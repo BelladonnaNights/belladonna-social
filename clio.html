@@ -521,7 +521,7 @@ async function init(){
           unsubs.push(fs.onSnapshot(fs.collection(db,COL_POSTS),snap=>{posts=snap.docs.map(d=>({id:d.id,...d.data()}));render();},bad));
           unsubs.push(fs.onSnapshot(fs.collection(db,COL_LIB),snap=>{libOv={};snap.docs.forEach(d=>libOv[d.id]=d.data());render();},bad));
           unsubs.push(fs.onSnapshot(fs.collection(db,'gig_schedule'),snap=>{gigs=snap.docs.map(d=>({id:d.id,...d.data()}));render();},err=>console.warn('gig_schedule:',err.message)));
-          setTimeout(()=>syncBuffer(false),5000);setTimeout(()=>{if(mode==='cloud'&&posts.length)migrateTitles();},3500);
+          setTimeout(()=>syncBuffer(false),5000);setTimeout(()=>{if(mode==='cloud'&&posts.length)migrateTitles();},3500);setTimeout(()=>{if(mode==='cloud'&&posts.length)runGen(false);},4500);
         }else{posts=[];libOv={};gigs=[];}
         render();
       });
@@ -544,6 +544,8 @@ async function persist(p){
   render();
 }
 async function removePost(id){
+  const gone=posts.find(p=>p.id===id);
+  if(gone&&gone.genKey)await saveLib('gen',{skip:[...((libOv.gen||{}).skip||[]),gone.genKey]});
   posts=posts.filter(p=>p.id!==id);
   if(mode==='cloud')await fs.deleteDoc(fs.doc(db,COL_POSTS,id));
   else localStorage.setItem(LS,JSON.stringify(posts));
@@ -808,22 +810,55 @@ function vCalendar(){
 }
 
 /* ── CAMPAIGNS: each month is a campaign ── */
-function vCampaigns(){
-  const real=vposts.filter(p=>!isMile(p));
-  const months=[...new Set(vposts.map(p=>p.date.slice(0,7)))].sort();
-  const t=todayStr().slice(0,7);
-  $('view').innerHTML=head('Campaigns','Each month is a campaign: its banner, its posts, its big night, how far along it is.')+
-    `<div class="bar"><label style="display:flex;gap:8px;align-items:center;cursor:pointer;font-size:13px;color:var(--text2)"><input type="checkbox" data-act="bantoggle" ${showBanners()?'checked':''} style="width:17px;height:17px"/> Show campaign banners</label></div>`+
-    `<div class="grid">${months.map(m=>{
-      const mp=real.filter(p=>p.date.startsWith(m)),n=mp.length;
-      const made=mp.filter(p=>p.created).length,posted=mp.filter(p=>p.posted).length;
-      const big=vposts.filter(p=>p.type==='big'&&p.date.startsWith(m));
-      return `<div class="card">${bannerHtml(m)}<h4>${monthName(m)} ${m===t?'· now':''}</h4>
-        <div class="meta">${big.length?'Big night: '+esc(big.map(b=>b.title.replace('Big night: ','')+' ('+new Date(b.date+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})+')').join(', ')):'No big night'}</div>
-        <div class="nick">Made ${made}/${n}</div><div class="prog"><i style="width:${n?made/n*100:0}%"></i></div>
-        <div class="nick">Posted ${posted}/${n}</div><div class="prog posted"><i style="width:${n?posted/n*100:0}%"></i></div>
-        <div style="margin-top:8px"><button class="btn btn-g" data-act="month" data-arg="${m}">Open in Calendar</button></div></div>`;}).join('')}</div>`;
+async function setCampaign(m,field,val){
+  const map={...campMap()},cur=map[m]||{};
+  const c={...cur,weeks:[...(cur.weeks||[undefined,undefined,undefined,undefined])]};
+  val=val.trim();
+  if(field==='theme')c.theme=val;else c.weeks[+field.slice(1)]=val;
+  map[m]=c;await saveLib('campaigns',{map});
+  // keep the calendar's post titles in step with the themes
+  const L=monthLong(m);
+  if(field==='theme'){
+    const p=posts.find(x=>x.type==='monthly'&&!x.posted&&x.title.includes('('+L+')'))||posts.find(x=>x.type==='monthly'&&!x.posted&&x.genKey&&x.title.endsWith(L));
+    if(p&&val)quietSave({...p,title:'Monthly announcement, 3 slides: '+val+' ('+L+')'});
+  }else{
+    const i=+field.slice(1),wk=posts.filter(x=>x.type==='weekly'&&x.date.startsWith(m)&&/^Weekly (graphic|nights graphic)/.test(x.title)).sort(sortFn)[i];
+    if(wk&&!wk.posted&&val)quietSave({...wk,title:'Weekly graphic: '+val});
+  }
+  render();
 }
+function campCard(m){
+  const t=todayStr().slice(0,7),real=vposts.filter(p=>!isMile(p)&&p.date.startsWith(m)),n=real.length;
+  const made=real.filter(p=>p.created).length,posted=real.filter(p=>p.posted).length;
+  const ci=campInfo(m),bigs=posts.filter(p=>p.type==='big'&&p.date.startsWith(m)).sort(sortFn);
+  const win=winLines(m,false);
+  const st=posts.filter(p=>!isMile(p)&&p.date.startsWith(m)&&p.stats&&(p.stats.reach||p.stats.likes||p.stats.comments||p.stats.shares));
+  const sum=k=>st.reduce((a,p)=>a+(+p.stats[k]||0),0);
+  const best=st.slice().sort((a,b)=>engage(b)-engage(a))[0];
+  const inp=(f,v,ph)=>`<input type="text" data-ct="${m}" data-f="${f}" value="${esc(v||'')}" placeholder="${ph}"/>`;
+  return `<div class="card" style="padding:14px">${bannerHtml(m)}<h4 style="font-size:13px">${monthName(m)} ${m===t?'· now':''}</h4>
+    <span class="lbl">Month theme</span>${inp('theme',ci.theme,'Month theme')}
+    <span class="lbl">Weekly themes</span>${[0,1,2,3].map(i=>inp('w'+i,ci.weeks[i],'Week '+(i+1)+' theme')).join('<div style="height:4px"></div>')}
+    <span class="lbl">Big night</span>
+    ${bigs.length?bigs.map(b=>{const[pn,tot]=evProgress(b);return `<div class="row" style="cursor:default;flex-wrap:wrap"><div class="rt">${esc(evTitle(b))}<small>${esc(dayName(b.date))}</small></div><div class="has" style="display:block">${pn}/${tot} done</div><button class="btn btn-g" style="padding:3px 9px" data-act="evgo" data-arg="${esc(b.id)}">Checklist</button></div><div class="prog" style="margin:2px 0 6px"><i style="width:${Math.round(pn/tot*100)}%"></i></div>`;}).join(''):'<div class="meta">No big night this month.</div>'}
+    <span class="lbl">Best Dressed winners</span>
+    ${win.length?win.map(x=>`<div class="meta" style="margin:0">${esc(x)}</div>`).join(''):'<div class="meta" style="margin:0">None entered yet. Add them in the Monthly Recap post.</div>'}
+    <span class="lbl">Results (from Echo)</span>
+    ${st.length?`<div class="meta" style="margin:0">${st.length} posts with numbers · reach ${sum('reach').toLocaleString()} · likes ${sum('likes').toLocaleString()} · comments + shares ${(sum('comments')+sum('shares')).toLocaleString()}</div>${best?`<div class="meta" style="margin:0">Best: ${esc(best.title)}</div>`:''}`:'<div class="meta" style="margin:0">No numbers entered yet.</div>'}
+    <span class="lbl">Progress</span>
+    <div class="nick">Made ${made}/${n}</div><div class="prog"><i style="width:${n?made/n*100:0}%"></i></div>
+    <div class="nick">Posted ${posted}/${n}</div><div class="prog posted"><i style="width:${n?posted/n*100:0}%"></i></div>
+    <div style="margin-top:8px"><button class="btn btn-g" data-act="month" data-arg="${m}">Open in Calendar</button></div></div>`;
+}
+function vCampaigns(){
+  const months=[...new Set(vposts.map(p=>p.date.slice(0,7)))].sort();
+  const cur=todayStr().slice(0,7),show=months.filter(m=>campFilter==='all'||m>=cur);
+  $('view').innerHTML=head('Campaigns','Each month is a campaign: its themes, banner, big night, winners and results in one place.')+
+    `<div class="bar"><label style="display:flex;gap:8px;align-items:center;cursor:pointer;font-size:13px;color:var(--text2)"><input type="checkbox" data-act="bantoggle" ${showBanners()?'checked':''} style="width:17px;height:17px"/> Show campaign banners</label><div class="sp"></div>
+      <button class="chip ${campFilter==='up'?'on':''}" data-act="campf" data-arg="up">This month and ahead</button><button class="chip ${campFilter==='all'?'on':''}" data-act="campf" data-arg="all">All months</button></div>`+
+    `<div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(320px,1fr))">${show.map(campCard).join('')}</div>`;
+}
+let campFilter='up';
 
 /* ── STUDIO: where posts get finished ── */
 function vStudio(){
@@ -885,12 +920,13 @@ const GROUP_ORDER=['Monthly & weekly','Event posts','Nightly stories','After the
 function orderGroups(g){const ix=x=>{const i=GROUP_ORDER.indexOf(x);return i<0?99:i;};return g.slice().sort((a,b)=>ix(a)-ix(b));}
 function cadenceHtml(){
   const L=libList(),groups=orderGroups([...new Set(L.map(e=>e.group||'Other'))]);
-  return `<div class="sec">Posting cadence</div><div class="sub" style="margin:0 0 8px">Everything you post on a rhythm, grouped. Edit the name, nickname, group or how often, or add your own. The nickname is what shows on calendar badges. Today these lines describe your rhythm; the calendar itself is built from your loaded calendars and from HQ.</div>
-  <div class="bar"><button class="btn btn-p" data-act="libnew">+ Add a post type</button></div>`+
+  return `<div class="sec">Posting cadence</div><div class="sub" style="margin:0 0 8px">Everything you post on a rhythm, grouped. Each line has a rule (like “every Monday” or “7, 3 days before and the day of each big night”), and Clio creates the posts for the next 60 days from those rules. Change a rule and the new posts follow it. Posts already on your calendar are never duplicated or moved.</div>
+  <div class="bar"><button class="btn btn-p" data-act="libnew">+ Add a post type</button><button class="btn btn-g" data-act="gennow">Create posts now (${planGen().length} waiting)</button>
+  <label style="display:flex;gap:8px;align-items:center;cursor:pointer;font-size:13px;color:var(--text2)"><input type="checkbox" data-act="gentoggle" ${(libOv.settings||{}).autoGen===false?'':'checked'} style="width:17px;height:17px"/> Create them automatically when I open Clio</label></div>`+
   groups.map(g=>`<div class="monthh" style="font-size:1.1rem;margin:14px 0 6px">${esc(g)}</div>`+
     L.filter(e=>(e.group||'Other')===g).map(e=>`<div class="card" style="padding:10px 12px;margin-bottom:6px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
       <div style="flex:1;min-width:220px"><div><b style="font-weight:600">${esc(e.name)}</b>${e.nick?` <span class="nick">(${esc(e.nick)})</span>`:''}</div>
-      <div class="meta" style="margin:0">${esc(e.use||'')}${e.use&&e.freq?' · ':''}<span style="color:var(--gold2)">${esc(e.freq||'')}</span></div></div>
+      <div class="meta" style="margin:0">${esc(e.use||'')}${e.use&&(e.freq||describeRule(ruleOf(e.id)))?' · ':''}<span style="color:var(--gold2)">${esc(e.freq||describeRule(ruleOf(e.id)))}</span>${['none',undefined].includes(ruleOf(e.id).kind)?' <span class="has" style="display:inline">· manual</span>':''}${ruleOf(e.id).kind==='hq'?' <span class="has" style="display:inline">· automatic</span>':''}</div></div>
       <button class="btn btn-g" data-act="libedit" data-arg="${e.id}">Edit</button></div>`).join('')).join('')+
   (libList(true).some(e=>e.deleted)?`<div class="meta" style="margin-top:10px">Hidden: ${libList(true).filter(e=>e.deleted).map(e=>`${esc(e.name)} <button class="chip" data-act="librestore" data-arg="${e.id}">Restore</button>`).join(' ')}</div>`:'');
 }
@@ -932,6 +968,7 @@ $('banner').addEventListener('click',e=>{const a=e.target.closest('[data-act]');
 $('view').addEventListener('change',e=>{
   if(e.target.id==='tf'){typeF=e.target.value;render();}
   else if(e.target.id==='mf'){monthF=e.target.value;render();}
+  else if(e.target.dataset.ct){setCampaign(e.target.dataset.ct,e.target.dataset.f,e.target.value);}
   else if(e.target.dataset.ban){const u=e.target.value.trim();if(!u||/^https?:\/\//.test(u))setBanner(e.target.dataset.ban,u);else toast('That does not look like an image link');}
   else if(e.target.dataset.stat){const p=posts.find(x=>x.id===e.target.dataset.stat);if(p){const v=parseInt(String(e.target.value).replace(/[^\d]/g,''))||0;e.target.value=v||'';quietSave({...p,stats:{...(p.stats||{}),[e.target.dataset.f]:v}});toast('Saved');}}
   else if(e.target.dataset.ts){const S={...getTagSets()},id=e.target.dataset.ts;if(S[id]){S[id]={...S[id],[e.target.dataset.f]:e.target.value.trim()};saveTagSets(S);}}
@@ -960,6 +997,10 @@ function act(a,arg){
   else if(a==='evopen'){openEdit(arg);}
   else if(a==='edtasks')openTasks();
   else if(a==='libnew')openLibEdit(null);
+  else if(a==='campf'){campFilter=arg;render();}
+  else if(a==='evgo'){const L=upcomingEvents().findIndex(x=>x.id===arg);evIdx=Math.max(0,L);setTab('dashboard');}
+  else if(a==='gennow')runGen(true);
+  else if(a==='gentoggle'){saveLib('settings',{autoGen:(libOv.settings||{}).autoGen===false}).then(render);}
   else if(a==='libedit')openLibEdit(arg);
   else if(a==='librestore'){saveLib(arg,{deleted:false}).then(render);}
   else if(a==='bantoggle'){saveLib('settings',{showBanners:!showBanners()}).then(render);}
@@ -1317,6 +1358,97 @@ function tsAdd(names,kind){
   saveTagSets(S);toast(n?n+' added: fill in their tags':'Nothing new to add');
 }
 
+/* ── CADENCE RULES: the schedule lines create the posts ── */
+const RULE_DEFAULTS={
+  monthly:{kind:'monthly_day',day:25,time:'12:00'},
+  weekly:{kind:'weekday',weekday:1,time:'11:00'},
+  cover:{kind:'before_event',offsets:[14],time:'12:00'},
+  count:{kind:'before_event',offsets:[7,3,0],time:'12:00'},
+  recap:{kind:'month_end',time:'12:00'},
+  tonight:{kind:'hq'},host:{kind:'hq'},best:{kind:'hq'}
+};
+const WD=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+function ruleOf(id){const o=libOv[id]||{};return o.rule||RULE_DEFAULTS[id]||{kind:'none'};}
+function describeRule(r){
+  if(!r)return '';
+  if(r.kind==='monthly_day')return 'The '+r.day+ordSuf(r.day)+' of every month';
+  if(r.kind==='weekday')return 'Every '+WD[r.weekday];
+  if(r.kind==='month_end')return 'Last day of every month';
+  if(r.kind==='before_event')return (r.offsets||[]).map(o=>o===0?'the day of':o+' days before').join(', ')+' each big night';
+  if(r.kind==='hq')return 'Automatic from HQ';
+  return '';
+}
+function ordSuf(n){n=+n;return (n%100>=11&&n%100<=13)?'th':({1:'st',2:'nd',3:'rd'}[n%10]||'th');}
+function lastDay(y,m){return new Date(y,m,0).getDate();}
+function monthLong(m){return new Date(m+'-15T12:00:00').toLocaleDateString('en-US',{month:'long'});}
+function nextMonthKey(date){const d=new Date(date.slice(0,7)+'-15T12:00:00');d.setMonth(d.getMonth()+1);return ymd(d).slice(0,7);}
+
+/* campaign themes: override first, else read from the posts already on the calendar */
+function campMap(){return (libOv.campaigns||{}).map||{};}
+function derivedWeeks(m){
+  return posts.filter(p=>p.type==='weekly'&&p.date.startsWith(m)&&/^Weekly graphic:/.test(p.title)).sort(sortFn).map(p=>p.title.replace(/^Weekly graphic:\s*/,''));
+}
+function derivedTheme(m){
+  const L=monthLong(m),p=posts.find(x=>x.type==='monthly'&&x.title.includes('('+L+')'));
+  if(!p)return '';
+  const t=p.title.split(': ').slice(1).join(': ').replace(/\s*\([A-Za-z]+\)\s*$/,'');return t;
+}
+function campInfo(m){
+  const o=campMap()[m]||{},dw=derivedWeeks(m);
+  return {theme:o.theme!==undefined?o.theme:derivedTheme(m),weeks:[0,1,2,3].map(i=>(o.weeks&&o.weeks[i]!==undefined)?o.weeks[i]:(dw[i]||''))};
+}
+function mondaysOf(m){const out=[];const n=lastDay(+m.slice(0,4),+m.slice(5));for(let d=1;d<=n;d++){const ds=m+'-'+pad(d);if(new Date(ds+'T12:00:00').getDay()===1)out.push(ds);}return out;}
+
+function genTitle(id,name,date,ctx){
+  const ev=ctx&&ctx.ev;
+  if(id==='monthly'){const nm=nextMonthKey(date),th=campInfo(nm).theme;return 'Monthly announcement, 3 slides: '+(th?th+' ('+monthLong(nm)+')':monthLong(nm));}
+  if(id==='weekly'){const m=date.slice(0,7),i=mondaysOf(m).indexOf(date),th=i>=0&&i<4?campInfo(m).weeks[i]:'';return th?'Weekly graphic: '+th:'Weekly nights graphic (no costume theme)';}
+  if(id==='cover')return 'Facebook Event: '+ev;
+  if(id==='count')return ctx.off===0?'Countdown, day of: '+ev:'Countdown, '+ctx.off+' days: '+ev;
+  if(id==='recap')return 'Monthly recap: '+monthLong(date.slice(0,7));
+  return name+(ev?': '+ev:'');
+}
+function planGen(){
+  const t=todayStr(),end=addDays(t,60),out=[];
+  const skip=new Set((libOv.gen||{}).skip||[]),have=new Set(posts.map(p=>p.genKey).filter(Boolean));
+  const taken=(type,date,label)=>posts.some(p=>p.type===type&&p.date===date&&(!label||p.title.includes(label)))||out.some(p=>p.type===type&&p.date===date&&(!label||p.title.includes(label)));
+  const add=(e,date,time,anchor,off,ctx,label)=>{
+    if(date<t||date>end)return;
+    const key=e.id+'|'+anchor+'|'+(off===undefined?'':off);
+    if(have.has(key)||skip.has(key))return;
+    if(taken(e.id,date,label))return;
+    out.push({id:'r_'+key.replace(/[^a-z0-9]+/gi,'_'),date,time:time||'12:00',type:e.id,title:genTitle(e.id,e.name,date,{...ctx,off}),
+      platform:(TYPES[e.id]&&TYPES[e.id].plat)||'IG + FB',caption:'',imageUrl:'',notes:'',created:false,posted:false,gen:true,genKey:key});
+  };
+  const bigs=posts.filter(p=>p.type==='big');
+  libList().forEach(e=>{
+    const r=ruleOf(e.id);if(!r||r.kind==='none'||r.kind==='hq')return;
+    if(r.kind==='monthly_day'){
+      let d=new Date(t.slice(0,7)+'-01T12:00:00');
+      for(let i=0;i<4;i++){const y=d.getFullYear(),m=d.getMonth()+1,day=Math.min(+r.day||1,lastDay(y,m));add(e,y+'-'+pad(m)+'-'+pad(day),r.time,y+'-'+pad(m),undefined,{});d.setMonth(d.getMonth()+1);}
+    }else if(r.kind==='weekday'){
+      for(let ds=t;ds<=end;ds=addDays(ds,1)){if(new Date(ds+'T12:00:00').getDay()===+r.weekday)add(e,ds,r.time,ds,undefined,{});}
+    }else if(r.kind==='month_end'){
+      let d=new Date(t.slice(0,7)+'-01T12:00:00');
+      for(let i=0;i<4;i++){const y=d.getFullYear(),m=d.getMonth()+1;add(e,y+'-'+pad(m)+'-'+pad(lastDay(y,m)),r.time,y+'-'+pad(m),undefined,{});d.setMonth(d.getMonth()+1);}
+    }else if(r.kind==='before_event'){
+      bigs.forEach(b=>(r.offsets||[]).forEach(off=>{
+        const label=e.id==='count'?(off===0?'day of':off+' days'):'';
+        add(e,addDays(b.date,-off),r.time,b.date,off,{ev:evTitle(b)},label);
+      }));
+    }
+  });
+  return out;
+}
+async function runGen(manual){
+  if(!manual&&(libOv.settings||{}).autoGen===false)return;
+  const L=planGen();
+  if(!L.length){if(manual)toast('Nothing new to create');return;}
+  L.forEach(p=>quietSave(p));
+  render();
+  toast(L.length+' post'+(L.length>1?'s':'')+' created from your cadence');
+}
+
 /* ── POST TYPE EDITOR (name, nickname, group, how often; add / hide) ── */
 let ledId=null;
 function ensureLed(){
@@ -1333,15 +1465,37 @@ function openLibEdit(id){
   <div class="f2"><div class="f"><label>Name</label><input type="text" id="le-name" value="${esc(e.name)}"/></div><div class="f"><label>Nickname (shows on badges)</label><input type="text" id="le-nick" value="${esc(e.nick)}"/></div></div>
   <div class="f"><label>Group (pick one or type a new one)</label><input type="text" id="le-group" list="le-groups" value="${esc(e.group||'')}"/><datalist id="le-groups">${groups.map(g=>`<option value="${esc(g)}">`).join('')}</datalist></div>
   <div class="f"><label>How often / when</label><input type="text" id="le-freq" value="${esc(e.freq||'')}" placeholder="Every Monday, the 25th of every month, 3 days before each big night…"/></div>
+  <div class="f" id="le-rulebox"><label>Rule: how Clio creates these posts</label>
+    <select id="le-rule" onchange="ledRule()"><option value="none">Manual (I add them myself)</option><option value="monthly_day">Every month on a day</option><option value="weekday">Every week on a weekday</option><option value="month_end">Last day of every month</option><option value="before_event">Before each big night</option>${(e.id&&ruleOf(e.id).kind==='hq')?'<option value="hq">Automatic from HQ</option>':''}</select>
+    <div class="f2" style="margin-top:6px"><div class="f" id="le-dayw"><label>Day of month</label><input type="text" inputmode="numeric" id="le-day" value="${(ruleOf(e.id||'')||{}).day||25}"/></div>
+    <div class="f" id="le-wdw"><label>Weekday</label><select id="le-wd">${WD.map((d,i)=>`<option value="${i}" ${((ruleOf(e.id||'')||{}).weekday??1)===i?'selected':''}>${d}</option>`).join('')}</select></div>
+    <div class="f" id="le-offw"><label>Days before (comma list, 0 = day of)</label><input type="text" id="le-offs" value="${((ruleOf(e.id||'')||{}).offsets||[7]).join(', ')}"/></div>
+    <div class="f" id="le-timew"><label>Post time</label><input type="time" id="le-time" value="${(ruleOf(e.id||'')||{}).time||'12:00'}"/></div></div></div>
   <div class="f"><label>What it is / timing</label><input type="text" id="le-use" value="${esc(e.use||'')}" placeholder="Monday post: week theme plus each night"/></div>
   <div class="f"><label>Size</label><input type="text" id="le-size" value="${esc(e.size||'')}" placeholder="1080x1350"/></div>
   ${id&&!e.custom?'<div class="meta">This is one of your built-in post types. “Hide” removes it from this list; posts already on the calendar keep working.</div>':''}
   <div class="acts">${id?`<button class="btn btn-d" type="button" onclick="libHide()">${e.custom?'Delete':'Hide'}</button>`:''}<span class="sp"></span><button class="btn btn-g" type="button" onclick="document.getElementById('led').classList.remove('show')">Cancel</button><button class="btn btn-p" type="button" onclick="libSaveEdit()">Save</button></div></div>`;
   $('led').classList.add('show');
+  $('le-rule').value=ruleOf(e.id||'').kind||'none';ledRule();
+}
+function ledRule(){
+  const k=$('le-rule').value;
+  $('le-dayw').style.display=k==='monthly_day'?'':'none';
+  $('le-wdw').style.display=k==='weekday'?'':'none';
+  $('le-offw').style.display=k==='before_event'?'':'none';
+  $('le-timew').style.display=(k==='none'||k==='hq')?'none':'';
+  $('le-rule').disabled=k==='hq';
 }
 async function libSaveEdit(){
   const name=$('le-name').value.trim();if(!name){toast('Give it a name');return;}
   const patch={name,nick:$('le-nick').value.trim(),group:$('le-group').value.trim()||'Other',freq:$('le-freq').value.trim(),use:$('le-use').value.trim(),size:$('le-size').value.trim()};
+  const k=$('le-rule').value;
+  if(k==='hq')patch.rule={kind:'hq'};
+  else if(k==='none')patch.rule={kind:'none'};
+  else{patch.rule={kind:k,time:$('le-time').value||'12:00'};
+    if(k==='monthly_day')patch.rule.day=Math.min(31,Math.max(1,parseInt($('le-day').value)||1));
+    if(k==='weekday')patch.rule.weekday=+$('le-wd').value;
+    if(k==='before_event')patch.rule.offsets=$('le-offs').value.split(',').map(x=>parseInt(x.trim())).filter(x=>!isNaN(x)&&x>=0);}
   let id=ledId;
   if(!id){id='c_'+Date.now().toString(36);patch.custom=true;}
   await saveLib(id,patch);$('led').classList.remove('show');render();
@@ -1359,7 +1513,7 @@ function bannerHtml(m){
   if(!showBanners())return '';
   const u=bannerMap()[m];
   return `<div style="margin:-2px -2px 10px">${u?`<img src="${esc(u)}" alt="" style="width:100%;aspect-ratio:16/9;object-fit:cover;border:1px solid var(--border2);border-radius:var(--radius);display:block"/>`
-    :`<div style="width:100%;aspect-ratio:16/9;border:1px dashed var(--border2);border-radius:var(--radius);display:flex;align-items:center;justify-content:center;color:var(--text3);font-family:var(--serif);font-style:italic">No banner yet</div>`}
+    :`<div style="width:100%;aspect-ratio:16/4;border:1px dashed var(--border2);border-radius:var(--radius);display:flex;align-items:center;justify-content:center;color:var(--text3);font-family:var(--serif);font-style:italic">No banner yet</div>`}
     <div class="tools" style="margin:6px 0 0"><button class="btn btn-g" type="button" onclick="banUpload('${m}')">${u?'Replace banner':'Upload banner'}</button>${u?`<button class="btn btn-d" type="button" data-act="bandel" data-arg="${m}">Remove</button>`:''}</div>
     <input type="text" data-ban="${m}" value="${esc(u||'')}" placeholder="or paste an image link" style="margin-top:6px"/></div>`;
 }
@@ -1467,7 +1621,7 @@ function exportBuffer(){
   toast(ready.length+' posts exported'+(skipped?` · ${skipped} skipped (no caption)`:''));
 }
 
-window.closeEdit=closeEdit;window.saveEdit=saveEdit;window.delPost=delPost;window.encore=encore;window.muse=muse;window.libSaveEdit=libSaveEdit;window.libHide=libHide;window.banUpload=banUpload;window.addTags=addTags;window.setWin=setWin;window.tw=null;Object.defineProperty(window,'tw',{get:()=>tw,set:v=>{tw=v;}});Object.defineProperty(window,'twKey',{get:()=>twKey});window.twPick=twPick;window.twAdd=twAdd;window.twDelTask=twDelTask;window.twMove=twMove;window.twNewSet=twNewSet;window.twDelSet=twDelSet;window.twSave=twSave;window.libUpload=libUpload;window.aiCaption=aiCaption;window.openGfx=openGfx;window.gfxPick=gfxPick;window.gfxSaveBg=gfxSaveBg;window.gfxUse=gfxUse;window.uploadImg=uploadImg;window.imgPrev=imgPrev;
+window.closeEdit=closeEdit;window.saveEdit=saveEdit;window.delPost=delPost;window.encore=encore;window.muse=muse;window.libSaveEdit=libSaveEdit;window.ledRule=ledRule;window.libHide=libHide;window.banUpload=banUpload;window.addTags=addTags;window.setWin=setWin;window.tw=null;Object.defineProperty(window,'tw',{get:()=>tw,set:v=>{tw=v;}});Object.defineProperty(window,'twKey',{get:()=>twKey});window.twPick=twPick;window.twAdd=twAdd;window.twDelTask=twDelTask;window.twMove=twMove;window.twNewSet=twNewSet;window.twDelSet=twDelSet;window.twSave=twSave;window.libUpload=libUpload;window.aiCaption=aiCaption;window.openGfx=openGfx;window.gfxPick=gfxPick;window.gfxSaveBg=gfxSaveBg;window.gfxUse=gfxUse;window.uploadImg=uploadImg;window.imgPrev=imgPrev;
 window.addEventListener('hashchange',()=>{const h=location.hash.slice(1);if((TABS.some(t=>t[0]===h)||h==='events')&&h!==tab){tab=h;render();}});
 applyTheme(document.documentElement.getAttribute('data-theme')||'dark');
 init();
