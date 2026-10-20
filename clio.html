@@ -647,7 +647,7 @@ function rowHtml(p){
   const checks=mile?'<div class="ck" style="visibility:hidden"></div>':
     `<div class="ck"><input type="checkbox" data-k="created" ${p.created?'checked':''}/>Made</div><div class="ck"><input type="checkbox" data-k="posted" ${p.posted?'checked':''}/>Posted</div>`;
   const has=(p.caption?'✎ ':'')+(p.imageUrl?'🖼':'');
-  return `<div class="row ${mile?'milestone':''} ${p.posted?'done':''} ${overdue(p,todayStr())?'od':''}" data-id="${esc(p.id)}">${checks}<div class="time">${fmtTime(p.time)||'—'}</div><span class="badge${hi}">${T.l}</span><div class="rt">${esc(p.title)}${p.notes?`<small>${esc(p.notes)}</small>`:''}</div><div class="has">${has}</div>${p.auto?'':`<button class="btn btn-d" style="padding:3px 9px" data-act="delrow" data-arg="${esc(p.id)}" title="Delete this post">✕</button>`}</div>`;
+  return `<div class="row ${mile?'milestone':''} ${p.posted?'done':''} ${overdue(p,todayStr())?'od':''}" data-id="${esc(p.id)}">${checks}<div class="time">${fmtTime(p.time)||'—'}</div><span class="badge${hi}">${T.l}</span><div class="rt">${p.gen?'<span class="has" style="display:inline" title="Created from your cadence rules">✦ </span>':''}${esc(p.title)}${p.notes?`<small>${esc(p.notes)}</small>`:''}</div><div class="has">${has}</div>${p.auto?'':`<button class="btn btn-d" style="padding:3px 9px" data-act="delrow" data-arg="${esc(p.id)}" title="Delete this post">✕</button>`}</div>`;
 }
 function groupedList(list,monthHeads,desc){
   if(!list.length)return '<div class="empty">Nothing here.</div>';
@@ -791,7 +791,7 @@ function vCalendar(){
   if(calMode==='grid'){vGrid();return;}
   const t=todayStr();
   const months=[...new Set(vposts.map(p=>p.date.slice(0,7)))].sort();
-  const views=[['todo','To do'],['overdue','Overdue'],['all','Everything'],['history','History']];
+  const views=[['todo','To do'],['overdue','Overdue'],['all','Everything'],['history','History'],['auto','Made by cadence']];
   let list=vposts.slice();
   if(typeF!=='all')list=list.filter(p=>p.type===typeF);
   if(monthF!=='all')list=list.filter(p=>p.date.startsWith(monthF));
@@ -799,6 +799,7 @@ function vCalendar(){
   if(calView==='todo')list=list.filter(p=>overdue(p,t)||(p.date>=t&&p.date<=end&&!p.posted));
   if(calView==='overdue')list=list.filter(p=>overdue(p,t));
   if(calView==='history')list=list.filter(p=>p.posted);
+  if(calView==='auto')list=list.filter(p=>p.gen&&p.date>=t&&!p.posted);
   list.sort(sortFn);
   if(calView==='history')list.reverse();
   $('view').innerHTML=head('Calendar',calView==='history'?'Everything that has gone out.':'Check “Made” when the graphic exists, “Posted” when it is live.')+overviewStats()+
@@ -908,7 +909,7 @@ function libCard(t,slot){
   return `<div class="card">${slot?`<div class="nick" style="color:var(--gold2)">${slot}</div>`:''}<h4>${esc(t.name)}</h4><div class="nick">${esc(t.nick)} · ${esc(t.size)}</div>
         <div class="meta">${esc(t.use)}${n?` · ${n} posts`:''}</div>
         <span class="lbl">Example image (a finished design Muse tells ChatGPT to copy)</span>
-        ${o.tplImg?`<img src="${esc(o.tplImg)}" alt="" style="width:100%;max-height:220px;object-fit:contain;background:#000;border:1px solid var(--border2);border-radius:var(--radius);margin-bottom:6px"/>`:''}
+        ${o.tplImg?`<img src="${esc(o.tplImg)}" alt="" style="width:100%;height:auto;display:block;margin-bottom:6px"/>`:''}
         <div class="tools" style="margin:0 0 4px"><button class="btn btn-g" type="button" onclick="libUpload('${t.id}')">${o.tplImg?'Replace example':'Upload example'}</button></div>
         <span class="lbl">Link to template (optional: Canva, Drive, anything)</span><input type="text" data-lib="${t.id}" data-f="link" value="${esc(o.link||'')}" placeholder="https://canva.com/…"/>
         <span class="lbl">Blank background (only for Make graphic, where Clio draws the text itself)</span><input type="text" data-lib="${t.id}" data-f="bgUrl" value="${esc(o.bgUrl||'')}" placeholder="Set from Make graphic, or paste a link"/>
@@ -921,7 +922,7 @@ function orderGroups(g){const ix=x=>{const i=GROUP_ORDER.indexOf(x);return i<0?9
 function cadenceHtml(){
   const L=libList(),groups=orderGroups([...new Set(L.map(e=>e.group||'Other'))]);
   return `<div class="sec">Posting cadence</div><div class="sub" style="margin:0 0 8px">Everything you post on a rhythm, grouped. Each line has a rule (like “every Monday” or “7, 3 days before and the day of each big night”), and Clio creates the posts for the next 60 days from those rules. Change a rule and the new posts follow it. Posts already on your calendar are never duplicated or moved.</div>
-  <div class="bar"><button class="btn btn-p" data-act="libnew">+ Add a post type</button><button class="btn btn-g" data-act="gennow">Create posts now (${planGen().length} waiting)</button>
+  <div class="bar"><button class="btn btn-p" data-act="libnew">+ Add a post type</button><button class="btn btn-g" data-act="gennow">Create posts now (${planGen().length} waiting)</button><button class="btn btn-g" data-act="genlist">See what it made (${posts.filter(p=>p.gen&&!p.posted&&p.date>=todayStr()).length})</button>
   <label style="display:flex;gap:8px;align-items:center;cursor:pointer;font-size:13px;color:var(--text2)"><input type="checkbox" data-act="gentoggle" ${(libOv.settings||{}).autoGen===false?'':'checked'} style="width:17px;height:17px"/> Create them automatically when I open Clio</label></div>`+
   groups.map(g=>`<div class="monthh" style="font-size:1.1rem;margin:14px 0 6px">${esc(g)}</div>`+
     L.filter(e=>(e.group||'Other')===g).map(e=>`<div class="card" style="padding:10px 12px;margin-bottom:6px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
@@ -1000,6 +1001,7 @@ function act(a,arg){
   else if(a==='campf'){campFilter=arg;render();}
   else if(a==='evgo'){const L=upcomingEvents().findIndex(x=>x.id===arg);evIdx=Math.max(0,L);setTab('dashboard');}
   else if(a==='gennow')runGen(true);
+  else if(a==='genlist'){calView='auto';calMode='list';setTab('calendar');}
   else if(a==='gentoggle'){saveLib('settings',{autoGen:(libOv.settings||{}).autoGen===false}).then(render);}
   else if(a==='libedit')openLibEdit(arg);
   else if(a==='librestore'){saveLib(arg,{deleted:false}).then(render);}
