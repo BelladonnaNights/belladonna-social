@@ -160,10 +160,12 @@ select:focus,input:focus,textarea:focus{outline:none;border-color:var(--gold);}
     </div>
     <div class="f"><label>What it is</label><input type="text" id="f-title"/></div>
     <div class="f"><label>Caption (goes to Buffer)</label><textarea id="f-cap"></textarea>
-      <div class="tools" style="margin:6px 0 0"><button class="btn btn-g" type="button" id="b-cap" onclick="aiCaption()">Write caption (ChatGPT)</button></div></div>
+      <div class="tools" style="margin:6px 0 0"><button class="btn btn-g" type="button" id="b-cap" onclick="aiCaption()">Write caption (ChatGPT)</button></div>
+      <div id="f-tags" class="bar" style="margin:6px 0 0"></div></div>
     <div class="f"><label>Image (upload, or paste a direct .jpg / .png link)</label><input type="text" id="f-img" placeholder="https://…" oninput="imgPrev()"/>
       <div class="tools" style="margin:6px 0 0"><button class="btn btn-g" type="button" id="b-up" onclick="document.getElementById('f-file').click()">Upload image</button><input type="file" id="f-file" accept="image/jpeg,image/png,image/webp" style="display:none" onchange="uploadImg(this)"/></div>
       <img id="f-prev" alt="" style="display:none;max-width:140px;max-height:140px;margin-top:8px;border:1px solid var(--border2);border-radius:var(--radius)"/></div>
+    <div class="f" id="f-win" style="display:none"></div>
     <div class="f"><label>Notes</label><input type="text" id="f-notes"/></div>
     <div class="checks">
       <label><input type="checkbox" id="f-created"/> Made</label>
@@ -791,6 +793,7 @@ function vLibrary(){
         <span class="lbl">Blank background (only for Make graphic, where Clio draws the text itself)</span><input type="text" data-lib="${t.id}" data-f="bgUrl" value="${esc(o.bgUrl||'')}" placeholder="Set from Make graphic, or paste a link"/>
         <span class="lbl">Notes</span><input type="text" data-lib="${t.id}" data-f="notes" value="${esc(o.notes||'')}"/>
         ${o.link?`<div style="margin-top:8px"><a href="${esc(o.link)}" target="_blank" rel="noopener"><button class="btn btn-g" type="button">Open template</button></a></div>`:''}</div>`;}).join('')}</div>
+      ${libTagsHtml()}
       <div class="card" style="max-width:520px;margin-top:16px"><span class="lbl">Worker address (for captions and image uploads)</span><input type="text" data-api="1" value="${esc((()=>{try{return localStorage.getItem('bn_clio_api')||'';}catch(e){return '';}})())}" placeholder="https://clio-api.yourname.workers.dev"/></div>
       <div class="sub" style="margin-top:16px">Finished graphics are stored on your Cloudflare. Set each template's background art here (or from Make graphic) and Clio draws the text on top.</div>`;
 }
@@ -817,6 +820,7 @@ $('banner').addEventListener('click',e=>{const a=e.target.closest('[data-act]');
 $('view').addEventListener('change',e=>{
   if(e.target.id==='tf'){typeF=e.target.value;render();}
   else if(e.target.id==='mf'){monthF=e.target.value;render();}
+  else if(e.target.dataset.ts){const S={...getTagSets()},id=e.target.dataset.ts;if(S[id]){S[id]={...S[id],[e.target.dataset.f]:e.target.value.trim()};saveTagSets(S);}}
   else if(e.target.dataset.kind){const p=posts.find(x=>x.id===e.target.dataset.kind);if(p)persist({...p,evKind:e.target.value});}
   else if(e.target.dataset.api){const u=normApi(e.target.value);if(u||!e.target.value.trim()){try{localStorage.setItem('bn_clio_api',u);}catch(x){}toast(u?'Worker address saved':'Worker address cleared');}else toast('That does not look like an address');}
   else if(e.target.dataset.lib)saveLib(e.target.dataset.lib,{[e.target.dataset.f]:e.target.value.trim()}).then(render);
@@ -841,17 +845,26 @@ function act(a,arg){
   else if(a==='evprev'||a==='evnext'){evIdx+=a==='evnext'?1:-1;render();}
   else if(a==='evopen'){openEdit(arg);}
   else if(a==='edtasks')openTasks();
+  else if(a==='tsnew'){const S={...getTagSets()};S['t'+Date.now().toString(36)]={name:'',kind:'general',text:''};saveTagSets(S);}
+  else if(a==='tsdel'){const S={...getTagSets()};delete S[arg];saveTagSets(S);}
+  else if(a==='tsgames'){const ks=[...new Set(gigs.filter(isPublicGig).map(g=>g.kind).filter(Boolean))];tsAdd(ks.length?ks:['Karaoke','Music Bingo','Trivia','Sing-Along'],'game');}
+  else if(a==='tsvenues'){tsAdd([...new Set(gigs.filter(isPublicGig).map(g=>g.venue).filter(Boolean))],'venue');}
   else if(a==='bufsync')syncBuffer(false);
   else if(a==='signout'&&auth)authMod.signOut(auth);
 }
 
 /* ── EDIT MODAL ── */
+$('f-title').addEventListener('input',()=>{renderTags();renderWin();});
+$('f-notes').addEventListener('input',renderTags);
+$('f-type').addEventListener('change',renderWin);
+$('f-date').addEventListener('change',renderWin);
 $('f-type').innerHTML=Object.entries(TYPES).map(([k,v])=>`<option value="${k}">${v.l}</option>`).join('');
 function fillForm(p){
   $('f-date').value=p.date;$('f-time').value=p.time||'';$('f-type').value=p.type;$('f-plat').value=p.platform||'';
   $('f-title').value=p.title;$('f-cap').value=p.caption||'';$('f-img').value=p.imageUrl||'';imgPrev();$('f-notes').value=p.notes||'';
   $('f-created').checked=!!p.created;$('f-posted').checked=!!p.posted;
   $('f-muse-wrap').style.display='none';
+  renderTags();renderWin();
 }
 function openEdit(id,presetDate){
   editingId=id||null;
@@ -901,7 +914,7 @@ function museFor(type,title,date){
     return `Create a 1080x1350 Instagram graphic for Belladonna, a live entertainment brand. ${STYLE}\n\nLayout:\n1. Small gold line: "BELLADONNA COUNTDOWN"\n2. Huge title: "${when}"\n3. Event name: "${m?m[2]:ev}"\n4. Details: "[DAY, DATE] · [TIME] · [VENUE]"\n5. Gold line: "Dress in the theme. Or any costume."\n6. Small footer: belladonnanights.com\n\nMood: [ONE LINE OF MOOD].`;
   }
   if(type==='cover')return `Create a 1920x1005 Facebook Event cover for Belladonna, a live entertainment brand. ${STYLE}\n\nText, large and centered with a clear safe margin:\n1. Small gold line: "BELLADONNA PRESENTS"\n2. Huge title: "${ev.toUpperCase()}"\n3. Details: "[DAY, DATE] · [TIME] · [VENUE]"\n4. Small line: "Dress in the theme. Or any costume."\n\nMood: [ONE LINE OF MOOD].`;
-  if(type==='recap')return `Create a 1080x1350 Instagram graphic for Belladonna, a live entertainment brand. ${STYLE}\n\nLayout:\n1. Small gold line: "BELLADONNA RECAP"\n2. Huge title: "${t.toUpperCase()}"\n3. Subtitle: "CROWN WINNERS"\n4. Winner names, one per line: "[WEEK 1 WINNER]" to "[FINALE WINNER]"\n5. Empty framed area for a photo collage\n6. Gold line: "Next month: [NEXT MONTH THEME]"\n7. Small footer: belladonnanights.com\n\nMood: [ONE LINE OF MOOD].`;
+  if(type==='recap')return `Create a 1080x1350 Instagram graphic for Belladonna, a live entertainment brand. ${STYLE}\n\nLayout:\n1. Small gold line: "BELLADONNA RECAP"\n2. Huge title: "${t.toUpperCase()}"\n3. Subtitle: "CROWN WINNERS"\n4. Winner names, one per line, exactly as written here:\n${(date?winLines(date.slice(0,7),true):[]).join("\n")||"[WEEK 1 WINNER] to [FINALE WINNER]"}\n5. Empty framed area for a photo collage\n6. Gold line: "Next month: [NEXT MONTH THEME]"\n7. Small footer: belladonnanights.com\n\nMood: [ONE LINE OF MOOD].`;
   return `Create a graphic for Belladonna, a live entertainment brand, for this post: "${title}". ${STYLE}\n\nText: "[TEXT]". Footer: belladonnanights.com\n\nMood: [ONE LINE OF MOOD].`;
 }
 let libPend=null;
@@ -988,7 +1001,7 @@ async function aiCaption(){
   try{
     const d=await apiFetch('/caption',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
       template:TYPES[type]?.l||type,title,date,platform:$('f-plat').value,
-      details:[...wk,...mo].join('\n'),existing:old,extra:$('f-notes').value.trim()})});
+      details:[...wk,...mo,...(type==='recap'&&date?winLines(date.slice(0,7),false).map(x=>'Best Dressed winner - '+x):[])].join('\n'),existing:old,extra:$('f-notes').value.trim()})});
     $('f-cap').value=d.caption;toast(old?'Caption rewritten':'Caption written');
   }catch(e){toast('Caption failed: '+e.message);}
   b.disabled=false;b.textContent='Write caption (ChatGPT)';
@@ -1003,7 +1016,7 @@ function gfxDefaults(type,title,date){
   if(type==='weekly'){d.kicker='THIS WEEK AT BELLADONNA';d.lines=(gigs.length&&date?nightLines(date,addDays(date,6),true):[]).join('\n');}
   else if(type==='monthly'){const dt=new Date((date||todayStr())+'T12:00:00');dt.setMonth(dt.getMonth()+1);d.title=dt.toLocaleDateString('en-US',{month:'long'}).toUpperCase();d.sub=t;}
   else if(type==='count'){const m=title.match(/^Countdown, (.*?): (.*)$/);d.kicker='BELLADONNA COUNTDOWN';d.title=m?(m[1]==='day of'?'TONIGHT':m[1].toUpperCase()):'COUNTDOWN';d.sub=m?m[2]:ev;}
-  else if(type==='recap'){d.kicker='BELLADONNA RECAP';d.sub='CROWN WINNERS';}
+  else if(type==='recap'){d.kicker='BELLADONNA RECAP';d.sub='CROWN WINNERS';d.lines=(date?winLines(date.slice(0,7),false):[]).join('\n');}
   else if(type==='tonight'){d.kicker='TONIGHT AT BELLADONNA';}
   return d;
 }
@@ -1104,6 +1117,72 @@ async function gfxUse(){
   b.disabled=false;b.textContent='Use this image';
 }
 
+/* ── BEST DRESSED WINNERS (feed the Monthly Recap) ── */
+function winMap(){return (libOv.winners||{}).map||{};}
+function winSlots(month){
+  const wk=posts.filter(p=>p.type==='weekly'&&p.date.startsWith(month)&&/^Weekly graphic:/.test(p.title)).sort(sortFn)
+    .map((p,i)=>({key:p.id,label:'Week '+(i+1)+': '+p.title.replace(/^Weekly graphic:\s*/,'')}));
+  const big=posts.filter(p=>p.type==='big'&&p.date.startsWith(month)).sort(sortFn).map(p=>({key:p.id,label:'Finale: '+evTitle(p)}));
+  return wk.concat(big);
+}
+function winLines(month,fillBlanks){
+  const m=winMap();
+  return winSlots(month).map(x=>(m[x.key]||'').trim()?x.label+' - '+m[x.key].trim():(fillBlanks?x.label+' - [WINNER]':'')).filter(Boolean);
+}
+async function setWin(key,val){
+  const m={...winMap()};if(val.trim())m[key]=val.trim();else delete m[key];
+  await saveLib('winners',{map:m});renderWin();
+}
+function renderWin(){
+  const box=$('f-win');if(!box)return;
+  const type=$('f-type').value,date=$('f-date').value,m=winMap();
+  let slots=[],title='';
+  if(type==='recap'&&date){slots=winSlots(date.slice(0,7));title='Best Dressed winners for this month (fills the recap)';}
+  else if(type==='weekly'&&editingId&&/^Weekly graphic:/.test($('f-title').value)){slots=[{key:editingId,label:'This week'}];title='Best Dressed winner this week (feeds the monthly recap)';}
+  if(!slots.length){box.style.display='none';box.innerHTML='';return;}
+  box.style.display='';
+  box.innerHTML=`<label>${title}</label>`+slots.map(x=>`<div style="display:flex;gap:8px;align-items:center;margin-bottom:4px"><span class="has" style="display:block;width:44%;flex-shrink:0;white-space:normal">${esc(x.label)}</span><input type="text" value="${esc(m[x.key]||'')}" placeholder="Winner name" data-k="${esc(x.key)}" onchange="setWin(this.dataset.k,this.value)"/></div>`).join('');
+}
+
+/* ── TAG SETS: saved hashtags and @tags per venue / game ── */
+function getTagSets(){return (libOv.tagSets||{}).sets||{};}
+async function saveTagSets(sets){await saveLib('tagSets',{sets});render();}
+function tagSuggested(set){const hay=($('f-title').value+' '+$('f-notes').value).toLowerCase();return set.name&&hay.includes(set.name.toLowerCase());}
+function renderTags(){
+  const box=$('f-tags');if(!box)return;
+  const L=Object.entries(getTagSets()).filter(([,v])=>(v.text||'').trim());
+  if(!L.length){box.innerHTML='<span class="has" style="display:block">Add tag sets in the Library to add hashtags with one click.</span>';return;}
+  L.sort((a,b)=>tagSuggested(b[1])-tagSuggested(a[1]));
+  const sug=L.filter(([,v])=>tagSuggested(v));
+  box.innerHTML=(sug.length>1?`<button class="chip on" type="button" onclick="addTags('*')">+ All matching (${sug.length})</button>`:'')+
+    L.map(([k,v])=>`<button class="chip ${tagSuggested(v)?'on':''}" type="button" onclick="addTags('${k}')">+ ${esc(v.name)}</button>`).join('');
+}
+function addTags(id){
+  const S=getTagSets();
+  const picks=id==='*'?Object.values(S).filter(tagSuggested):[S[id]].filter(Boolean);
+  const cap=$('f-cap');let have=cap.value.toLowerCase();
+  const add=[];
+  picks.forEach(v=>(v.text||'').split(/\s+/).filter(Boolean).forEach(t=>{if(!have.includes(t.toLowerCase())&&!add.some(a=>a.toLowerCase()===t.toLowerCase()))add.push(t);}));
+  if(!add.length){toast('Those tags are already in the caption');return;}
+  const cur=cap.value.trimEnd(),last=cur.split('\n').pop().trim();
+  cap.value=cur?(/^[#@]/.test(last)?cur+' ':cur+'\n\n')+add.join(' '):add.join(' ');
+  toast(add.length+' tag'+(add.length>1?'s':'')+' added');
+}
+function libTagsHtml(){
+  const S=getTagSets(),ids=Object.keys(S);
+  return `<div class="sec">Tag sets</div><div class="sub" style="margin:0 0 8px">Hashtags and @tags saved per venue and per game. In a post, one click adds them to the caption. A set lights up on its own when its name is in the post title (like Karaoke or a venue name).</div>
+  <div class="bar"><button class="btn btn-g" data-act="tsnew">+ New set</button><button class="btn btn-g" data-act="tsgames">Add my games</button><button class="btn btn-g" data-act="tsvenues">Add my venues</button></div>
+  <div class="grid">${ids.map(id=>{const v=S[id];return `<div class="card"><span class="lbl">Name (match the venue or game name)</span><input type="text" data-ts="${id}" data-f="name" value="${esc(v.name||'')}"/>
+    <span class="lbl">Kind</span><select data-ts="${id}" data-f="kind">${['venue','game','general'].map(k=>`<option value="${k}" ${v.kind===k?'selected':''}>${k[0].toUpperCase()+k.slice(1)}</option>`).join('')}</select>
+    <span class="lbl">Hashtags and @tags</span><textarea data-ts="${id}" data-f="text" style="min-height:70px" placeholder="#karaoke #tacoma @thevenue">${esc(v.text||'')}</textarea>
+    <div class="acts"><button class="btn btn-d" data-act="tsdel" data-arg="${id}">Delete</button></div></div>`;}).join('')||'<div class="empty">No tag sets yet.</div>'}</div>`;
+}
+function tsAdd(names,kind){
+  const S={...getTagSets()},have=new Set(Object.values(S).map(v=>(v.name||'').toLowerCase()));let n=0;
+  names.forEach(nm=>{if(!nm||have.has(nm.toLowerCase()))return;S['t'+Date.now().toString(36)+(n++)]={name:nm,kind,text:''};have.add(nm.toLowerCase());});
+  saveTagSets(S);toast(n?n+' added: fill in their tags':'Nothing new to add');
+}
+
 /* ── CHECKLIST EDITOR: your own tasks and timing, one list per kind of event ── */
 let tw=null,twKey='';
 function ensureTov(){
@@ -1188,7 +1267,7 @@ function exportBuffer(){
   toast(ready.length+' posts exported'+(skipped?` · ${skipped} skipped (no caption)`:''));
 }
 
-window.closeEdit=closeEdit;window.saveEdit=saveEdit;window.delPost=delPost;window.encore=encore;window.muse=muse;window.tw=null;Object.defineProperty(window,'tw',{get:()=>tw,set:v=>{tw=v;}});Object.defineProperty(window,'twKey',{get:()=>twKey});window.twPick=twPick;window.twAdd=twAdd;window.twDelTask=twDelTask;window.twMove=twMove;window.twNewSet=twNewSet;window.twDelSet=twDelSet;window.twSave=twSave;window.libUpload=libUpload;window.aiCaption=aiCaption;window.openGfx=openGfx;window.gfxPick=gfxPick;window.gfxSaveBg=gfxSaveBg;window.gfxUse=gfxUse;window.uploadImg=uploadImg;window.imgPrev=imgPrev;
+window.closeEdit=closeEdit;window.saveEdit=saveEdit;window.delPost=delPost;window.encore=encore;window.muse=muse;window.addTags=addTags;window.setWin=setWin;window.tw=null;Object.defineProperty(window,'tw',{get:()=>tw,set:v=>{tw=v;}});Object.defineProperty(window,'twKey',{get:()=>twKey});window.twPick=twPick;window.twAdd=twAdd;window.twDelTask=twDelTask;window.twMove=twMove;window.twNewSet=twNewSet;window.twDelSet=twDelSet;window.twSave=twSave;window.libUpload=libUpload;window.aiCaption=aiCaption;window.openGfx=openGfx;window.gfxPick=gfxPick;window.gfxSaveBg=gfxSaveBg;window.gfxUse=gfxUse;window.uploadImg=uploadImg;window.imgPrev=imgPrev;
 window.addEventListener('hashchange',()=>{const h=location.hash.slice(1);if((TABS.some(t=>t[0]===h)||h==='events')&&h!==tab){tab=h;render();}});
 applyTheme(document.documentElement.getAttribute('data-theme')||'dark');
 init();
