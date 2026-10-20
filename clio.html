@@ -46,7 +46,7 @@ html,body{min-height:100%;font-family:var(--font);background:var(--bg2);color:va
 .bar{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:14px;}
 .chip{padding:4px 12px;border-radius:99px;font-size:10px;border:.5px solid var(--border2);background:none;cursor:pointer;color:var(--text2);font-family:var(--cinzel);letter-spacing:.04em;text-transform:uppercase;}
 .chip.on{background:var(--text);color:#fff;border-color:var(--text);}
-select,input[type=text],input[type=date],input[type=time],textarea{font-family:var(--font);font-size:13px;padding:7px 10px;border:.5px solid var(--border2);border-radius:var(--r);background:var(--bg);color:var(--text);width:100%;}
+select,input[type=text],input[type=date],input[type=time],input[type=password],textarea{font-family:var(--font);font-size:13px;padding:7px 10px;border:.5px solid var(--border2);border-radius:var(--r);background:var(--bg);color:var(--text);width:100%;}
 select.mini{width:auto;font-size:12px;padding:5px 8px;}
 textarea{resize:vertical;min-height:90px;line-height:1.5;}
 select:focus,input:focus,textarea:focus{outline:none;border-color:var(--gold);}
@@ -101,6 +101,7 @@ select:focus,input:focus,textarea:focus{outline:none;border-color:var(--gold);}
   <div class="brand">Belladonna Clio</div>
   <div class="tabs" id="tabs"></div>
   <span class="mode" id="mode">…</span>
+  <button class="btn btn-g" id="so" data-act="signout" style="display:none">Sign out</button>
   <button class="btn btn-p" data-act="new">+ Post</button>
 </nav>
 <div class="wrap"><div id="banner"></div><div id="view"></div></div>
@@ -381,7 +382,7 @@ function buildSeed(){
 }
 
 /* ── STATE ── */
-let db=null,fs=null,mode='local',posts=[],libOv={};
+let db=null,fs=null,auth=null,authMod=null,user=null,authChecked=false,unsubs=[],mode='local',posts=[],vposts=[],gigs=[],libOv={};
 let tab=(location.hash||'#dashboard').slice(1);
 let calView='todo',typeF='all',monthF='all',studioF='caption',editingId=null;
 const TABS=[['dashboard','Dashboard'],['calendar','Calendar'],['campaigns','Campaigns'],['studio','Studio'],['echo','Echo'],['library','Library']];
@@ -406,13 +407,22 @@ const sortFn=(a,b)=>(a.date+(a.time||'99'))<(b.date+(b.time||'99'))?-1:1;
 async function init(){
   if(!FIREBASE_CONFIG.apiKey.startsWith('PASTE')){
     try{
-      const app=await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js');
+      const fa=await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js');
       fs=await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
-      db=fs.getFirestore(app.initializeApp(FIREBASE_CONFIG));
+      authMod=await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js');
+      const appInst=fa.initializeApp(FIREBASE_CONFIG);
+      db=fs.getFirestore(appInst);auth=authMod.getAuth(appInst);
       mode='cloud';
-      const bad=err=>banner('Firestore says: '+esc(err.message)+'. The rules need entries for <b>'+COL_POSTS+'</b> and <b>'+COL_LIB+'</b>.',true);
-      fs.onSnapshot(fs.collection(db,COL_POSTS),snap=>{posts=snap.docs.map(d=>({id:d.id,...d.data()}));render();},bad);
-      fs.onSnapshot(fs.collection(db,COL_LIB),snap=>{libOv={};snap.docs.forEach(d=>libOv[d.id]=d.data());render();},bad);
+      authMod.onAuthStateChanged(auth,u=>{
+        authChecked=true;user=u;unsubs.forEach(f=>f());unsubs=[];
+        if(u){
+          const bad=err=>banner('Firestore says: '+esc(err.message)+'. Clio needs an account with role admin to read and save.',true);
+          unsubs.push(fs.onSnapshot(fs.collection(db,COL_POSTS),snap=>{posts=snap.docs.map(d=>({id:d.id,...d.data()}));render();},bad));
+          unsubs.push(fs.onSnapshot(fs.collection(db,COL_LIB),snap=>{libOv={};snap.docs.forEach(d=>libOv[d.id]=d.data());render();},bad));
+          unsubs.push(fs.onSnapshot(fs.collection(db,'gig_schedule'),snap=>{gigs=snap.docs.map(d=>({id:d.id,...d.data()}));render();},err=>console.warn('gig_schedule:',err.message)));
+        }else{posts=[];libOv={};gigs=[];}
+        render();
+      });
     }catch(e){mode='local';banner('Firebase failed to load ('+esc(e.message)+'). Running in this-browser-only mode.',true);}
   }
   if(mode==='local'){
@@ -461,9 +471,64 @@ async function seedMissing(){
   toast(add.length+' posts added');
 }
 
+/* ── HQ NIGHTS: HQ's gig_schedule is the source (the Planner mirrors it), so Clio reads it directly ── */
+function t24(t){
+  if(t==null||t==='')return '';
+  const m=/^\s*(\d{1,2})(?::(\d{2}))?\s*([ap])?\.?m?\.?/i.exec(String(t));if(!m)return '';
+  let h=+m[1];const ap=(m[3]||'').toLowerCase();
+  if(ap==='p'&&h<12)h+=12;if(ap==='a'&&h===12)h=0;
+  if(!ap&&m[1].length===1&&h>=1&&h<=11)h+=12;
+  if(h>23)return '';
+  return pad(h)+':'+(m[2]||'00');
+}
+const DN=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+const isPublicGig=g=>g.date&&g.status!=='cancelled'&&!/event/i.test(g.kind||'');
+function virtualRows(){
+  if(!gigs.length)return [];
+  const have=new Set(posts.map(p=>p.id)),from=addDays(todayStr(),-1),out=[];
+  gigs.forEach(g=>{
+    if(!isPublicGig(g)||g.date<from)return;
+    const v=g.venue||'venue',k=g.kind||'night',t=t24(g.time);
+    const mk=(code,date,time,type,title)=>{
+      const id='g_'+g.id+'_'+code;if(have.has(id))return;
+      out.push({id,date,time,type,title,platform:TYPES[type].plat,caption:'',imageUrl:'',notes:(g.host&&g.host!=='Unassigned')?'Host: '+g.host:'',created:false,posted:false,auto:true});
+    };
+    mk('tonight',g.date,'15:00','tonight','Tonight story: '+v+', '+k+(t?' at '+fmtTime(t):''));
+    mk('host',g.date,t||'18:00','host','Host story: '+v+', '+k);
+    mk('best',addDays(g.date,1),'10:00','best','Best Dressed photo: '+v+', '+k+' ('+DN[new Date(g.date+'T12:00:00').getDay()]+')');
+  });
+  return out;
+}
+function nightLines(from,to,perDate){
+  const L=gigs.filter(g=>isPublicGig(g)&&g.date>=from&&g.date<=to);
+  const dow=g=>new Date(g.date+'T12:00:00').getDay();
+  if(perDate)return L.sort((a,b)=>a.date<b.date?-1:1).map(g=>DN[dow(g)]+', '+g.venue+', '+g.kind);
+  const m=new Map();
+  L.forEach(g=>{const key=dow(g)+'|'+g.venue+'|'+g.kind;if(!m.has(key))m.set(key,{d:dow(g),v:g.venue,k:g.kind});});
+  return [...m.values()].sort((a,b)=>a.d-b.d||String(a.v).localeCompare(String(b.v))).map(x=>DN[x.d]+', '+x.v+', '+x.k);
+}
+
 /* ── SHELL ── */
 function setTab(t){tab=t;location.hash=t;render();window.scrollTo(0,0);}
+function vSignIn(){
+  $('view').innerHTML=head('Belladonna Clio','Sign in with your admin account.')+(authChecked?`<div class="card" style="max-width:380px"><span class="lbl">Email or username</span><input type="text" id="si-id" autocomplete="username"/><span class="lbl">Password</span><input type="password" id="si-pw" autocomplete="current-password"/><div style="margin-top:12px"><button class="btn btn-p" data-act="signin">Sign in</button></div></div>`:'<div class="empty">Checking sign-in…</div>');
+}
+async function signIn(){
+  let id=($('si-id').value||'').trim();const pw=$('si-pw').value;
+  if(!id||!pw){toast('Enter both');return;}
+  try{
+    if(!id.includes('@')){
+      const d=await fs.getDoc(fs.doc(db,'loginLookup',id.toLowerCase()));
+      if(d.exists()&&d.data().email)id=d.data().email;
+      else{toast("Couldn't find that username. Try your email.");return;}
+    }
+    await authMod.signInWithEmailAndPassword(auth,id,pw);
+  }catch(e){toast('Sign-in failed');}
+}
 function render(){
+  const so=$('so');if(so)so.style.display=(mode==='cloud'&&user)?'':'none';
+  if(mode==='cloud'&&!user){$('tabs').innerHTML='';banner('');vSignIn();return;}
+  vposts=posts.concat(virtualRows());
   $('tabs').innerHTML=TABS.map(([k,l])=>`<button class="tab ${tab===k?'on':''}" data-act="tab" data-arg="${k}">${l}</button>`).join('');
   if(!posts.length)banner(`Clio's calendar is empty. <button class="btn btn-p" data-act="seed">Load my 2026–2027 calendars (${buildSeed().length} rows)</button>`);
   else if($('banner').querySelector('.banner:not(.err)'))banner('');
@@ -497,17 +562,17 @@ function groupedList(list,monthHeads,desc){
 }
 function statsHtml(list,t){
   const real=list.filter(p=>!isMile(p));
-  return `<div class="stats"><div class="stat"><b>${real.length}</b><span>Showing</span></div><div class="stat"><b>${real.filter(p=>p.created).length}</b><span>Made</span></div><div class="stat"><b>${real.filter(p=>p.posted).length}</b><span>Posted</span></div><div class="stat ${posts.some(p=>overdue(p,t))?'bad':''}"><b>${posts.filter(p=>overdue(p,t)).length}</b><span>Overdue (all)</span></div></div>`;
+  return `<div class="stats"><div class="stat"><b>${real.length}</b><span>Showing</span></div><div class="stat"><b>${real.filter(p=>p.created).length}</b><span>Made</span></div><div class="stat"><b>${real.filter(p=>p.posted).length}</b><span>Posted</span></div><div class="stat ${vposts.some(p=>overdue(p,t))?'bad':''}"><b>${vposts.filter(p=>overdue(p,t)).length}</b><span>Overdue (all)</span></div></div>`;
 }
 
 /* ── DASHBOARD ── */
 function vDashboard(){
   const t=todayStr(),wk=addDays(t,7);
-  const real=posts.filter(p=>!isMile(p));
+  const real=vposts.filter(p=>!isMile(p));
   const od=real.filter(p=>overdue(p,t)).sort(sortFn);
   const next=real.filter(p=>p.date>=t&&p.date<=wk&&!p.posted).sort(sortFn);
   const needMade=next.filter(p=>!p.created).length;
-  const bigs=posts.filter(p=>p.type==='big'&&p.date>=t).sort(sortFn).slice(0,3);
+  const bigs=vposts.filter(p=>p.type==='big'&&p.date>=t).sort(sortFn).slice(0,3);
   const thisMonth=t.slice(0,7),mp=real.filter(p=>p.date.startsWith(thisMonth));
   $('view').innerHTML=head('Dashboard','What needs you right now.')+
     `<div class="stats">
@@ -524,9 +589,9 @@ function vDashboard(){
 /* ── CALENDAR (History lives here) ── */
 function vCalendar(){
   const t=todayStr();
-  const months=[...new Set(posts.map(p=>p.date.slice(0,7)))].sort();
+  const months=[...new Set(vposts.map(p=>p.date.slice(0,7)))].sort();
   const views=[['todo','To do'],['overdue','Overdue'],['all','Everything'],['history','History']];
-  let list=posts.slice();
+  let list=vposts.slice();
   if(typeF!=='all')list=list.filter(p=>p.type===typeF);
   if(monthF!=='all')list=list.filter(p=>p.date.startsWith(monthF));
   const end=addDays(t,14);
@@ -545,14 +610,14 @@ function vCalendar(){
 
 /* ── CAMPAIGNS: each month is a campaign ── */
 function vCampaigns(){
-  const real=posts.filter(p=>!isMile(p));
-  const months=[...new Set(posts.map(p=>p.date.slice(0,7)))].sort();
+  const real=vposts.filter(p=>!isMile(p));
+  const months=[...new Set(vposts.map(p=>p.date.slice(0,7)))].sort();
   const t=todayStr().slice(0,7);
   $('view').innerHTML=head('Campaigns','Each month is a campaign: its posts, its big night, how far along it is.')+
     `<div class="grid">${months.map(m=>{
       const mp=real.filter(p=>p.date.startsWith(m)),n=mp.length;
       const made=mp.filter(p=>p.created).length,posted=mp.filter(p=>p.posted).length;
-      const big=posts.filter(p=>p.type==='big'&&p.date.startsWith(m));
+      const big=vposts.filter(p=>p.type==='big'&&p.date.startsWith(m));
       return `<div class="card"><h4>${monthName(m)} ${m===t?'· now':''}</h4>
         <div class="meta">${big.length?'Big night: '+esc(big.map(b=>b.title.replace('Big night: ','')+' ('+new Date(b.date+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})+')').join(', ')):'No big night'}</div>
         <div class="nick">Made ${made}/${n}</div><div class="prog"><i style="width:${n?made/n*100:0}%"></i></div>
@@ -563,7 +628,7 @@ function vCampaigns(){
 /* ── STUDIO: where posts get finished ── */
 function vStudio(){
   const t=todayStr();
-  const up=posts.filter(p=>!isMile(p)&&!p.posted&&p.date>=t).sort(sortFn);
+  const up=vposts.filter(p=>!isMile(p)&&p.type!=='tonight'&&p.type!=='host'&&!p.posted&&p.date>=t).sort(sortFn);
   const f={caption:up.filter(p=>!p.caption.trim()),image:up.filter(p=>!p.imageUrl.trim()),ready:up.filter(p=>p.caption.trim()&&p.imageUrl.trim()),all:up};
   const chips=[['caption','Needs caption'],['image','Needs image'],['ready','Ready for Buffer'],['all','All upcoming']];
   const list=f[studioF].slice(0,150);
@@ -586,7 +651,7 @@ function vLibrary(){
   $('view').innerHTML=head('Library','The ten templates. Keep a link to each design (Canva, Drive) here so you can open it fast.')+
     `<div class="grid">${LIB_SEED.map(t=>{
       const o=libOv[t.id]||{};
-      const n=posts.filter(p=>p.type===t.id).length;
+      const n=vposts.filter(p=>p.type===t.id).length;
       return `<div class="card"><h4>${esc(t.name)}</h4><div class="nick">${esc(t.nick)} · ${esc(t.size)}</div>
         <div class="meta">${esc(t.use)}${n?` · ${n} posts`:''}</div>
         <span class="lbl">Link to template</span><input type="text" data-lib="${t.id}" data-f="link" value="${esc(o.link||'')}" placeholder="https://canva.com/…"/>
@@ -599,7 +664,7 @@ function vLibrary(){
 $('view').addEventListener('click',e=>{
   const cb=e.target.closest('input[data-k]');
   if(cb){
-    const row=cb.closest('.row'),p=posts.find(x=>x.id===row.dataset.id);if(!p)return;
+    const row=cb.closest('.row'),p=vposts.find(x=>x.id===row.dataset.id);if(!p)return;
     const k=cb.dataset.k,v=cb.checked,n={...p,[k]:v};
     if(k==='posted'&&v)n.created=true;
     if(k==='created'&&!v)n.posted=false;
@@ -611,7 +676,8 @@ $('view').addEventListener('click',e=>{
   if(row)openEdit(row.dataset.id);
 });
 $('tabs').addEventListener('click',e=>{const a=e.target.closest('[data-act]');if(a)act(a.dataset.act,a.dataset.arg);});
-document.querySelector('.nav').addEventListener('click',e=>{const a=e.target.closest('[data-act="new"]');if(a)openEdit();});
+document.querySelector('.nav').addEventListener('click',e=>{const a=e.target.closest('[data-act]');if(a&&a.dataset.act!=='tab')act(a.dataset.act,a.dataset.arg);});
+document.addEventListener('keydown',e=>{if(e.key==='Enter'&&(e.target.id==='si-pw'||e.target.id==='si-id'))signIn();});
 $('banner').addEventListener('click',e=>{const a=e.target.closest('[data-act]');if(a)act(a.dataset.act,a.dataset.arg);});
 $('view').addEventListener('change',e=>{
   if(e.target.id==='tf'){typeF=e.target.value;render();}
@@ -626,6 +692,8 @@ function act(a,arg){
   else if(a==='month'){monthF=arg;calView='all';setTab('calendar');}
   else if(a==='studio'){studioF=arg;render();}
   else if(a==='new')openEdit();
+  else if(a==='signin')signIn();
+  else if(a==='signout'&&auth)authMod.signOut(auth);
 }
 
 /* ── EDIT MODAL ── */
@@ -638,7 +706,7 @@ function fillForm(p){
 }
 function openEdit(id){
   editingId=id||null;
-  const p=id?posts.find(x=>x.id===id):{date:todayStr(),time:'12:00',type:'weekly',title:'',platform:'IG + FB',caption:'',imageUrl:'',notes:'',created:false,posted:false};
+  const p=id?vposts.find(x=>x.id===id):{date:todayStr(),time:'12:00',type:'weekly',title:'',platform:'IG + FB',caption:'',imageUrl:'',notes:'',created:false,posted:false};
   $('mt').textContent=id?'Edit post':'Add post';
   fillForm(p);
   $('f-del').style.display=id?'':'none';
@@ -671,11 +739,13 @@ function encore(){
 
 /* The Muse: builds the ChatGPT prompt for this post from your template text */
 const STYLE='Style: dark gothic botanical, near-black background, antique gold and cream accents, deadly nightshade sprigs framing the corners, a raven perched at the top. Elegant serif display font for the title, clean sans-serif for details. No emojis, no clip art, no cheesy party elements.';
-function museFor(type,title){
+function museFor(type,title,date){
+  const wk=(type==='weekly'&&gigs.length&&date)?nightLines(date,addDays(date,6),true):[];
+  const mo=(type==='monthly'&&gigs.length&&date)?(()=>{const d=new Date(date+'T12:00:00');return nightLines(ymd(new Date(d.getFullYear(),d.getMonth()+1,1)),ymd(new Date(d.getFullYear(),d.getMonth()+2,0)),false);})():[];
   const t=title.includes(': ')?title.split(': ').slice(1).join(': '):title;
   const ev=t.replace(/^\d+ days?: /,'');
-  if(type==='monthly')return `Create a 1080x1350 Instagram graphic for a live entertainment brand called Belladonna. ${STYLE}\n\nLayout, top to bottom:\n1. Small gold line: "BELLADONNA PRESENTS"\n2. Huge title: "[MONTH NAME]"\n3. Subtitle: "${t}"\n4. Four lines, one per week, each with the date and costume theme: "[Mon DATE] [WEEK 1 THEME]", and so on for weeks 2 to 4\n5. A gold highlighted line: "BIG NIGHT: [EVENT NAME], [DAY, DATE]"\n6. Bottom line: "Dress in the theme. Or any costume. Bonus card for everyone who does."\n7. Small footer: belladonnanights.com\n\nMood: [ONE LINE OF MOOD]. Keep the text large and perfectly spelled.`;
-  if(type==='weekly')return `Create a 1080x1350 Instagram graphic for Belladonna, a live entertainment brand. ${STYLE}\n\nLayout:\n1. Small gold line: "THIS WEEK AT BELLADONNA"\n2. Huge title: "${t.toUpperCase()}"\n3. One line under it: "[WEEK X OF 4: MONTH THEME NAME]"\n4. A list of this week's nights, one per line: "[DAY], [VENUE], [EVENT]"\n5. Gold line: "Costume = bonus card. Theme costume = bonus stamp."\n6. Small footer: belladonnanights.com\n\nMood: [ONE LINE OF MOOD].`;
+  if(type==='monthly')return `Create a 1080x1350 Instagram graphic for a live entertainment brand called Belladonna. ${STYLE}\n\nLayout, top to bottom:\n1. Small gold line: "BELLADONNA PRESENTS"\n2. Huge title: "[MONTH NAME]"\n3. Subtitle: "${t}"\n4. Four lines, one per week, each with the date and costume theme: "[Mon DATE] [WEEK 1 THEME]", and so on for weeks 2 to 4\n5. A gold highlighted line: "BIG NIGHT: [EVENT NAME], [DAY, DATE]"\n6. Bottom line: "Dress in the theme. Or any costume. Bonus card for everyone who does."\n7. Small footer: belladonnanights.com\n\nMood: [ONE LINE OF MOOD]. Keep the text large and perfectly spelled.${mo.length?'\n\nThen make slide 2, "Monthly Schedule", listing every venue and night, one per line:\n   '+mo.join('\n   '):''}`;
+  if(type==='weekly')return `Create a 1080x1350 Instagram graphic for Belladonna, a live entertainment brand. ${STYLE}\n\nLayout:\n1. Small gold line: "THIS WEEK AT BELLADONNA"\n2. Huge title: "${t.toUpperCase()}"\n3. One line under it: "[WEEK X OF 4: MONTH THEME NAME]"\n4. This week's nights, one per line:${wk.length?'\n   '+wk.join('\n   '):' "[DAY], [VENUE], [EVENT]"'}\n5. Gold line: "Costume = bonus card. Theme costume = bonus stamp."\n6. Small footer: belladonnanights.com\n\nMood: [ONE LINE OF MOOD].`;
   if(type==='count'){
     const m=title.match(/^Countdown, (.*?): (.*)$/);
     const when=m?(m[1]==='day of'?'TONIGHT':m[1].toUpperCase()):'[N DAYS]';
@@ -686,7 +756,7 @@ function museFor(type,title){
   return `Create a graphic for Belladonna, a live entertainment brand, for this post: "${title}". ${STYLE}\n\nText: "[TEXT]". Footer: belladonnanights.com\n\nMood: [ONE LINE OF MOOD].`;
 }
 function muse(){
-  const p=museFor($('f-type').value,$('f-title').value||'');
+  const p=museFor($('f-type').value,$('f-title').value||'',$('f-date').value);
   $('f-muse').value=p;$('f-muse-wrap').style.display='';
   (navigator.clipboard?navigator.clipboard.writeText(p).then(()=>toast('Prompt copied'),()=>toast('Select and copy the prompt below')):Promise.resolve(toast('Select and copy the prompt below')));
 }
@@ -695,7 +765,7 @@ function muse(){
 function csvCell(s){return '"'+String(s??'').replace(/"/g,'""')+'"';}
 function exportBuffer(){
   const t=todayStr();
-  let list=posts.filter(p=>!isMile(p)&&!p.posted&&p.date>=t);
+  let list=posts.filter(p=>!isMile(p)&&p.type!=='tonight'&&p.type!=='host'&&!p.posted&&p.date>=t);
   const ready=list.filter(p=>p.caption.trim()).sort(sortFn);
   const skipped=list.length-ready.length;
   if(!ready.length){toast('No upcoming posts have a caption yet');return;}
