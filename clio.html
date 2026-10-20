@@ -141,17 +141,16 @@ select:focus,input:focus,textarea:focus{outline:none;border-color:var(--gold);}
 
 <script type="module">
 /* ─────────────────────────────────────────────────────────────
-   FIREBASE: paste the same config object your other Belladonna apps use
-   (project belladonna-hq). Until you do, Clio runs in "This browser only"
-   mode so you can try it right away.
+   FIREBASE: belladonna-hq web config (same one your other apps use).
    ───────────────────────────────────────────────────────────── */
 const FIREBASE_CONFIG = {
-  apiKey: "PASTE_API_KEY",
+  apiKey: "AIzaSyCIfAE1JGHsUGzzVH2pz1Vyj5b5OhA0tDQ",
   authDomain: "belladonna-hq.firebaseapp.com",
+  databaseURL: "https://belladonna-hq-default-rtdb.firebaseio.com",
   projectId: "belladonna-hq",
-  storageBucket: "",
-  messagingSenderId: "",
-  appId: ""
+  storageBucket: "belladonna-hq.firebasestorage.app",
+  messagingSenderId: "1021873183587",
+  appId: "1:1021873183587:web:def283bb7b5ca48e4f9156"
 };
 const COL_POSTS='socialPosts', COL_LIB='socialLibrary';
 const LS='bn_social_posts_v1', LS_LIB='bn_clio_lib_v1';
