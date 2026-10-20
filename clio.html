@@ -472,6 +472,7 @@ async function init(){
           unsubs.push(fs.onSnapshot(fs.collection(db,COL_POSTS),snap=>{posts=snap.docs.map(d=>({id:d.id,...d.data()}));render();},bad));
           unsubs.push(fs.onSnapshot(fs.collection(db,COL_LIB),snap=>{libOv={};snap.docs.forEach(d=>libOv[d.id]=d.data());render();},bad));
           unsubs.push(fs.onSnapshot(fs.collection(db,'gig_schedule'),snap=>{gigs=snap.docs.map(d=>({id:d.id,...d.data()}));render();},err=>console.warn('gig_schedule:',err.message)));
+          setTimeout(()=>syncBuffer(false),5000);
         }else{posts=[];libOv={};gigs=[];}
         render();
       });
@@ -636,16 +637,18 @@ const EVENT_TASKS=[
 const evTitle=p=>p.title.replace(/^Big night:\s*/i,'');
 function upcomingEvents(){const t=todayStr();return posts.filter(p=>p.type==='big'&&p.date>=t).sort(sortFn);}
 function daysAway(d){const n=Math.round((new Date(d+'T12:00:00')-new Date(todayStr()+'T12:00:00'))/864e5);return n===0?'Today':n===1?'Tomorrow':n+' days away';}
+function getSets(){const s=(libOv.eventTasks||{}).sets;return (s&&Object.keys(s).length)?s:{default:{name:'Big night',tasks:EVENT_TASKS}};}
+function setFor(p){const S=getSets();return S[p.evKind]||S[Object.keys(S)[0]];}
 function evChecklist(p){
   const t=todayStr(),tk=p.tasks||{};let lastG='';
-  return EVENT_TASKS.map(x=>{
+  return setFor(p).tasks.map(x=>{
     const due=addDays(p.date,-x.d),done=!!tk[x.k],late=!done&&due<t;
     const g=x.g&&x.g!==lastG?`<div class="lbl" style="margin:10px 0 2px">${esc(x.g)}</div>`:'';lastG=x.g||'';
     const label=x.g?x.t.replace(/^Make event flyer:\s*/,''):x.t;
     return g+`<div class="row ${done?'done':''} ${late?'od':''}" style="cursor:pointer;${x.g?'margin-left:14px;':''}" data-act="task" data-arg="${esc(p.id)}|${x.k}"><input type="checkbox" ${done?'checked':''} style="pointer-events:none"/><div class="rt">${esc(label)}</div><div class="has" style="display:block">${done?'Done':(late?'Overdue · ':'Do by ')+(late?'':'')+new Date(due+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})}</div></div>`;
   }).join('');
 }
-function evProgress(p){const n=EVENT_TASKS.filter(x=>(p.tasks||{})[x.k]).length;return [n,EVENT_TASKS.length];}
+function evProgress(p){const L=setFor(p).tasks,n=L.filter(x=>(p.tasks||{})[x.k]).length;return [n,L.length];}
 function vDashboard(){
   const evs=upcomingEvents();
   if(evIdx>=evs.length)evIdx=evs.length-1;if(evIdx<0)evIdx=0;
@@ -662,9 +665,9 @@ function vDashboard(){
         <button class="btn btn-g" data-act="evnext" ${evIdx>=evs.length-1?'disabled style="opacity:.3"':''}>›</button>
       </div>
       <div class="prog" style="margin:12px 0 4px"><i style="width:${Math.round(n/tot*100)}%"></i></div>
-      <div class="meta" style="margin-bottom:8px">${n} of ${tot} done</div>
+      <div class="meta" style="margin-bottom:8px">${n} of ${tot} done · Checklist: <select class="mini" data-kind="${esc(p.id)}">${Object.entries(getSets()).map(([k,v])=>`<option value="${k}" ${setFor(p)===v?'selected':''}>${esc(v.name)}</option>`).join('')}</select></div>
       ${evChecklist(p)}
-      <div class="acts" style="margin-top:12px"><button class="btn btn-g" data-act="evopen" data-arg="${esc(p.id)}">Edit event</button><button class="btn btn-p" data-act="tab" data-arg="events">See all events</button></div>
+      <div class="acts" style="margin-top:12px"><button class="btn btn-g" data-act="edtasks">Edit checklists</button><button class="btn btn-g" data-act="evopen" data-arg="${esc(p.id)}">Edit event</button><button class="btn btn-p" data-act="tab" data-arg="events">See all events</button></div>
     </div>`;
   }
   const t=todayStr(),real=vposts.filter(p=>!isMile(p)),od=real.filter(p=>overdue(p,t)).length;
@@ -674,7 +677,7 @@ function vDashboard(){
 function vEvents(){
   const evs=upcomingEvents();
   $('view').innerHTML=head('All events','Every upcoming event with its full to-do list.')+
-    `<div class="bar"><button class="btn btn-g" data-act="tab" data-arg="dashboard">‹ Back to Dashboard</button></div>`+
+    `<div class="bar"><button class="btn btn-g" data-act="tab" data-arg="dashboard">‹ Back to Dashboard</button><button class="btn btn-g" data-act="edtasks">Edit checklists</button></div>`+
     (evs.length?`<div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(320px,1fr))">`+evs.map(p=>{const[n,tot]=evProgress(p);
       return `<div class="card"><div class="nick">${esc(daysAway(p.date))} · ${esc(dayName(p.date))}</div><h4 style="font-size:13px;margin:2px 0 6px">${esc(evTitle(p))}</h4>
       <div class="prog"><i style="width:${Math.round(n/tot*100)}%"></i></div><div class="meta">${n} of ${tot} done</div>${evChecklist(p)}
@@ -685,7 +688,7 @@ function overviewStats(){
   const od=real.filter(p=>overdue(p,t)).length;
   const next=real.filter(p=>p.date>=t&&p.date<=wk&&!p.posted);
   const mp=real.filter(p=>p.date.startsWith(t.slice(0,7)));
-  return `<div class="stats"><div class="stat ${od?'bad':''}"><b>${od}</b><span>Overdue</span></div><div class="stat"><b>${next.length}</b><span>Next 7 days</span></div><div class="stat"><b>${next.filter(p=>!p.created).length}</b><span>Still to make</span></div><div class="stat"><b>${mp.filter(p=>p.posted).length}/${mp.length}</b><span>Posted this month</span></div></div>`;
+  return `<div class="stats"><div class="stat ${od?'bad':''}"><b>${od}</b><span>Overdue</span></div><div class="stat"><b>${next.length}</b><span>Next 7 days</span></div><div class="stat"><b>${next.filter(p=>!p.created).length}</b><span>Still to make</span></div><div class="stat"><b>${mp.filter(p=>p.posted).length}/${mp.length}</b><span>Posted this month</span></div></div><div class="bar" style="margin-top:-6px"><button class="btn btn-g" data-act="bufsync">Sync with Buffer</button></div>`;
 }
 
 /* ── CALENDAR (History lives here) ── */
@@ -814,6 +817,7 @@ $('banner').addEventListener('click',e=>{const a=e.target.closest('[data-act]');
 $('view').addEventListener('change',e=>{
   if(e.target.id==='tf'){typeF=e.target.value;render();}
   else if(e.target.id==='mf'){monthF=e.target.value;render();}
+  else if(e.target.dataset.kind){const p=posts.find(x=>x.id===e.target.dataset.kind);if(p)persist({...p,evKind:e.target.value});}
   else if(e.target.dataset.api){const u=normApi(e.target.value);if(u||!e.target.value.trim()){try{localStorage.setItem('bn_clio_api',u);}catch(x){}toast(u?'Worker address saved':'Worker address cleared');}else toast('That does not look like an address');}
   else if(e.target.dataset.lib)saveLib(e.target.dataset.lib,{[e.target.dataset.f]:e.target.value.trim()}).then(render);
 });
@@ -836,6 +840,8 @@ function act(a,arg){
   else if(a==='task'){const[id,k]=arg.split('|'),p=posts.find(x=>x.id===id);if(p){const tk={...(p.tasks||{})};if(tk[k])delete tk[k];else tk[k]=true;persist({...p,tasks:tk});}}
   else if(a==='evprev'||a==='evnext'){evIdx+=a==='evnext'?1:-1;render();}
   else if(a==='evopen'){openEdit(arg);}
+  else if(a==='edtasks')openTasks();
+  else if(a==='bufsync')syncBuffer(false);
   else if(a==='signout'&&auth)authMod.signOut(auth);
 }
 
@@ -1098,6 +1104,74 @@ async function gfxUse(){
   b.disabled=false;b.textContent='Use this image';
 }
 
+/* ── CHECKLIST EDITOR: your own tasks and timing, one list per kind of event ── */
+let tw=null,twKey='';
+function ensureTov(){
+  if($('tov'))return;
+  const el=document.createElement('div');el.className='ov';el.id='tov';
+  el.addEventListener('click',e=>{if(e.target===el)el.classList.remove('show');});
+  document.body.appendChild(el);
+}
+function openTasks(){
+  ensureTov();
+  tw=JSON.parse(JSON.stringify(getSets()));twKey=Object.keys(tw)[0];
+  renderTasks();$('tov').classList.add('show');
+}
+function renderTasks(){
+  const set=tw[twKey];
+  $('tov').innerHTML=`<div class="box" style="max-width:680px"><h3>Event checklists</h3>
+  <div class="f2"><div class="f"><label>Checklist</label><select onchange="twPick(this.value)">${Object.entries(tw).map(([k,v])=>`<option value="${k}" ${k===twKey?'selected':''}>${esc(v.name)}</option>`).join('')}</select></div>
+  <div class="f"><label>Name</label><input type="text" value="${esc(set.name)}" oninput="tw[twKey].name=this.value"/></div></div>
+  <div class="tools" style="margin-top:0"><button class="btn btn-g" type="button" onclick="twNewSet()">+ New checklist</button><button class="btn btn-g" type="button" onclick="twDelSet()">Delete this checklist</button></div>
+  <div class="sec" style="margin-top:8px">Tasks, in order. “Days before” counts back from the event date.</div>
+  ${set.tasks.map((x,i)=>`<div class="row" style="cursor:default;gap:6px;flex-wrap:wrap">
+    <input type="text" value="${esc(x.t)}" style="flex:1;min-width:180px" oninput="tw[twKey].tasks[${i}].t=this.value"/>
+    <input type="text" value="${esc(x.g||'')}" placeholder="Group (optional)" style="width:130px" oninput="tw[twKey].tasks[${i}].g=this.value.trim()"/>
+    <input type="text" inputmode="numeric" value="${x.d}" style="width:56px" title="Days before the event" oninput="tw[twKey].tasks[${i}].d=Math.max(0,parseInt(this.value)||0)"/><span class="has" style="display:inline">days</span>
+    <button class="btn btn-g" style="padding:3px 8px" type="button" onclick="twMove(${i},-1)">↑</button><button class="btn btn-g" style="padding:3px 8px" type="button" onclick="twMove(${i},1)">↓</button><button class="btn btn-d" style="padding:3px 8px" type="button" onclick="twDelTask(${i})">✕</button></div>`).join('')}
+  <div class="tools"><button class="btn btn-g" type="button" onclick="twAdd()">+ Add task</button></div>
+  <div class="acts"><button class="btn btn-g" type="button" onclick="document.getElementById('tov').classList.remove('show')">Cancel</button><button class="btn btn-p" type="button" onclick="twSave()">Save checklists</button></div></div>`;
+}
+function twPick(k){twKey=k;renderTasks();}
+function twAdd(){tw[twKey].tasks.push({k:'t'+Date.now().toString(36),t:'New task',d:14});renderTasks();}
+function twDelTask(i){tw[twKey].tasks.splice(i,1);renderTasks();}
+function twMove(i,d){const L=tw[twKey].tasks,j=i+d;if(j<0||j>=L.length)return;[L[i],L[j]]=[L[j],L[i]];renderTasks();}
+function twNewSet(){const n=(prompt('Name for the new checklist (like Trivia night or Costume party)')||'').trim();if(!n)return;
+  const k='s'+Date.now().toString(36);tw[k]={name:n,tasks:JSON.parse(JSON.stringify(tw[twKey].tasks)).map(x=>({...x,k:x.k}))};twKey=k;renderTasks();}
+function twDelSet(){if(Object.keys(tw).length<2){toast('Keep at least one checklist');return;}
+  if(!confirm('Delete the checklist "'+tw[twKey].name+'"? Events using it switch to another checklist.'))return;
+  delete tw[twKey];twKey=Object.keys(tw)[0];renderTasks();}
+async function twSave(){
+  Object.values(tw).forEach(v=>{v.tasks=v.tasks.filter(x=>x.t.trim());v.name=v.name.trim()||'Checklist';});
+  await saveLib('eventTasks',{sets:tw});$('tov').classList.remove('show');render();
+}
+
+/* ── BUFFER SYNC: Buffer says it sent a post, Clio ticks Posted ── */
+let bufBusy=false;
+async function syncBuffer(manual){
+  if(bufBusy)return;
+  let stored='';try{stored=localStorage.getItem('bn_clio_api')||'';}catch(e){}
+  if(!manual&&!stored)return;
+  const t=todayStr();
+  const cand=posts.filter(p=>!isMile(p)&&(p.caption||'').trim()&&!p.posted&&p.date<=addDays(t,1));
+  if(!cand.length){if(manual)toast('Nothing is waiting to be marked posted');return;}
+  bufBusy=true;
+  try{
+    const since=addDays(cand.map(p=>p.date).sort()[0],-1)+'T00:00:00Z';
+    const d=await apiFetch('/buffer/sent?since='+encodeURIComponent(since),{method:'GET'});
+    const norm=x=>String(x||'').replace(/\\s+/g,' ').trim().toLowerCase();
+    const near=(p,b)=>Math.abs((new Date(ymd(new Date(b.dueAt))+'T12:00:00')-new Date(p.date+'T12:00:00'))/864e5)<=1;
+    const same=(p,b)=>{const a=norm(p.caption),c=norm(b.text);return a===c||(a.length>40&&c.length>40&&a.slice(0,80)===c.slice(0,80));};
+    let done=0,failed=0;
+    for(const p of cand){
+      if((d.sent||[]).some(b=>same(p,b)&&near(p,b))){await persist({...p,created:true,posted:true});done++;}
+      else if((d.failed||[]).some(b=>same(p,b)&&near(p,b)))failed++;
+    }
+    if(done||failed||manual)toast((done?done+' marked posted from Buffer':'Nothing new from Buffer')+(failed?` · ${failed} failed in Buffer, check it`:''));
+  }catch(e){if(manual)toast('Buffer sync failed: '+e.message);}
+  bufBusy=false;
+}
+
 /* ── BUFFER CSV EXPORT (Buffer's bulk upload: Text, Image URL, Tags, Posting Time) ── */
 function csvCell(s){return '"'+String(s??'').replace(/"/g,'""')+'"';}
 function exportBuffer(){
@@ -1114,7 +1188,7 @@ function exportBuffer(){
   toast(ready.length+' posts exported'+(skipped?` · ${skipped} skipped (no caption)`:''));
 }
 
-window.closeEdit=closeEdit;window.saveEdit=saveEdit;window.delPost=delPost;window.encore=encore;window.muse=muse;window.libUpload=libUpload;window.aiCaption=aiCaption;window.openGfx=openGfx;window.gfxPick=gfxPick;window.gfxSaveBg=gfxSaveBg;window.gfxUse=gfxUse;window.uploadImg=uploadImg;window.imgPrev=imgPrev;
+window.closeEdit=closeEdit;window.saveEdit=saveEdit;window.delPost=delPost;window.encore=encore;window.muse=muse;window.tw=null;Object.defineProperty(window,'tw',{get:()=>tw,set:v=>{tw=v;}});Object.defineProperty(window,'twKey',{get:()=>twKey});window.twPick=twPick;window.twAdd=twAdd;window.twDelTask=twDelTask;window.twMove=twMove;window.twNewSet=twNewSet;window.twDelSet=twDelSet;window.twSave=twSave;window.libUpload=libUpload;window.aiCaption=aiCaption;window.openGfx=openGfx;window.gfxPick=gfxPick;window.gfxSaveBg=gfxSaveBg;window.gfxUse=gfxUse;window.uploadImg=uploadImg;window.imgPrev=imgPrev;
 window.addEventListener('hashchange',()=>{const h=location.hash.slice(1);if((TABS.some(t=>t[0]===h)||h==='events')&&h!==tab){tab=h;render();}});
 applyTheme(document.documentElement.getAttribute('data-theme')||'dark');
 init();
