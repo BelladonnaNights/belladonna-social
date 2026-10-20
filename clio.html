@@ -429,7 +429,7 @@ function buildSeed(){
 /* ── STATE ── */
 let db=null,fs=null,auth=null,authMod=null,user=null,authChecked=false,unsubs=[],mode='local',posts=[],vposts=[],gigs=[],libOv={};
 let tab=(location.hash||'#dashboard').slice(1);
-let calView='todo',typeF='all',monthF='all',studioF='caption',editingId=null,selDay=null;
+let evIdx=0,calView='todo',typeF='all',monthF='all',studioF='caption',editingId=null,selDay=null;
 let calMode=(()=>{try{return localStorage.getItem('bn_clio_calmode')||'list';}catch(e){return 'list';}})();
 let calMonth=(()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');})();
 function applyTheme(t){
@@ -438,7 +438,7 @@ function applyTheme(t){
   const b=document.getElementById('th');if(b)b.textContent=t==='dark'?'☀ Light':'☾ Dark';
 }
 const TABS=[['dashboard','Dashboard'],['calendar','Calendar'],['campaigns','Campaigns'],['studio','Studio'],['echo','Echo'],['library','Library']];
-if(!TABS.some(t=>t[0]===tab))tab='dashboard';
+if(!TABS.some(t=>t[0]===tab)&&tab!=='events')tab='dashboard';
 
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -584,7 +584,7 @@ function render(){
   $('tabs').innerHTML=TABS.map(([k,l])=>`<button class="tab ${tab===k?'on':''}" data-act="tab" data-arg="${k}">${l}</button>`).join('');
   if(!posts.length)banner(`Clio's calendar is empty. <button class="btn btn-p" data-act="seed">Load my 2026–2027 calendars (${buildSeed().length} rows)</button>`);
   else if($('banner').querySelector('.banner:not(.err)'))banner('');
-  ({dashboard:vDashboard,calendar:vCalendar,campaigns:vCampaigns,studio:vStudio,echo:vEcho,library:vLibrary})[tab]();
+  ({dashboard:vDashboard,events:vEvents,calendar:vCalendar,campaigns:vCampaigns,studio:vStudio,echo:vEcho,library:vLibrary})[tab]();
 }
 function head(t,s){return `<div class="title">${t}</div><div class="sub">${s}</div>`;}
 
@@ -594,7 +594,7 @@ function rowHtml(p){
   const checks=mile?'<div class="ck" style="visibility:hidden"></div>':
     `<div class="ck"><input type="checkbox" data-k="created" ${p.created?'checked':''}/>Made</div><div class="ck"><input type="checkbox" data-k="posted" ${p.posted?'checked':''}/>Posted</div>`;
   const has=(p.caption?'✎ ':'')+(p.imageUrl?'🖼':'');
-  return `<div class="row ${mile?'milestone':''} ${p.posted?'done':''} ${overdue(p,todayStr())?'od':''}" data-id="${esc(p.id)}">${checks}<div class="time">${fmtTime(p.time)||'—'}</div><span class="badge${hi}">${T.l}</span><div class="rt">${esc(p.title)}${p.notes?`<small>${esc(p.notes)}</small>`:''}</div><div class="has">${has}</div></div>`;
+  return `<div class="row ${mile?'milestone':''} ${p.posted?'done':''} ${overdue(p,todayStr())?'od':''}" data-id="${esc(p.id)}">${checks}<div class="time">${fmtTime(p.time)||'—'}</div><span class="badge${hi}">${T.l}</span><div class="rt">${esc(p.title)}${p.notes?`<small>${esc(p.notes)}</small>`:''}</div><div class="has">${has}</div>${p.auto?'':`<button class="btn btn-d" style="padding:3px 9px" data-act="delrow" data-arg="${esc(p.id)}" title="Delete this post">✕</button>`}</div>`;
 }
 function groupedList(list,monthHeads,desc){
   if(!list.length)return '<div class="empty">Nothing here.</div>';
@@ -618,24 +618,74 @@ function statsHtml(list,t){
 }
 
 /* ── DASHBOARD ── */
+/* ── DASHBOARD: upcoming events and everything each one needs ── */
+const EVENT_TASKS=[
+  {k:'flyer45',t:'Make event flyer: 4:5 (FB / Instagram post)',d:21,g:'Make event flyer'},
+  {k:'flyer169',t:'Make event flyer: 16:9 (FB Event banner)',d:21,g:'Make event flyer'},
+  {k:'fbevent',t:'Create FB Event page',d:21},
+  {k:'wixevent',t:'Create Wix Event',d:21},
+  {k:'wixcodes',t:'Create Wix Free Ticket Codes',d:20},
+  {k:'tickets',t:'Design event free tickets',d:18},
+  {k:'ad',t:'Create event ad',d:14},
+  {k:'disc',t:'Design and post 3 event-related posts in FB Event Discussion',d:14},
+  {k:'groups',t:'Post to all relatable Facebook groups',d:10},
+  {k:'budget',t:'Increase FB ad budget one week before',d:7},
+  {k:'print',t:'Design printable flyer',d:21},
+  {k:'hang',t:'Do flyer hang routes',d:14}
+];
+const evTitle=p=>p.title.replace(/^Big night:\s*/i,'');
+function upcomingEvents(){const t=todayStr();return posts.filter(p=>p.type==='big'&&p.date>=t).sort(sortFn);}
+function daysAway(d){const n=Math.round((new Date(d+'T12:00:00')-new Date(todayStr()+'T12:00:00'))/864e5);return n===0?'Today':n===1?'Tomorrow':n+' days away';}
+function evChecklist(p){
+  const t=todayStr(),tk=p.tasks||{};let lastG='';
+  return EVENT_TASKS.map(x=>{
+    const due=addDays(p.date,-x.d),done=!!tk[x.k],late=!done&&due<t;
+    const g=x.g&&x.g!==lastG?`<div class="lbl" style="margin:10px 0 2px">${esc(x.g)}</div>`:'';lastG=x.g||'';
+    const label=x.g?x.t.replace(/^Make event flyer:\s*/,''):x.t;
+    return g+`<div class="row ${done?'done':''} ${late?'od':''}" style="cursor:pointer;${x.g?'margin-left:14px;':''}" data-act="task" data-arg="${esc(p.id)}|${x.k}"><input type="checkbox" ${done?'checked':''} style="pointer-events:none"/><div class="rt">${esc(label)}</div><div class="has" style="display:block">${done?'Done':(late?'Overdue · ':'Do by ')+(late?'':'')+new Date(due+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})}</div></div>`;
+  }).join('');
+}
+function evProgress(p){const n=EVENT_TASKS.filter(x=>(p.tasks||{})[x.k]).length;return [n,EVENT_TASKS.length];}
 function vDashboard(){
-  const t=todayStr(),wk=addDays(t,7);
-  const real=vposts.filter(p=>!isMile(p));
-  const od=real.filter(p=>overdue(p,t)).sort(sortFn);
-  const next=real.filter(p=>p.date>=t&&p.date<=wk&&!p.posted).sort(sortFn);
-  const needMade=next.filter(p=>!p.created).length;
-  const bigs=vposts.filter(p=>p.type==='big'&&p.date>=t).sort(sortFn).slice(0,3);
-  const thisMonth=t.slice(0,7),mp=real.filter(p=>p.date.startsWith(thisMonth));
-  $('view').innerHTML=head('Dashboard','What needs you right now.')+
-    `<div class="stats">
-      <div class="stat ${od.length?'bad':''}"><b>${od.length}</b><span>Overdue</span></div>
-      <div class="stat"><b>${next.length}</b><span>Next 7 days</span></div>
-      <div class="stat"><b>${needMade}</b><span>Still to make</span></div>
-      <div class="stat"><b>${mp.filter(p=>p.posted).length}/${mp.length}</b><span>Posted this month</span></div>
-    </div>`+
-    (bigs.length?`<div class="sec">Next big nights</div>`+bigs.map(rowHtml).join(''):'')+
-    `<div class="sec">Overdue</div>`+(od.length?od.slice(0,8).map(rowHtml).join('')+(od.length>8?`<div class="empty"><button class="btn btn-g" data-act="view" data-arg="overdue">See all ${od.length} overdue</button></div>`:''):'<div class="empty">Nothing overdue.</div>')+
-    `<div class="sec">Next 7 days</div>`+(next.length?groupedList(next,false):'<div class="empty">Nothing due this week.</div>');
+  const evs=upcomingEvents();
+  if(evIdx>=evs.length)evIdx=evs.length-1;if(evIdx<0)evIdx=0;
+  let box;
+  if(!evs.length)box='<div class="card"><div class="empty">No upcoming big nights on the calendar.</div></div>';
+  else{
+    const p=evs[evIdx],[n,tot]=evProgress(p);
+    box=`<div class="card" style="padding:16px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <button class="btn btn-g" data-act="evprev" ${evIdx===0?'disabled style="opacity:.3"':''}>‹</button>
+        <div style="flex:1;text-align:center"><div class="nick">Event ${evIdx+1} of ${evs.length} · ${esc(daysAway(p.date))}</div>
+          <div class="monthh" style="margin:2px 0;border:0;padding:0">${esc(evTitle(p))}</div>
+          <div class="meta" style="margin:0">${esc(dayName(p.date))}</div></div>
+        <button class="btn btn-g" data-act="evnext" ${evIdx>=evs.length-1?'disabled style="opacity:.3"':''}>›</button>
+      </div>
+      <div class="prog" style="margin:12px 0 4px"><i style="width:${Math.round(n/tot*100)}%"></i></div>
+      <div class="meta" style="margin-bottom:8px">${n} of ${tot} done</div>
+      ${evChecklist(p)}
+      <div class="acts" style="margin-top:12px"><button class="btn btn-g" data-act="evopen" data-arg="${esc(p.id)}">Edit event</button><button class="btn btn-p" data-act="tab" data-arg="events">See all events</button></div>
+    </div>`;
+  }
+  const t=todayStr(),real=vposts.filter(p=>!isMile(p)),od=real.filter(p=>overdue(p,t)).length;
+  $('view').innerHTML=head('Dashboard','Upcoming events and everything each one needs.')+box+
+    (od?`<div class="banner err" style="margin-top:12px">${od} scheduled post${od>1?'s are':' is'} overdue. <button class="btn btn-g" data-act="view" data-arg="overdue">Open in Calendar</button></div>`:'');
+}
+function vEvents(){
+  const evs=upcomingEvents();
+  $('view').innerHTML=head('All events','Every upcoming event with its full to-do list.')+
+    `<div class="bar"><button class="btn btn-g" data-act="tab" data-arg="dashboard">‹ Back to Dashboard</button></div>`+
+    (evs.length?`<div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(320px,1fr))">`+evs.map(p=>{const[n,tot]=evProgress(p);
+      return `<div class="card"><div class="nick">${esc(daysAway(p.date))} · ${esc(dayName(p.date))}</div><h4 style="font-size:13px;margin:2px 0 6px">${esc(evTitle(p))}</h4>
+      <div class="prog"><i style="width:${Math.round(n/tot*100)}%"></i></div><div class="meta">${n} of ${tot} done</div>${evChecklist(p)}
+      <div class="acts" style="margin-top:8px"><button class="btn btn-g" data-act="evopen" data-arg="${esc(p.id)}">Edit event</button></div></div>`;}).join('')+`</div>`:'<div class="empty">No upcoming big nights.</div>');
+}
+function overviewStats(){
+  const t=todayStr(),wk=addDays(t,7),real=vposts.filter(p=>!isMile(p));
+  const od=real.filter(p=>overdue(p,t)).length;
+  const next=real.filter(p=>p.date>=t&&p.date<=wk&&!p.posted);
+  const mp=real.filter(p=>p.date.startsWith(t.slice(0,7)));
+  return `<div class="stats"><div class="stat ${od?'bad':''}"><b>${od}</b><span>Overdue</span></div><div class="stat"><b>${next.length}</b><span>Next 7 days</span></div><div class="stat"><b>${next.filter(p=>!p.created).length}</b><span>Still to make</span></div><div class="stat"><b>${mp.filter(p=>p.posted).length}/${mp.length}</b><span>Posted this month</span></div></div>`;
 }
 
 /* ── CALENDAR (History lives here) ── */
@@ -657,7 +707,7 @@ function vMonth(){
     return `<div class="mc ${ds===t?'today':''} ${ds===selDay?'sel':''}" data-act="day" data-arg="${ds}"><div class="md">${+ds.slice(8)}</div>${chips}${ps.length>3?`<span class="mp more">+${ps.length-3}</span>`:''}</div>`;
   }).join('');
   const sel=selDay&&selDay.startsWith(calMonth)?(by[selDay]||[]):null;
-  $('view').innerHTML=head('Calendar','Tap a day to see its posts. Gold = to do, green = posted, red = overdue, ★ = big night.')+
+  $('view').innerHTML=head('Calendar','Tap a day to see its posts. Gold = to do, green = posted, red = overdue, ★ = big night.')+overviewStats()+
     `<div class="bar">${modeChips()}<select class="mini" id="tf"><option value="all">All templates</option>${Object.entries(TYPES).map(([k,v])=>`<option value="${k}" ${typeF===k?'selected':''}>${v.l}</option>`).join('')}</select></div>`+
     `<div class="mnav"><button class="btn btn-g" data-act="mprev">‹</button><div class="mt">${monthTitle}</div><button class="btn btn-g" data-act="mtoday">Today</button><button class="btn btn-g" data-act="mnext">›</button></div>`+
     `<div class="mgrid">${DN.map(d=>`<div class="mh">${d}</div>`).join('')}${grid}</div>`+
@@ -677,8 +727,8 @@ function vCalendar(){
   if(calView==='history')list=list.filter(p=>p.posted);
   list.sort(sortFn);
   if(calView==='history')list.reverse();
-  $('view').innerHTML=head('Calendar',calView==='history'?'Everything that has gone out.':'Check “Made” when the graphic exists, “Posted” when it is live.')+
-    statsHtml(list,t)+
+  $('view').innerHTML=head('Calendar',calView==='history'?'Everything that has gone out.':'Check “Made” when the graphic exists, “Posted” when it is live.')+overviewStats()+
+    
     `<div class="bar">${modeChips()}${views.map(([k,l])=>`<button class="chip ${calView===k?'on':''}" data-act="view" data-arg="${k}">${l}</button>`).join('')}
       <select class="mini" id="tf"><option value="all">All templates</option>${Object.entries(TYPES).map(([k,v])=>`<option value="${k}" ${typeF===k?'selected':''}>${v.l}</option>`).join('')}</select>
       <select class="mini" id="mf"><option value="all">All months</option>${months.map(m=>`<option value="${m}" ${monthF===m?'selected':''}>${monthName(m)}</option>`).join('')}</select></div>`+
@@ -738,6 +788,7 @@ function vLibrary(){
         <span class="lbl">Blank background (only for Make graphic, where Clio draws the text itself)</span><input type="text" data-lib="${t.id}" data-f="bgUrl" value="${esc(o.bgUrl||'')}" placeholder="Set from Make graphic, or paste a link"/>
         <span class="lbl">Notes</span><input type="text" data-lib="${t.id}" data-f="notes" value="${esc(o.notes||'')}"/>
         ${o.link?`<div style="margin-top:8px"><a href="${esc(o.link)}" target="_blank" rel="noopener"><button class="btn btn-g" type="button">Open template</button></a></div>`:''}</div>`;}).join('')}</div>
+      <div class="card" style="max-width:520px;margin-top:16px"><span class="lbl">Worker address (for captions and image uploads)</span><input type="text" data-api="1" value="${esc((()=>{try{return localStorage.getItem('bn_clio_api')||'';}catch(e){return '';}})())}" placeholder="https://clio-api.yourname.workers.dev"/></div>
       <div class="sub" style="margin-top:16px">Finished graphics are stored on your Cloudflare. Set each template's background art here (or from Make graphic) and Clio draws the text on top.</div>`;
 }
 
@@ -763,6 +814,7 @@ $('banner').addEventListener('click',e=>{const a=e.target.closest('[data-act]');
 $('view').addEventListener('change',e=>{
   if(e.target.id==='tf'){typeF=e.target.value;render();}
   else if(e.target.id==='mf'){monthF=e.target.value;render();}
+  else if(e.target.dataset.api){const u=normApi(e.target.value);if(u||!e.target.value.trim()){try{localStorage.setItem('bn_clio_api',u);}catch(x){}toast(u?'Worker address saved':'Worker address cleared');}else toast('That does not look like an address');}
   else if(e.target.dataset.lib)saveLib(e.target.dataset.lib,{[e.target.dataset.f]:e.target.value.trim()}).then(render);
 });
 function act(a,arg){
@@ -780,6 +832,10 @@ function act(a,arg){
   else if(a==='mprev'||a==='mnext'){const[y,m]=calMonth.split('-').map(Number);const d=new Date(y,m-1+(a==='mnext'?1:-1),1);calMonth=d.getFullYear()+'-'+pad(d.getMonth()+1);selDay=null;render();}
   else if(a==='mtoday'){calMonth=todayStr().slice(0,7);selDay=todayStr();render();}
   else if(a==='newday')openEdit(null,arg);
+  else if(a==='delrow'){const p=posts.find(x=>x.id===arg);if(p&&confirm('Delete "'+p.title+'"? This cannot be undone.')){removePost(arg);toast('Deleted');}}
+  else if(a==='task'){const[id,k]=arg.split('|'),p=posts.find(x=>x.id===id);if(p){const tk={...(p.tasks||{})};if(tk[k])delete tk[k];else tk[k]=true;persist({...p,tasks:tk});}}
+  else if(a==='evprev'||a==='evnext'){evIdx+=a==='evnext'?1:-1;render();}
+  else if(a==='evopen'){openEdit(arg);}
   else if(a==='signout'&&auth)authMod.signOut(auth);
 }
 
@@ -796,7 +852,7 @@ function openEdit(id,presetDate){
   const p=id?vposts.find(x=>x.id===id):{date:presetDate||todayStr(),time:'12:00',type:'weekly',title:'',platform:'IG + FB',caption:'',imageUrl:'',notes:'',created:false,posted:false};
   $('mt').textContent=id?'Edit post':'Add post';
   fillForm(p);
-  $('f-del').style.display=id?'':'none';
+  $('f-del').style.display=(id&&!p.auto)?'':'none';
   $('f-enc').style.display=id?'':'none';
   $('ov').classList.add('show');
 }
@@ -848,7 +904,7 @@ function libUpload(id){
   let f=$('lib-file');
   if(!f){f=document.createElement('input');f.type='file';f.id='lib-file';f.accept='image/jpeg,image/png,image/webp';f.style.display='none';
     f.onchange=async()=>{const file=f.files[0];f.value='';if(!file||!libPend)return;
-      try{toast('Uploading…');const blob=await shrink(file,2000);
+      try{if(!apiBase()){toast('Set up the Worker first (see steps)');return;}toast('Uploading…');const blob=await shrink(file,2000);
         const d=await apiFetch('/upload',{method:'POST',headers:{'Content-Type':'image/jpeg'},body:blob});
         await saveLib(libPend,{tplImg:d.url});render();toast('Example saved');}catch(e){toast('Upload failed: '+e.message);}};
     document.body.appendChild(f);}
@@ -874,11 +930,18 @@ function muse(){
 }
 
 /* ── CLIO API (Cloudflare Worker): ChatGPT captions + R2 image upload ── */
+function normApi(v){
+  let u=String(v||'').trim();
+  const m=u.match(/https?:\/\/[^\s)\]]+/);if(m)u=m[0];
+  else if(/^[\w.-]+\.workers\.dev/i.test(u))u='https://'+u;
+  u=u.replace(/\/+$/,'');
+  return /^https:\/\/[\w.-]+\.[a-z]{2,}$/i.test(u)?u:'';
+}
 function apiBase(){
   let u='';try{u=localStorage.getItem('bn_clio_api')||'';}catch(e){}
   if(!u){
-    u=(prompt('Paste your Clio Worker address (like https://clio-api.yourname.workers.dev). One time only.')||'').trim().replace(/\/+$/,'');
-    if(!/^https:\/\//.test(u))return '';
+    u=normApi(prompt('Paste your Clio Worker address (like https://clio-api.yourname.workers.dev). One time only.')||'');
+    if(!u)return '';
     try{localStorage.setItem('bn_clio_api',u);}catch(e){}
   }
   return u;
@@ -1052,7 +1115,7 @@ function exportBuffer(){
 }
 
 window.closeEdit=closeEdit;window.saveEdit=saveEdit;window.delPost=delPost;window.encore=encore;window.muse=muse;window.libUpload=libUpload;window.aiCaption=aiCaption;window.openGfx=openGfx;window.gfxPick=gfxPick;window.gfxSaveBg=gfxSaveBg;window.gfxUse=gfxUse;window.uploadImg=uploadImg;window.imgPrev=imgPrev;
-window.addEventListener('hashchange',()=>{const h=location.hash.slice(1);if(TABS.some(t=>t[0]===h)&&h!==tab){tab=h;render();}});
+window.addEventListener('hashchange',()=>{const h=location.hash.slice(1);if((TABS.some(t=>t[0]===h)||h==='events')&&h!==tab){tab=h;render();}});
 applyTheme(document.documentElement.getAttribute('data-theme')||'dark');
 init();
 </script>
