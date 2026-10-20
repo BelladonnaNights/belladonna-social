@@ -779,12 +779,10 @@ function vEcho(){
 }
 
 /* ── LIBRARY ── */
-function vLibrary(){
-  $('view').innerHTML=head('Library','The ten templates. Keep a link to each design (Canva, Drive) here so you can open it fast.')+
-    `<div class="grid">${LIB_SEED.map(t=>{
-      const o=libOv[t.id]||{};
-      const n=vposts.filter(p=>p.type===t.id).length;
-      return `<div class="card"><h4>${esc(t.name)}</h4><div class="nick">${esc(t.nick)} · ${esc(t.size)}</div>
+function libCard(t,slot){
+  const o=libOv[t.id]||{};
+  const n=vposts.filter(p=>p.type===t.id).length;
+  return `<div class="card">${slot?`<div class="nick" style="color:var(--gold2)">${slot}</div>`:''}<h4>${esc(t.name)}</h4><div class="nick">${esc(t.nick)} · ${esc(t.size)}</div>
         <div class="meta">${esc(t.use)}${n?` · ${n} posts`:''}</div>
         <span class="lbl">Example image (a finished design Muse tells ChatGPT to copy)</span>
         ${o.tplImg?`<img src="${esc(o.tplImg)}" alt="" style="width:100%;max-height:220px;object-fit:contain;background:#000;border:1px solid var(--border2);border-radius:var(--radius);margin-bottom:6px"/>`:''}
@@ -792,7 +790,16 @@ function vLibrary(){
         <span class="lbl">Link to template (optional: Canva, Drive, anything)</span><input type="text" data-lib="${t.id}" data-f="link" value="${esc(o.link||'')}" placeholder="https://canva.com/…"/>
         <span class="lbl">Blank background (only for Make graphic, where Clio draws the text itself)</span><input type="text" data-lib="${t.id}" data-f="bgUrl" value="${esc(o.bgUrl||'')}" placeholder="Set from Make graphic, or paste a link"/>
         <span class="lbl">Notes</span><input type="text" data-lib="${t.id}" data-f="notes" value="${esc(o.notes||'')}"/>
-        ${o.link?`<div style="margin-top:8px"><a href="${esc(o.link)}" target="_blank" rel="noopener"><button class="btn btn-g" type="button">Open template</button></a></div>`:''}</div>`;}).join('')}</div>
+        ${o.link?`<div style="margin-top:8px"><a href="${esc(o.link)}" target="_blank" rel="noopener"><button class="btn btn-g" type="button">Open template</button></a></div>`:''}</div>`;
+}
+const MONTHLY_SET=[['monthly','Slide 1 of 3'],['sched','Slide 2 of 3'],['weekly','Slide 3 of 3 (also your Monday weekly graphic)']];
+function vLibrary(){
+  const inSet=new Set(MONTHLY_SET.map(x=>x[0]));
+  $('view').innerHTML=head('Library','Your templates. Upload a finished example of each design so Muse can copy it.')+
+    `<div class="sec">Monthly Announcement · 3 slides · posted on the 25th</div>
+    <div class="card" style="padding:12px;border-color:var(--border-gold)"><div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(250px,1fr))">${MONTHLY_SET.map(([id,slot])=>libCard(LIB_SEED.find(x=>x.id===id),slot)).join('')}</div></div>
+    <div class="sec">Everything else</div>
+    <div class="grid">${LIB_SEED.filter(t=>!inSet.has(t.id)).map(t=>libCard(t,'')).join('')}</div>
       ${libTagsHtml()}
       <div class="card" style="max-width:520px;margin-top:16px"><span class="lbl">Worker address (for captions and image uploads)</span><input type="text" data-api="1" value="${esc((()=>{try{return localStorage.getItem('bn_clio_api')||'';}catch(e){return '';}})())}" placeholder="https://clio-api.yourname.workers.dev"/></div>
       <div class="sub" style="margin-top:16px">Finished graphics are stored on your Cloudflare. Set each template's background art here (or from Make graphic) and Clio draws the text on top.</div>`;
