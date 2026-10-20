@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>Belladonna — Posting Calendar</title>
+<title>Belladonna Clio</title>
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600&family=EB+Garamond:ital,wght@0,400;1,400&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
@@ -17,23 +17,28 @@
 }
 html,body{min-height:100%;font-family:var(--font);background:var(--bg2);color:var(--text);}
 .nav{background:var(--bg);border-bottom:1px solid var(--border2);padding:0 1.25rem;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:50;height:52px;}
-.brand{font-family:var(--cinzel);font-size:12px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;background:var(--gold-shine);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;white-space:nowrap;}
-.mode{font-family:var(--cinzel);font-size:9px;letter-spacing:.08em;text-transform:uppercase;padding:2px 8px;border-radius:99px;border:.5px solid var(--border2);color:var(--text3);}
+.brand{font-family:var(--cinzel);font-size:12px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;background:var(--gold-shine);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;white-space:nowrap;flex-shrink:0;}
+.tabs{display:flex;overflow-x:auto;-webkit-overflow-scrolling:touch;flex:1;scrollbar-width:none;}
+.tabs::-webkit-scrollbar{display:none}
+.tab{padding:17px 12px;font-size:10px;cursor:pointer;border:none;background:none;color:var(--text2);border-bottom:2px solid transparent;font-family:var(--cinzel);letter-spacing:.07em;text-transform:uppercase;white-space:nowrap;}
+.tab.on{color:var(--gold);border-bottom-color:var(--gold);font-weight:600;}
+.mode{font-family:var(--cinzel);font-size:9px;letter-spacing:.08em;text-transform:uppercase;padding:2px 8px;border-radius:99px;border:.5px solid var(--border2);color:var(--text3);white-space:nowrap;flex-shrink:0;}
 .mode.cloud{color:var(--green);border-color:var(--green);}
 .mode.local{color:#8a5a00;border-color:#c98a00;}
-.sp{flex:1}
 .btn{cursor:pointer;font-family:var(--font);font-size:12px;border-radius:var(--r);padding:7px 14px;border:none;white-space:nowrap;}
 .btn-p{background:var(--text);color:#fff;font-weight:500;}
 .btn-p:hover{opacity:.82}
 .btn-g{background:none;border:.5px solid var(--border2);color:var(--text2);}
 .btn-g:hover{background:var(--bg3);color:var(--text)}
 .btn-d{background:none;border:.5px solid var(--red);color:var(--red);}
+.btn-gold{background:none;border:.5px solid var(--gold);color:#8a6a10;}
+.btn-gold:hover{background:var(--gold-dim)}
 .wrap{max-width:980px;margin:0 auto;padding:1.25rem 1rem 4rem;}
 .title{font-family:var(--cinzel);font-size:16px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;background:var(--gold-shine);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
 .sub{font-family:var(--serif);font-style:italic;font-size:14px;color:var(--text2);margin:2px 0 14px;}
 .banner{background:#fff8e1;border:.5px solid var(--gold-border);border-radius:var(--rl);padding:12px 14px;margin-bottom:12px;font-size:13px;line-height:1.5;display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
 .banner.err{background:#fdecea;border-color:var(--red);}
-.stats{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;}
+.stats{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;}
 .stat{background:var(--bg);border:.5px solid var(--border);border-radius:var(--rl);padding:8px 14px;min-width:96px;}
 .stat b{display:block;font-family:var(--cinzel);font-size:18px;font-weight:600;}
 .stat span{font-family:var(--cinzel);font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:var(--text3);}
@@ -45,6 +50,7 @@ select,input[type=text],input[type=date],input[type=time],textarea{font-family:v
 select.mini{width:auto;font-size:12px;padding:5px 8px;}
 textarea{resize:vertical;min-height:90px;line-height:1.5;}
 select:focus,input:focus,textarea:focus{outline:none;border-color:var(--gold);}
+.sec{font-family:var(--cinzel);font-size:11px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;margin:18px 0 8px;color:var(--text2);}
 .day{margin-bottom:14px;}
 .dayh{font-family:var(--cinzel);font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--gold);padding:4px 2px;border-bottom:.5px solid var(--border);margin-bottom:5px;display:flex;gap:8px;align-items:center;}
 .dayh .tag{font-size:8px;padding:1px 7px;border-radius:99px;letter-spacing:.06em;}
@@ -54,7 +60,7 @@ select:focus,input:focus,textarea:focus{outline:none;border-color:var(--gold);}
 .row{display:flex;align-items:center;gap:10px;padding:8px 10px;background:var(--bg);border:.5px solid var(--border);border-radius:var(--rl);margin-bottom:4px;cursor:pointer;}
 .row:hover{border-color:var(--gold-border)}
 .row.done{opacity:.55}
-.row.milestone{background:var(--gold-dim);border-color:var(--gold-border);cursor:pointer}
+.row.milestone{background:var(--gold-dim);border-color:var(--gold-border)}
 .ck{display:flex;flex-direction:column;align-items:center;gap:1px;font-family:var(--cinzel);font-size:7px;letter-spacing:.05em;text-transform:uppercase;color:var(--text3);width:42px;flex-shrink:0;}
 .ck input{width:17px;height:17px;accent-color:#c9a84c;cursor:pointer;}
 .time{font-family:var(--cinzel);font-size:10px;color:var(--text3);width:52px;flex-shrink:0;}
@@ -63,9 +69,18 @@ select:focus,input:focus,textarea:focus{outline:none;border-color:var(--gold);}
 .rt small{display:block;font-family:var(--serif);font-style:italic;font-weight:400;font-size:12px;color:var(--text3);}
 .has{font-size:10px;color:var(--text3);flex-shrink:0;font-family:var(--cinzel)}
 .empty{font-family:var(--serif);font-style:italic;color:var(--text3);padding:1.5rem 0;text-align:center;}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px;}
+.card{background:var(--bg);border:.5px solid var(--border);border-radius:var(--rl);padding:14px;}
+.card h4{font-family:var(--cinzel);font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;margin-bottom:2px;}
+.card .meta{font-family:var(--serif);font-style:italic;font-size:13px;color:var(--text2);margin-bottom:8px;}
+.card .lbl{display:block;font-family:var(--cinzel);font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:var(--text3);margin:8px 0 3px;}
+.prog{height:6px;background:var(--bg3);border-radius:99px;overflow:hidden;margin:6px 0;}
+.prog i{display:block;height:100%;background:var(--gold-shine);}
+.prog.posted i{background:var(--green);}
+.nick{font-family:var(--cinzel);font-size:9px;letter-spacing:.06em;color:var(--gold);text-transform:uppercase;}
 .ov{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:100;align-items:center;justify-content:center;padding:1rem;}
 .ov.show{display:flex}
-.box{background:var(--bg);border-radius:var(--rl);width:100%;max-width:560px;max-height:92vh;overflow-y:auto;padding:1.25rem;}
+.box{background:var(--bg);border-radius:var(--rl);width:100%;max-width:580px;max-height:92vh;overflow-y:auto;padding:1.25rem;}
 .box h3{font-family:var(--cinzel);font-size:12px;letter-spacing:.08em;text-transform:uppercase;margin-bottom:12px;}
 .f{margin-bottom:10px}
 .f label{display:block;font-family:var(--cinzel);font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:var(--text3);margin-bottom:3px;}
@@ -73,29 +88,22 @@ select:focus,input:focus,textarea:focus{outline:none;border-color:var(--gold);}
 .checks{display:flex;gap:18px;margin:6px 0 12px;font-size:13px}
 .checks label{display:flex;gap:6px;align-items:center;cursor:pointer}
 .checks input{width:17px;height:17px;accent-color:#c9a84c}
-.acts{display:flex;gap:8px;justify-content:flex-end;margin-top:6px}
+.acts{display:flex;gap:8px;justify-content:flex-end;margin-top:6px;flex-wrap:wrap}
+.sp{flex:1}
+.tools{display:flex;gap:8px;margin:2px 0 10px;flex-wrap:wrap}
 .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(90px);background:var(--gold);color:#1a1714;font-size:11px;font-weight:700;padding:8px 20px;border-radius:99px;transition:transform .22s;pointer-events:none;z-index:999;font-family:var(--cinzel);letter-spacing:.08em;text-transform:uppercase;max-width:90vw;text-align:center;}
 .toast.show{transform:translateX(-50%) translateY(0)}
-@media(max-width:600px){.has{display:none}.time{width:44px}.badge{display:none}}
+@media(max-width:600px){.has{display:none}.time{width:44px}.badge{display:none}.mode{display:none}}
 </style>
 </head>
 <body>
 <nav class="nav">
-  <div class="brand">Belladonna</div>
+  <div class="brand">Belladonna Clio</div>
+  <div class="tabs" id="tabs"></div>
   <span class="mode" id="mode">…</span>
-  <div class="sp"></div>
-  <button class="btn btn-g" onclick="exportBuffer()">Export for Buffer</button>
-  <button class="btn btn-p" onclick="openEdit()">+ Add post</button>
+  <button class="btn btn-p" data-act="new">+ Post</button>
 </nav>
-<div class="wrap">
-  <div class="title">Posting Calendar</div>
-  <div class="sub">What to post, when. Check “Made” once the graphic exists and “Posted” once it’s live.</div>
-  <div id="banner"></div>
-  <div class="stats" id="stats"></div>
-  <div class="bar" id="bar"></div>
-  <div id="list"></div>
-  <div style="text-align:center;margin-top:24px"><button class="btn btn-g" onclick="seedMissing()">Add any missing rows from the 2026–2027 calendars</button></div>
-</div>
+<div class="wrap"><div id="banner"></div><div id="view"></div></div>
 
 <div class="ov" id="ov" onclick="if(event.target===this)closeEdit()">
   <div class="box">
@@ -116,6 +124,11 @@ select:focus,input:focus,textarea:focus{outline:none;border-color:var(--gold);}
       <label><input type="checkbox" id="f-created"/> Made</label>
       <label><input type="checkbox" id="f-posted"/> Posted</label>
     </div>
+    <div class="tools">
+      <button class="btn btn-gold" onclick="muse()">✦ The Muse: build ChatGPT prompt</button>
+      <button class="btn btn-gold" id="f-enc" onclick="encore()">↻ Encore: duplicate</button>
+    </div>
+    <div class="f" id="f-muse-wrap" style="display:none"><label>Prompt (copied to clipboard, edit the [brackets])</label><textarea id="f-muse" style="min-height:200px"></textarea></div>
     <div class="acts">
       <button class="btn btn-d" id="f-del" onclick="delPost()">Delete</button>
       <div class="sp"></div>
@@ -129,7 +142,7 @@ select:focus,input:focus,textarea:focus{outline:none;border-color:var(--gold);}
 <script type="module">
 /* ─────────────────────────────────────────────────────────────
    FIREBASE: paste the same config object your other Belladonna apps use
-   (project belladonna-hq). Until you do, the app runs in "This browser only"
+   (project belladonna-hq). Until you do, Clio runs in "This browser only"
    mode so you can try it right away.
    ───────────────────────────────────────────────────────────── */
 const FIREBASE_CONFIG = {
@@ -140,8 +153,8 @@ const FIREBASE_CONFIG = {
   messagingSenderId: "",
   appId: ""
 };
-const COLLECTION = 'socialPosts';
-const LS = 'bn_social_posts_v1';
+const COL_POSTS='socialPosts', COL_LIB='socialLibrary';
+const LS='bn_social_posts_v1', LS_LIB='bn_clio_lib_v1';
 
 const TYPES = {
   monthly:{l:'Monthly',c:'#7a5500',bg:'#fff8e1',plat:'IG + FB'},
@@ -157,9 +170,22 @@ const TYPES = {
   other:{l:'Other',c:'#444441',bg:'#f4f3f0',plat:''}
 };
 
+/* Library: the ten templates, plain names + nicknames */
+const LIB_SEED=[
+  {id:'monthly',name:'Monthly Announcement',nick:'Monthly',size:'1080x1350',use:'The 25th, slide 1: month name and four weekly themes'},
+  {id:'sched',name:'Monthly Schedule',nick:'Sched',size:'1080x1350',use:'The 25th, slide 2: every venue and night'},
+  {id:'weekly',name:'Weekly Graphic',nick:'Weekly',size:'1080x1350',use:'Monday post: week theme plus each night'},
+  {id:'tonight',name:'Event-Day Story',nick:'Tonight',size:'1080x1920',use:'3:00 pm story on event days'},
+  {id:'host',name:'Host Story',nick:'Host',size:'1080x1920',use:"Host's costume story frame"},
+  {id:'cover',name:'Big Night Event Cover',nick:'Cover',size:'1920x1005',use:'Facebook Event image, 14 days out'},
+  {id:'count',name:'Countdown',nick:'Count',size:'1080x1350 + 1080x1920',use:'7-day, 3-day and day-of posts'},
+  {id:'best',name:'Best Dressed',nick:'Best',size:'1080x1350',use:'Next-morning winner photo frame'},
+  {id:'recap',name:'Monthly Recap',nick:'Recap',size:'1080x1350',use:'Winners and best photos, month end'},
+  {id:'pin',name:'Weekly Nights Pin',nick:'Pin',size:'1080x1350 + 1080x1920',use:'Pinned post, highlight, recurring Facebook Event covers'}
+];
+
 /* ── SEED: both calendars, one line per post: date  code[@time]  title ── */
-const SEED = `
-2026-10-19 W@ Villains & Monsters
+const SEED = `2026-10-19 W@ Villains & Monsters
 2026-10-19 C@ Monster Mash Halloween Party
 2026-10-24 K7 Monster Mash
 2026-10-25 M Secrets & Scandals (November)
@@ -325,8 +351,7 @@ const SEED = `
 2027-12-17 B Holiday House Party
 2027-12-20 W Naughty List
 2027-12-27 W Year in Review
-2027-12-31 R December
-`;
+2027-12-31 R December`;
 
 function slug(s){return s.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');}
 function buildSeed(){
@@ -349,24 +374,36 @@ function buildSeed(){
       case 'B':type='big';title='Big night: '+rest;time='';break;
       default:return;
     }
-    if(hasAt)time=atTime||'';      // "@" alone = no fixed time ("by evening")
+    if(hasAt)time=atTime||'';
     out.push({id:`s_${date}_${code}_${slug(rest||'nights')}`,date,time,type,title,
       platform:TYPES[type].plat,caption:'',imageUrl:'',notes:'',created:false,posted:false});
   });
   return out;
 }
 
-/* ── STATE + STORAGE ── */
-let db=null,fs=null,mode='local',posts=[];
-let view='todo',typeF='all',monthF='all',editingId=null;
+/* ── STATE ── */
+let db=null,fs=null,mode='local',posts=[],libOv={};
+let tab=(location.hash||'#dashboard').slice(1);
+let calView='todo',typeF='all',monthF='all',studioF='caption',editingId=null;
+const TABS=[['dashboard','Dashboard'],['calendar','Calendar'],['campaigns','Campaigns'],['studio','Studio'],['echo','Echo'],['library','Library']];
+if(!TABS.some(t=>t[0]===tab))tab='dashboard';
 
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-function todayStr(){const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
-function addDays(s,n){const d=new Date(s+'T12:00:00');d.setDate(d.getDate()+n);return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
+function pad(n){return String(n).padStart(2,'0');}
+function ymd(d){return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;}
+function todayStr(){return ymd(new Date());}
+function addDays(s,n){const d=new Date(s+'T12:00:00');d.setDate(d.getDate()+n);return ymd(d);}
 function toast(m){const t=$('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2600);}
 function banner(html,err){$('banner').innerHTML=html?`<div class="banner${err?' err':''}">${html}</div>`:'';}
+const isMile=p=>TYPES[p.type]?.milestone;
+const overdue=(p,t)=>!isMile(p)&&!p.posted&&p.date<t;
+function monthName(m){return new Date(m+'-15T12:00:00').toLocaleDateString('en-US',{month:'long',year:'numeric'});}
+function dayName(d){return new Date(d+'T12:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'});}
+function fmtTime(t){if(!t)return '';const[h,m]=t.split(':').map(Number);return `${((h+11)%12)+1}:${pad(m)} ${h<12?'am':'pm'}`;}
+const sortFn=(a,b)=>(a.date+(a.time||'99'))<(b.date+(b.time||'99'))?-1:1;
 
+/* ── STORAGE ── */
 async function init(){
   if(!FIREBASE_CONFIG.apiKey.startsWith('PASTE')){
     try{
@@ -374,33 +411,38 @@ async function init(){
       fs=await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
       db=fs.getFirestore(app.initializeApp(FIREBASE_CONFIG));
       mode='cloud';
-      fs.onSnapshot(fs.collection(db,COLLECTION),snap=>{
-        posts=snap.docs.map(d=>({id:d.id,...d.data()}));
-        render();
-      },err=>banner('Could not read the <b>'+COLLECTION+'</b> collection: '+esc(err.message)+'. The Firestore rules need a rule for it.',true));
-    }catch(e){
-      mode='local';banner('Firebase failed to load ('+esc(e.message)+'). Running in this-browser-only mode.',true);
-    }
+      const bad=err=>banner('Firestore says: '+esc(err.message)+'. The rules need entries for <b>'+COL_POSTS+'</b> and <b>'+COL_LIB+'</b>.',true);
+      fs.onSnapshot(fs.collection(db,COL_POSTS),snap=>{posts=snap.docs.map(d=>({id:d.id,...d.data()}));render();},bad);
+      fs.onSnapshot(fs.collection(db,COL_LIB),snap=>{libOv={};snap.docs.forEach(d=>libOv[d.id]=d.data());render();},bad);
+    }catch(e){mode='local';banner('Firebase failed to load ('+esc(e.message)+'). Running in this-browser-only mode.',true);}
   }
-  if(mode==='local')posts=JSON.parse(localStorage.getItem(LS)||'[]');
+  if(mode==='local'){
+    posts=JSON.parse(localStorage.getItem(LS)||'[]');
+    libOv=JSON.parse(localStorage.getItem(LS_LIB)||'{}');
+  }
   const m=$('mode');
   m.textContent=mode==='cloud'?'Synced · belladonna-hq':'This browser only';
   m.className='mode '+(mode==='cloud'?'cloud':'local');
   render();
 }
-
 async function persist(p){
   const i=posts.findIndex(x=>x.id===p.id);
   if(i>=0)posts[i]=p;else posts.push(p);
-  if(mode==='cloud'){const{id,...rest}=p;await fs.setDoc(fs.doc(db,COLLECTION,id),rest);}
+  if(mode==='cloud'){const{id,...rest}=p;await fs.setDoc(fs.doc(db,COL_POSTS,id),rest);}
   else localStorage.setItem(LS,JSON.stringify(posts));
   render();
 }
 async function removePost(id){
   posts=posts.filter(p=>p.id!==id);
-  if(mode==='cloud')await fs.deleteDoc(fs.doc(db,COLLECTION,id));
+  if(mode==='cloud')await fs.deleteDoc(fs.doc(db,COL_POSTS,id));
   else localStorage.setItem(LS,JSON.stringify(posts));
   render();
+}
+async function saveLib(id,patch){
+  libOv[id]={...(libOv[id]||{}),...patch};
+  if(mode==='cloud')await fs.setDoc(fs.doc(db,COL_LIB,id),libOv[id]);
+  else localStorage.setItem(LS_LIB,JSON.stringify(libOv));
+  toast('Saved');
 }
 async function seedMissing(){
   const have=new Set(posts.map(p=>p.id));
@@ -409,7 +451,7 @@ async function seedMissing(){
   if(mode==='cloud'){
     for(let i=0;i<add.length;i+=400){
       const b=fs.writeBatch(db);
-      add.slice(i,i+400).forEach(({id,...rest})=>b.set(fs.doc(db,COLLECTION,id),rest));
+      add.slice(i,i+400).forEach(({id,...rest})=>b.set(fs.doc(db,COL_POSTS,id),rest));
       await b.commit();
     }
   }else{
@@ -419,50 +461,31 @@ async function seedMissing(){
   }
   toast(add.length+' posts added');
 }
-window.seedMissing=seedMissing;
 
-/* ── RENDER ── */
-const isMile=p=>TYPES[p.type]?.milestone;
-function overdue(p,t){return !isMile(p)&&!p.posted&&p.date<t;}
-
+/* ── SHELL ── */
+function setTab(t){tab=t;location.hash=t;render();window.scrollTo(0,0);}
 function render(){
-  const t=todayStr();
-  if(!posts.length){
-    banner(`Your calendar is empty. <button class="btn btn-p" onclick="seedMissing()">Load my 2026–2027 calendars (${buildSeed().length} rows)</button>`);
-  }else if($('banner').querySelector('.banner:not(.err)'))banner('');
+  $('tabs').innerHTML=TABS.map(([k,l])=>`<button class="tab ${tab===k?'on':''}" data-act="tab" data-arg="${k}">${l}</button>`).join('');
+  if(!posts.length)banner(`Clio's calendar is empty. <button class="btn btn-p" data-act="seed">Load my 2026–2027 calendars (${buildSeed().length} rows)</button>`);
+  else if($('banner').querySelector('.banner:not(.err)'))banner('');
+  ({dashboard:vDashboard,calendar:vCalendar,campaigns:vCampaigns,studio:vStudio,echo:vEcho,library:vLibrary})[tab]();
+}
+function head(t,s){return `<div class="title">${t}</div><div class="sub">${s}</div>`;}
 
-  // month dropdown values
-  const months=[...new Set(posts.map(p=>p.date.slice(0,7)))].sort();
-  const bar=$('bar');
-  const views=[['todo','To do'],['overdue','Overdue'],['all','Everything']];
-  bar.innerHTML=views.map(([k,l])=>`<button class="chip ${view===k?'on':''}" data-v="${k}">${l}</button>`).join('')+
-    `<select class="mini" id="tf"><option value="all">All templates</option>${Object.entries(TYPES).map(([k,v])=>`<option value="${k}" ${typeF===k?'selected':''}>${v.l}</option>`).join('')}</select>`+
-    `<select class="mini" id="mf"><option value="all">All months</option>${months.map(m=>`<option value="${m}" ${monthF===m?'selected':''}>${monthName(m)}</option>`).join('')}</select>`;
-  bar.querySelectorAll('.chip').forEach(b=>b.onclick=()=>{view=b.dataset.v;render();});
-  $('tf').onchange=e=>{typeF=e.target.value;render();};
-  $('mf').onchange=e=>{monthF=e.target.value;render();};
-
-  let list=posts.slice();
-  if(typeF!=='all')list=list.filter(p=>p.type===typeF);
-  if(monthF!=='all')list=list.filter(p=>p.date.startsWith(monthF));
-  const end=addDays(t,14);
-  if(view==='todo')list=list.filter(p=>(overdue(p,t))||(p.date>=t&&p.date<=end));
-  if(view==='overdue')list=list.filter(p=>overdue(p,t));
-  list.sort((a,b)=>(a.date+(a.time||'99'))<(b.date+(b.time||'99'))?-1:1);
-
-  const real=list.filter(p=>!isMile(p));
-  $('stats').innerHTML=
-    `<div class="stat"><b>${real.length}</b><span>Showing</span></div>`+
-    `<div class="stat"><b>${real.filter(p=>p.created).length}</b><span>Made</span></div>`+
-    `<div class="stat"><b>${real.filter(p=>p.posted).length}</b><span>Posted</span></div>`+
-    `<div class="stat ${posts.some(p=>overdue(p,t))?'bad':''}"><b>${posts.filter(p=>overdue(p,t)).length}</b><span>Overdue (all)</span></div>`;
-
-  const L=$('list');
-  if(!list.length){L.innerHTML='<div class="empty">Nothing here. '+(view==='todo'?'Try “Everything” to see the full calendar.':'')+'</div>';return;}
-  let html='',curM='',curD='';
+/* ── ROWS ── */
+function rowHtml(p){
+  const T=TYPES[p.type]||TYPES.other,mile=isMile(p);
+  const checks=mile?'<div class="ck" style="visibility:hidden"></div>':
+    `<div class="ck"><input type="checkbox" data-k="created" ${p.created?'checked':''}/>Made</div><div class="ck"><input type="checkbox" data-k="posted" ${p.posted?'checked':''}/>Posted</div>`;
+  const has=(p.caption?'✎ ':'')+(p.imageUrl?'🖼':'');
+  return `<div class="row ${mile?'milestone':''} ${p.posted?'done':''}" data-id="${esc(p.id)}">${checks}<div class="time">${fmtTime(p.time)||'—'}</div><span class="badge" style="background:${T.bg};color:${T.c}">${T.l}</span><div class="rt">${esc(p.title)}${p.notes?`<small>${esc(p.notes)}</small>`:''}</div><div class="has">${has}</div></div>`;
+}
+function groupedList(list,monthHeads,desc){
+  if(!list.length)return '<div class="empty">Nothing here.</div>';
+  const t=todayStr();let html='',curM='',curD='';
   list.forEach(p=>{
     const m=p.date.slice(0,7);
-    if(view!=='todo'&&m!==curM){curM=m;html+=`<div class="monthh">${monthName(m)}</div>`;}
+    if(monthHeads&&m!==curM){curM=m;html+=(curD?'</div>':'')+`<div class="monthh">${monthName(m)}</div>`;curD='';}
     if(p.date!==curD){
       if(curD)html+='</div>';
       curD=p.date;
@@ -471,44 +494,156 @@ function render(){
     }
     html+=rowHtml(p);
   });
-  html+='</div>';
-  L.innerHTML=html;
+  return html+'</div>';
 }
-function monthName(m){return new Date(m+'-15T12:00:00').toLocaleDateString('en-US',{month:'long',year:'numeric'});}
-function dayName(d){return new Date(d+'T12:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'});}
-function fmtTime(t){if(!t)return '';const[h,m]=t.split(':').map(Number);return `${((h+11)%12)+1}:${String(m).padStart(2,'0')} ${h<12?'am':'pm'}`;}
-function rowHtml(p){
-  const T=TYPES[p.type]||TYPES.other,mile=isMile(p);
-  const checks=mile?'<div class="ck" style="visibility:hidden"></div>':
-    `<div class="ck"><input type="checkbox" data-k="created" ${p.created?'checked':''}/>Made</div><div class="ck"><input type="checkbox" data-k="posted" ${p.posted?'checked':''}/>Posted</div>`;
-  const has=(p.caption?'✎ ':'')+(p.imageUrl?'🖼':'');
-  return `<div class="row ${mile?'milestone':''} ${p.posted?'done':''}" data-id="${esc(p.id)}">${checks}<div class="time">${fmtTime(p.time)||'—'}</div><span class="badge" style="background:${T.bg};color:${T.c}">${T.l}</span><div class="rt">${esc(p.title)}${p.notes?`<small>${esc(p.notes)}</small>`:''}</div><div class="has">${has}</div></div>`;
+function statsHtml(list,t){
+  const real=list.filter(p=>!isMile(p));
+  return `<div class="stats"><div class="stat"><b>${real.length}</b><span>Showing</span></div><div class="stat"><b>${real.filter(p=>p.created).length}</b><span>Made</span></div><div class="stat"><b>${real.filter(p=>p.posted).length}</b><span>Posted</span></div><div class="stat ${posts.some(p=>overdue(p,t))?'bad':''}"><b>${posts.filter(p=>overdue(p,t)).length}</b><span>Overdue (all)</span></div></div>`;
 }
 
-$('list').addEventListener('click',e=>{
-  const row=e.target.closest('.row');if(!row)return;
-  const p=posts.find(x=>x.id===row.dataset.id);if(!p)return;
+/* ── DASHBOARD ── */
+function vDashboard(){
+  const t=todayStr(),wk=addDays(t,7);
+  const real=posts.filter(p=>!isMile(p));
+  const od=real.filter(p=>overdue(p,t)).sort(sortFn);
+  const next=real.filter(p=>p.date>=t&&p.date<=wk&&!p.posted).sort(sortFn);
+  const needMade=next.filter(p=>!p.created).length;
+  const bigs=posts.filter(p=>p.type==='big'&&p.date>=t).sort(sortFn).slice(0,3);
+  const thisMonth=t.slice(0,7),mp=real.filter(p=>p.date.startsWith(thisMonth));
+  $('view').innerHTML=head('Dashboard','What needs you right now.')+
+    `<div class="stats">
+      <div class="stat ${od.length?'bad':''}"><b>${od.length}</b><span>Overdue</span></div>
+      <div class="stat"><b>${next.length}</b><span>Next 7 days</span></div>
+      <div class="stat"><b>${needMade}</b><span>Still to make</span></div>
+      <div class="stat"><b>${mp.filter(p=>p.posted).length}/${mp.length}</b><span>Posted this month</span></div>
+    </div>`+
+    (bigs.length?`<div class="sec">Next big nights</div>`+bigs.map(rowHtml).join(''):'')+
+    `<div class="sec">Overdue</div>`+(od.length?od.slice(0,8).map(rowHtml).join('')+(od.length>8?`<div class="empty"><button class="btn btn-g" data-act="view" data-arg="overdue">See all ${od.length} overdue</button></div>`:''):'<div class="empty">Nothing overdue.</div>')+
+    `<div class="sec">Next 7 days</div>`+(next.length?groupedList(next,false):'<div class="empty">Nothing due this week.</div>');
+}
+
+/* ── CALENDAR (History lives here) ── */
+function vCalendar(){
+  const t=todayStr();
+  const months=[...new Set(posts.map(p=>p.date.slice(0,7)))].sort();
+  const views=[['todo','To do'],['overdue','Overdue'],['all','Everything'],['history','History']];
+  let list=posts.slice();
+  if(typeF!=='all')list=list.filter(p=>p.type===typeF);
+  if(monthF!=='all')list=list.filter(p=>p.date.startsWith(monthF));
+  const end=addDays(t,14);
+  if(calView==='todo')list=list.filter(p=>overdue(p,t)||(p.date>=t&&p.date<=end&&!p.posted));
+  if(calView==='overdue')list=list.filter(p=>overdue(p,t));
+  if(calView==='history')list=list.filter(p=>p.posted);
+  list.sort(sortFn);
+  if(calView==='history')list.reverse();
+  $('view').innerHTML=head('Calendar',calView==='history'?'Everything that has gone out.':'Check “Made” when the graphic exists, “Posted” when it is live.')+
+    statsHtml(list,t)+
+    `<div class="bar">${views.map(([k,l])=>`<button class="chip ${calView===k?'on':''}" data-act="view" data-arg="${k}">${l}</button>`).join('')}
+      <select class="mini" id="tf"><option value="all">All templates</option>${Object.entries(TYPES).map(([k,v])=>`<option value="${k}" ${typeF===k?'selected':''}>${v.l}</option>`).join('')}</select>
+      <select class="mini" id="mf"><option value="all">All months</option>${months.map(m=>`<option value="${m}" ${monthF===m?'selected':''}>${monthName(m)}</option>`).join('')}</select></div>`+
+    (calView==='todo'?groupedList(list,false):groupedList(list,calView!=='history'));
+}
+
+/* ── CAMPAIGNS: each month is a campaign ── */
+function vCampaigns(){
+  const real=posts.filter(p=>!isMile(p));
+  const months=[...new Set(posts.map(p=>p.date.slice(0,7)))].sort();
+  const t=todayStr().slice(0,7);
+  $('view').innerHTML=head('Campaigns','Each month is a campaign: its posts, its big night, how far along it is.')+
+    `<div class="grid">${months.map(m=>{
+      const mp=real.filter(p=>p.date.startsWith(m)),n=mp.length;
+      const made=mp.filter(p=>p.created).length,posted=mp.filter(p=>p.posted).length;
+      const big=posts.filter(p=>p.type==='big'&&p.date.startsWith(m));
+      return `<div class="card"><h4>${monthName(m)} ${m===t?'· now':''}</h4>
+        <div class="meta">${big.length?'Big night: '+esc(big.map(b=>b.title.replace('Big night: ','')+' ('+new Date(b.date+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})+')').join(', ')):'No big night'}</div>
+        <div class="nick">Made ${made}/${n}</div><div class="prog"><i style="width:${n?made/n*100:0}%"></i></div>
+        <div class="nick">Posted ${posted}/${n}</div><div class="prog posted"><i style="width:${n?posted/n*100:0}%"></i></div>
+        <div style="margin-top:8px"><button class="btn btn-g" data-act="month" data-arg="${m}">Open in Calendar</button></div></div>`;}).join('')}</div>`;
+}
+
+/* ── STUDIO: where posts get finished ── */
+function vStudio(){
+  const t=todayStr();
+  const up=posts.filter(p=>!isMile(p)&&!p.posted&&p.date>=t).sort(sortFn);
+  const f={caption:up.filter(p=>!p.caption.trim()),image:up.filter(p=>!p.imageUrl.trim()),ready:up.filter(p=>p.caption.trim()&&p.imageUrl.trim()),all:up};
+  const chips=[['caption','Needs caption'],['image','Needs image'],['ready','Ready for Buffer'],['all','All upcoming']];
+  const list=f[studioF].slice(0,150);
+  $('view').innerHTML=head('Studio','Write captions, attach image links, build prompts. Tap a post to open it.')+
+    `<div class="bar">${chips.map(([k,l])=>`<button class="chip ${studioF===k?'on':''}" data-act="studio" data-arg="${k}">${l} (${f[k].length})</button>`).join('')}<div class="sp"></div>
+      <button class="btn btn-gold" data-act="export">Export for Buffer</button></div>`+
+    (list.length?groupedList(list,false):'<div class="empty">Nothing in this list.</div>')+
+    (f[studioF].length>150?'<div class="empty">Showing the first 150. Finish these and the rest will appear.</div>':'');
+}
+
+/* ── ECHO ── */
+function vEcho(){
+  $('view').innerHTML=head('Echo','Analytics and performance.')+
+    `<div class="card"><h4>Not built yet</h4><div class="meta">Real reach and engagement numbers need Meta's API access, which is the same approval process as auto-posting. Until then, Buffer's own analytics shows reach and engagement per post.</div>
+    <div class="meta">What Echo can do first, with no approval needed: your own stats (posts made vs posted, on-time rate) and a place to type in each post's results by hand, so you can see which templates do best.</div></div>`;
+}
+
+/* ── LIBRARY ── */
+function vLibrary(){
+  $('view').innerHTML=head('Library','The ten templates. Keep a link to each design (Canva, Drive) here so you can open it fast.')+
+    `<div class="grid">${LIB_SEED.map(t=>{
+      const o=libOv[t.id]||{};
+      const n=posts.filter(p=>p.type===t.id).length;
+      return `<div class="card"><h4>${esc(t.name)}</h4><div class="nick">${esc(t.nick)} · ${esc(t.size)}</div>
+        <div class="meta">${esc(t.use)}${n?` · ${n} posts`:''}</div>
+        <span class="lbl">Link to template</span><input type="text" data-lib="${t.id}" data-f="link" value="${esc(o.link||'')}" placeholder="https://canva.com/…"/>
+        <span class="lbl">Notes</span><input type="text" data-lib="${t.id}" data-f="notes" value="${esc(o.notes||'')}"/>
+        ${o.link?`<div style="margin-top:8px"><a href="${esc(o.link)}" target="_blank" rel="noopener"><button class="btn btn-g" type="button">Open template</button></a></div>`:''}</div>`;}).join('')}</div>
+      <div class="sub" style="margin-top:16px">Finished graphics are not stored here yet. Each post keeps a link to its image. Cloudflare R2 would be the place to host them.</div>`;
+}
+
+/* ── EVENTS ── */
+$('view').addEventListener('click',e=>{
   const cb=e.target.closest('input[data-k]');
   if(cb){
+    const row=cb.closest('.row'),p=posts.find(x=>x.id===row.dataset.id);if(!p)return;
     const k=cb.dataset.k,v=cb.checked,n={...p,[k]:v};
     if(k==='posted'&&v)n.created=true;
     if(k==='created'&&!v)n.posted=false;
-    persist(n);
-    return;
+    persist(n);return;
   }
-  openEdit(p.id);
+  const a=e.target.closest('[data-act]');
+  if(a){act(a.dataset.act,a.dataset.arg);return;}
+  const row=e.target.closest('.row');
+  if(row)openEdit(row.dataset.id);
 });
+$('tabs').addEventListener('click',e=>{const a=e.target.closest('[data-act]');if(a)act(a.dataset.act,a.dataset.arg);});
+document.querySelector('.nav').addEventListener('click',e=>{const a=e.target.closest('[data-act="new"]');if(a)openEdit();});
+$('banner').addEventListener('click',e=>{const a=e.target.closest('[data-act]');if(a)act(a.dataset.act,a.dataset.arg);});
+$('view').addEventListener('change',e=>{
+  if(e.target.id==='tf'){typeF=e.target.value;render();}
+  else if(e.target.id==='mf'){monthF=e.target.value;render();}
+  else if(e.target.dataset.lib)saveLib(e.target.dataset.lib,{[e.target.dataset.f]:e.target.value.trim()}).then(render);
+});
+function act(a,arg){
+  if(a==='tab')setTab(arg);
+  else if(a==='view'){calView=arg;if(tab!=='calendar')tab='calendar';render();}
+  else if(a==='seed')seedMissing();
+  else if(a==='export')exportBuffer();
+  else if(a==='month'){monthF=arg;calView='all';setTab('calendar');}
+  else if(a==='studio'){studioF=arg;render();}
+  else if(a==='new')openEdit();
+}
 
 /* ── EDIT MODAL ── */
 $('f-type').innerHTML=Object.entries(TYPES).map(([k,v])=>`<option value="${k}">${v.l}</option>`).join('');
+function fillForm(p){
+  $('f-date').value=p.date;$('f-time').value=p.time||'';$('f-type').value=p.type;$('f-plat').value=p.platform||'';
+  $('f-title').value=p.title;$('f-cap').value=p.caption||'';$('f-img').value=p.imageUrl||'';$('f-notes').value=p.notes||'';
+  $('f-created').checked=!!p.created;$('f-posted').checked=!!p.posted;
+  $('f-muse-wrap').style.display='none';
+}
 function openEdit(id){
   editingId=id||null;
   const p=id?posts.find(x=>x.id===id):{date:todayStr(),time:'12:00',type:'weekly',title:'',platform:'IG + FB',caption:'',imageUrl:'',notes:'',created:false,posted:false};
   $('mt').textContent=id?'Edit post':'Add post';
-  $('f-date').value=p.date;$('f-time').value=p.time||'';$('f-type').value=p.type;$('f-plat').value=p.platform||'';
-  $('f-title').value=p.title;$('f-cap').value=p.caption||'';$('f-img').value=p.imageUrl||'';$('f-notes').value=p.notes||'';
-  $('f-created').checked=!!p.created;$('f-posted').checked=!!p.posted;
+  fillForm(p);
   $('f-del').style.display=id?'':'none';
+  $('f-enc').style.display=id?'':'none';
   $('ov').classList.add('show');
 }
 function closeEdit(){$('ov').classList.remove('show');}
@@ -516,35 +651,65 @@ async function saveEdit(){
   const title=$('f-title').value.trim(),date=$('f-date').value;
   if(!title||!date){toast('Needs a date and a title');return;}
   const old=editingId?posts.find(x=>x.id===editingId):null;
-  let created=$('f-created').checked,posted=$('f-posted').checked;
+  let created=$('f-created').checked;const posted=$('f-posted').checked;
   if(posted)created=true;
   await persist({...(old||{}),id:editingId||('p_'+Date.now()),date,time:$('f-time').value,type:$('f-type').value,
     platform:$('f-plat').value.trim(),title,caption:$('f-cap').value,imageUrl:$('f-img').value.trim(),notes:$('f-notes').value.trim(),created,posted});
   closeEdit();toast('Saved');
 }
 async function delPost(){if(editingId&&confirm('Delete this post?')){await removePost(editingId);closeEdit();}}
-window.openEdit=openEdit;window.closeEdit=closeEdit;window.saveEdit=saveEdit;window.delPost=delPost;
 
-/* ── BUFFER CSV EXPORT ── (Buffer’s bulk upload: Text, Image URL, Tags, Posting Time) */
+/* Encore: duplicate this post as a fresh one (new date, not made, not posted) */
+function encore(){
+  editingId=null;
+  $('mt').textContent='Encore: new copy';
+  $('f-date').value=addDays($('f-date').value||todayStr(),7);
+  $('f-created').checked=false;$('f-posted').checked=false;
+  $('f-del').style.display='none';$('f-enc').style.display='none';
+  $('f-muse-wrap').style.display='none';
+  toast('Copy ready: pick a date and save');
+}
+
+/* The Muse: builds the ChatGPT prompt for this post from your template text */
+const STYLE='Style: dark gothic botanical, near-black background, antique gold and cream accents, deadly nightshade sprigs framing the corners, a raven perched at the top. Elegant serif display font for the title, clean sans-serif for details. No emojis, no clip art, no cheesy party elements.';
+function museFor(type,title){
+  const t=title.includes(': ')?title.split(': ').slice(1).join(': '):title;
+  const ev=t.replace(/^\d+ days?: /,'');
+  if(type==='monthly')return `Create a 1080x1350 Instagram graphic for a live entertainment brand called Belladonna. ${STYLE}\n\nLayout, top to bottom:\n1. Small gold line: "BELLADONNA PRESENTS"\n2. Huge title: "[MONTH NAME]"\n3. Subtitle: "${t}"\n4. Four lines, one per week, each with the date and costume theme: "[Mon DATE] [WEEK 1 THEME]", and so on for weeks 2 to 4\n5. A gold highlighted line: "BIG NIGHT: [EVENT NAME], [DAY, DATE]"\n6. Bottom line: "Dress in the theme. Or any costume. Bonus card for everyone who does."\n7. Small footer: belladonnanights.com\n\nMood: [ONE LINE OF MOOD]. Keep the text large and perfectly spelled.`;
+  if(type==='weekly')return `Create a 1080x1350 Instagram graphic for Belladonna, a live entertainment brand. ${STYLE}\n\nLayout:\n1. Small gold line: "THIS WEEK AT BELLADONNA"\n2. Huge title: "${t.toUpperCase()}"\n3. One line under it: "[WEEK X OF 4: MONTH THEME NAME]"\n4. A list of this week's nights, one per line: "[DAY], [VENUE], [EVENT]"\n5. Gold line: "Costume = bonus card. Theme costume = bonus stamp."\n6. Small footer: belladonnanights.com\n\nMood: [ONE LINE OF MOOD].`;
+  if(type==='count'){
+    const m=title.match(/^Countdown, (.*?): (.*)$/);
+    const when=m?(m[1]==='day of'?'TONIGHT':m[1].toUpperCase()):'[N DAYS]';
+    return `Create a 1080x1350 Instagram graphic for Belladonna, a live entertainment brand. ${STYLE}\n\nLayout:\n1. Small gold line: "BELLADONNA COUNTDOWN"\n2. Huge title: "${when}"\n3. Event name: "${m?m[2]:ev}"\n4. Details: "[DAY, DATE] · [TIME] · [VENUE]"\n5. Gold line: "Dress in the theme. Or any costume."\n6. Small footer: belladonnanights.com\n\nMood: [ONE LINE OF MOOD].`;
+  }
+  if(type==='cover')return `Create a 1920x1005 Facebook Event cover for Belladonna, a live entertainment brand. ${STYLE}\n\nText, large and centered with a clear safe margin:\n1. Small gold line: "BELLADONNA PRESENTS"\n2. Huge title: "${ev.toUpperCase()}"\n3. Details: "[DAY, DATE] · [TIME] · [VENUE]"\n4. Small line: "Dress in the theme. Or any costume."\n\nMood: [ONE LINE OF MOOD].`;
+  if(type==='recap')return `Create a 1080x1350 Instagram graphic for Belladonna, a live entertainment brand. ${STYLE}\n\nLayout:\n1. Small gold line: "BELLADONNA RECAP"\n2. Huge title: "${t.toUpperCase()}"\n3. Subtitle: "CROWN WINNERS"\n4. Winner names, one per line: "[WEEK 1 WINNER]" to "[FINALE WINNER]"\n5. Empty framed area for a photo collage\n6. Gold line: "Next month: [NEXT MONTH THEME]"\n7. Small footer: belladonnanights.com\n\nMood: [ONE LINE OF MOOD].`;
+  return `Create a graphic for Belladonna, a live entertainment brand, for this post: "${title}". ${STYLE}\n\nText: "[TEXT]". Footer: belladonnanights.com\n\nMood: [ONE LINE OF MOOD].`;
+}
+function muse(){
+  const p=museFor($('f-type').value,$('f-title').value||'');
+  $('f-muse').value=p;$('f-muse-wrap').style.display='';
+  (navigator.clipboard?navigator.clipboard.writeText(p).then(()=>toast('Prompt copied'),()=>toast('Select and copy the prompt below')):Promise.resolve(toast('Select and copy the prompt below')));
+}
+
+/* ── BUFFER CSV EXPORT (Buffer's bulk upload: Text, Image URL, Tags, Posting Time) ── */
 function csvCell(s){return '"'+String(s??'').replace(/"/g,'""')+'"';}
 function exportBuffer(){
   const t=todayStr();
   let list=posts.filter(p=>!isMile(p)&&!p.posted&&p.date>=t);
-  if(typeF!=='all')list=list.filter(p=>p.type===typeF);
-  if(monthF!=='all')list=list.filter(p=>p.date.startsWith(monthF));
-  const ready=list.filter(p=>p.caption.trim());
+  const ready=list.filter(p=>p.caption.trim()).sort(sortFn);
   const skipped=list.length-ready.length;
   if(!ready.length){toast('No upcoming posts have a caption yet');return;}
-  ready.sort((a,b)=>(a.date+(a.time||'12:00'))<(b.date+(b.time||'12:00'))?-1:1);
   const rows=[['Text','Image URL','Tags','Posting Time'].map(csvCell).join(',')];
   ready.forEach(p=>rows.push([p.caption,p.imageUrl,'',`${p.date} ${p.time||'12:00'}`].map(csvCell).join(',')));
   const blob=new Blob([rows.join('\n')],{type:'text/csv;charset=utf-8'});
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);
-  a.download='buffer-bulk-'+t+'.csv';document.body.appendChild(a);a.click();a.remove();
+  a.download='clio-buffer-'+t+'.csv';document.body.appendChild(a);a.click();a.remove();
   toast(ready.length+' posts exported'+(skipped?` · ${skipped} skipped (no caption)`:''));
 }
-window.exportBuffer=exportBuffer;
 
+window.closeEdit=closeEdit;window.saveEdit=saveEdit;window.delPost=delPost;window.encore=encore;window.muse=muse;
+window.addEventListener('hashchange',()=>{const h=location.hash.slice(1);if(TABS.some(t=>t[0]===h)&&h!==tab){tab=h;render();}});
 init();
 </script>
 </body>
