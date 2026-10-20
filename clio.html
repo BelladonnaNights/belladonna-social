@@ -167,7 +167,7 @@ select:focus,input:focus,textarea:focus{outline:none;border-color:var(--gold);}
     </div>
     <div class="f"><label>What it is</label><input type="text" id="f-title"/></div>
     <div class="f"><label>Caption (goes to Buffer)</label><textarea id="f-cap"></textarea>
-      <div class="tools" style="margin:6px 0 0"><button class="btn btn-g" type="button" id="b-cap" onclick="aiCaption()">Write caption (ChatGPT)</button></div>
+      <div class="tools" style="margin:6px 0 0"><button class="btn btn-g" type="button" id="b-cap" onclick="capPrompt()">Copy caption prompt (paste into ChatGPT)</button></div>
       <div id="f-tags" class="bar" style="margin:6px 0 0"></div></div>
     <div class="f"><label>Image (upload, or paste a direct .jpg / .png link)</label><input type="text" id="f-img" placeholder="https://…" oninput="imgPrev()"/>
       <div class="tools" style="margin:6px 0 0"><button class="btn btn-g" type="button" id="b-up" onclick="document.getElementById('f-file').click()">Upload image</button><input type="file" id="f-file" accept="image/jpeg,image/png,image/webp" style="display:none" onchange="uploadImg(this)"/></div>
@@ -943,7 +943,7 @@ function vLibrary(){
     <div class="card" style="padding:12px;border-color:var(--border-gold)"><div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(250px,1fr))">${setCards}</div></div>`:'')+
     groups.map(g=>`<div class="sec">${esc(g)}</div><div class="grid">${rest.filter(e=>(e.group||'Other')===g).map(t=>libCard(t,'')).join('')}</div>`).join('')+
     `${libTagsHtml()}
-      <div class="card" style="max-width:520px;margin-top:16px"><span class="lbl">Worker address (for captions and image uploads)</span><input type="text" data-api="1" value="${esc((()=>{try{return localStorage.getItem('bn_clio_api')||'';}catch(e){return '';}})())}" placeholder="https://clio-api.yourname.workers.dev"/></div>
+      <div class="card" style="max-width:520px;margin-top:16px"><span class="lbl">Worker address (for image uploads and Buffer sync)</span><input type="text" data-api="1" value="${esc((()=>{try{return localStorage.getItem('bn_clio_api')||'';}catch(e){return '';}})())}" placeholder="https://clio-api.yourname.workers.dev"/></div>
       <div class="sub" style="margin-top:16px">Finished graphics are stored on your Cloudflare. Set each template's background art here (or from Make graphic) and Clio draws the text on top.</div>`;
 }
 
@@ -1607,6 +1607,21 @@ async function syncBuffer(manual){
   bufBusy=false;
 }
 
+/* Caption helper that costs nothing: builds a ready-to-paste prompt for the ChatGPT chat you already use */
+const CAP_RULES='You write social media captions for Belladonna, a gothic, elegant live-entertainment brand in the Pacific Northwest (Music Bingo, Karaoke, Trivia and Sing-Along nights at local venues). Voice: warm, witty, a little mysterious, never cheesy. No emojis, no hashtags, no clip-art phrases like "get ready to party". Under 600 characters. Use only the facts below; never invent a venue, time, prize or date. If a detail is missing, leave it out. End with a short call to action when it fits. Return only the caption text.';
+function capPrompt(){
+  const type=$('f-type').value,title=$('f-title').value.trim(),date=$('f-date').value;
+  if(!title){toast('Add a title first');return;}
+  const wk=(type==='weekly'&&gigs.length&&date)?nightLines(date,addDays(date,6),true):[];
+  const mo=(type==='monthly'&&gigs.length&&date)?(()=>{const d=new Date(date+'T12:00:00');return nightLines(ymd(new Date(d.getFullYear(),d.getMonth()+1,1)),ymd(new Date(d.getFullYear(),d.getMonth()+2,0)),false);})():[];
+  const win=(type==='recap'&&date)?winLines(date.slice(0,7),false).map(x=>'Best Dressed winner - '+x):[];
+  const facts=[...wk,...mo,...win],old=$('f-cap').value.trim(),extra=$('f-notes').value.trim();
+  const p=CAP_RULES+'\n\nPost type: '+(TYPES[type]?.l||type)+'\nPost title: '+title+(date?'\nPost date: '+date:'')+'\nPlatform: '+($('f-plat').value||'IG + FB')+
+    (facts.length?'\nFacts to use (one per line):\n'+facts.join('\n'):'')+(old?'\n\nCurrent draft to improve:\n'+old:'')+(extra?'\n\nExtra direction: '+extra:'');
+  $('f-muse').value=p;$('f-muse-wrap').style.display='';
+  (navigator.clipboard?navigator.clipboard.writeText(p).then(()=>toast('Caption prompt copied. Paste it into ChatGPT, then paste the answer here'),()=>toast('Select and copy the prompt below')):toast('Select and copy the prompt below'));
+}
+
 /* ── BUFFER CSV EXPORT (Buffer's bulk upload: Text, Image URL, Tags, Posting Time) ── */
 function csvCell(s){return '"'+String(s??'').replace(/"/g,'""')+'"';}
 function exportBuffer(){
@@ -1623,7 +1638,7 @@ function exportBuffer(){
   toast(ready.length+' posts exported'+(skipped?` · ${skipped} skipped (no caption)`:''));
 }
 
-window.closeEdit=closeEdit;window.saveEdit=saveEdit;window.delPost=delPost;window.encore=encore;window.muse=muse;window.libSaveEdit=libSaveEdit;window.ledRule=ledRule;window.libHide=libHide;window.banUpload=banUpload;window.addTags=addTags;window.setWin=setWin;window.tw=null;Object.defineProperty(window,'tw',{get:()=>tw,set:v=>{tw=v;}});Object.defineProperty(window,'twKey',{get:()=>twKey});window.twPick=twPick;window.twAdd=twAdd;window.twDelTask=twDelTask;window.twMove=twMove;window.twNewSet=twNewSet;window.twDelSet=twDelSet;window.twSave=twSave;window.libUpload=libUpload;window.aiCaption=aiCaption;window.openGfx=openGfx;window.gfxPick=gfxPick;window.gfxSaveBg=gfxSaveBg;window.gfxUse=gfxUse;window.uploadImg=uploadImg;window.imgPrev=imgPrev;
+window.closeEdit=closeEdit;window.saveEdit=saveEdit;window.delPost=delPost;window.encore=encore;window.muse=muse;window.libSaveEdit=libSaveEdit;window.ledRule=ledRule;window.libHide=libHide;window.banUpload=banUpload;window.addTags=addTags;window.setWin=setWin;window.tw=null;Object.defineProperty(window,'tw',{get:()=>tw,set:v=>{tw=v;}});Object.defineProperty(window,'twKey',{get:()=>twKey});window.twPick=twPick;window.twAdd=twAdd;window.twDelTask=twDelTask;window.twMove=twMove;window.twNewSet=twNewSet;window.twDelSet=twDelSet;window.twSave=twSave;window.libUpload=libUpload;window.aiCaption=aiCaption;window.capPrompt=capPrompt;window.openGfx=openGfx;window.gfxPick=gfxPick;window.gfxSaveBg=gfxSaveBg;window.gfxUse=gfxUse;window.uploadImg=uploadImg;window.imgPrev=imgPrev;
 window.addEventListener('hashchange',()=>{const h=location.hash.slice(1);if((TABS.some(t=>t[0]===h)||h==='events')&&h!==tab){tab=h;render();}});
 applyTheme(document.documentElement.getAttribute('data-theme')||'dark');
 init();
