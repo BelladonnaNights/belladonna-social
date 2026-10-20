@@ -239,6 +239,45 @@ const LIB_SEED=[
   {id:'pin',name:'Weekly Nights Pin',nick:'Pin',size:'1080x1350 + 1080x1920',use:'Pinned post, highlight, recurring Facebook Event covers'}
 ];
 
+const LIB_META={
+  mcover:{group:'Monthly & weekly',freq:'The 25th of every month',use:'Slide 1 of 3: "[MONTH] at Belladonna", tap to swipe'},
+  monthly:{group:'Monthly & weekly',freq:'The 25th of every month',use:'Slide 2 of 3: month name, month theme, four weekly themes, big night'},
+  sched:{group:'Monthly & weekly',freq:'The 25th of every month',use:'Slide 3 of 3: week 1 theme with every venue and night'},
+  weekly:{group:'Monthly & weekly',freq:'Every Monday',use:'Monday post: week theme plus each night'},
+  cover:{group:'Event posts',freq:'Every big night, 14 days out',use:'Facebook Event image'},
+  count:{group:'Event posts',freq:'7 days before, 3 days before, and the day of',use:'Countdown posts and stories'},
+  tonight:{group:'Nightly stories',freq:'Every event night, automatic from HQ',use:'3:00 pm story'},
+  host:{group:'Nightly stories',freq:'Every event night, automatic from HQ',use:"Host's costume story frame"},
+  best:{group:'After the night',freq:'The morning after every night, automatic from HQ',use:'Next-morning winner photo'},
+  recap:{group:'After the night',freq:'End of every month',use:'Winners and best photos'},
+  pin:{group:'Always on',freq:'Evergreen, update when the nights change',use:'Pinned post, highlight, and recurring Facebook Event covers'}
+};
+const LIB_FIELDS=['name','nick','size','use','group','freq'];
+function libList(withDeleted){
+  const out=[];
+  LIB_SEED.forEach(t=>{
+    const o=libOv[t.id]||{},m=LIB_META[t.id]||{};
+    const e={...t,...m,custom:false};
+    LIB_FIELDS.forEach(f=>{if(o[f]!==undefined&&o[f]!==null)e[f]=o[f];});
+    e.deleted=!!o.deleted;out.push(e);
+  });
+  Object.entries(libOv).forEach(([id,o])=>{
+    if(o&&o.custom){const e={id,custom:true,name:o.name||'Untitled',nick:o.nick||'',size:o.size||'',use:o.use||'',group:o.group||'Other',freq:o.freq||'',deleted:!!o.deleted};out.push(e);}
+  });
+  return withDeleted?out:out.filter(e=>!e.deleted);
+}
+let typeSig='';
+function syncTypes(){
+  libList(true).forEach(e=>{
+    if(e.deleted)return;
+    const label=e.nick||e.name;
+    if(TYPES[e.id])TYPES[e.id].l=label;
+    else if(e.custom)TYPES[e.id]={l:label,c:'#444441',bg:'#f4f3f0',plat:'IG + FB'};
+  });
+  const sig=Object.entries(TYPES).map(([k,v])=>k+':'+v.l).join('|');
+  if(sig!==typeSig){typeSig=sig;if(typeof buildTypeOptions==='function')buildTypeOptions();}
+}
+
 /* ── SEED: both calendars, one line per post: date  code[@time]  title ── */
 const SEED = `2026-10-19 W@ Villains & Monsters
 2026-10-19 C@ Monster Mash Halloween Party
@@ -591,6 +630,7 @@ async function signIn(){
 function render(){
   const so=$('so');if(so)so.style.display=(mode==='cloud'&&user)?'':'none';
   if(mode==='cloud'&&!user){$('tabs').innerHTML='';banner('');vSignIn();return;}
+  syncTypes();
   vposts=posts.concat(virtualRows());
   $('tabs').innerHTML=TABS.map(([k,l])=>`<button class="tab ${tab===k?'on':''}" data-act="tab" data-arg="${k}">${l}</button>`).join('');
   if(!posts.length)banner(`Clio's calendar is empty. <button class="btn btn-p" data-act="seed">Load my 2026–2027 calendars (${buildSeed().length} rows)</button>`);
@@ -772,12 +812,13 @@ function vCampaigns(){
   const real=vposts.filter(p=>!isMile(p));
   const months=[...new Set(vposts.map(p=>p.date.slice(0,7)))].sort();
   const t=todayStr().slice(0,7);
-  $('view').innerHTML=head('Campaigns','Each month is a campaign: its posts, its big night, how far along it is.')+
+  $('view').innerHTML=head('Campaigns','Each month is a campaign: its banner, its posts, its big night, how far along it is.')+
+    `<div class="bar"><label style="display:flex;gap:8px;align-items:center;cursor:pointer;font-size:13px;color:var(--text2)"><input type="checkbox" data-act="bantoggle" ${showBanners()?'checked':''} style="width:17px;height:17px"/> Show campaign banners</label></div>`+
     `<div class="grid">${months.map(m=>{
       const mp=real.filter(p=>p.date.startsWith(m)),n=mp.length;
       const made=mp.filter(p=>p.created).length,posted=mp.filter(p=>p.posted).length;
       const big=vposts.filter(p=>p.type==='big'&&p.date.startsWith(m));
-      return `<div class="card"><h4>${monthName(m)} ${m===t?'· now':''}</h4>
+      return `<div class="card">${bannerHtml(m)}<h4>${monthName(m)} ${m===t?'· now':''}</h4>
         <div class="meta">${big.length?'Big night: '+esc(big.map(b=>b.title.replace('Big night: ','')+' ('+new Date(b.date+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})+')').join(', ')):'No big night'}</div>
         <div class="nick">Made ${made}/${n}</div><div class="prog"><i style="width:${n?made/n*100:0}%"></i></div>
         <div class="nick">Posted ${posted}/${n}</div><div class="prog posted"><i style="width:${n?posted/n*100:0}%"></i></div>
@@ -840,14 +881,31 @@ function libCard(t,slot){
         ${o.link?`<div style="margin-top:8px"><a href="${esc(o.link)}" target="_blank" rel="noopener"><button class="btn btn-g" type="button">Open template</button></a></div>`:''}</div>`;
 }
 const MONTHLY_SET=[['mcover','Slide 1 of 3'],['monthly','Slide 2 of 3'],['sched','Slide 3 of 3']];
+const GROUP_ORDER=['Monthly & weekly','Event posts','Nightly stories','After the night','Always on'];
+function orderGroups(g){const ix=x=>{const i=GROUP_ORDER.indexOf(x);return i<0?99:i;};return g.slice().sort((a,b)=>ix(a)-ix(b));}
+function cadenceHtml(){
+  const L=libList(),groups=orderGroups([...new Set(L.map(e=>e.group||'Other'))]);
+  return `<div class="sec">Posting cadence</div><div class="sub" style="margin:0 0 8px">Everything you post on a rhythm, grouped. Edit the name, nickname, group or how often, or add your own. The nickname is what shows on calendar badges. Today these lines describe your rhythm; the calendar itself is built from your loaded calendars and from HQ.</div>
+  <div class="bar"><button class="btn btn-p" data-act="libnew">+ Add a post type</button></div>`+
+  groups.map(g=>`<div class="monthh" style="font-size:1.1rem;margin:14px 0 6px">${esc(g)}</div>`+
+    L.filter(e=>(e.group||'Other')===g).map(e=>`<div class="card" style="padding:10px 12px;margin-bottom:6px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <div style="flex:1;min-width:220px"><div><b style="font-weight:600">${esc(e.name)}</b>${e.nick?` <span class="nick">(${esc(e.nick)})</span>`:''}</div>
+      <div class="meta" style="margin:0">${esc(e.use||'')}${e.use&&e.freq?' · ':''}<span style="color:var(--gold2)">${esc(e.freq||'')}</span></div></div>
+      <button class="btn btn-g" data-act="libedit" data-arg="${e.id}">Edit</button></div>`).join('')).join('')+
+  (libList(true).some(e=>e.deleted)?`<div class="meta" style="margin-top:10px">Hidden: ${libList(true).filter(e=>e.deleted).map(e=>`${esc(e.name)} <button class="chip" data-act="librestore" data-arg="${e.id}">Restore</button>`).join(' ')}</div>`:'');
+}
+const MONTHLY_SET_IDS=['mcover','monthly','sched'];
 function vLibrary(){
-  const inSet=new Set(MONTHLY_SET.map(x=>x[0]));
-  $('view').innerHTML=head('Library','Your templates. Upload a finished example of each design so Muse can copy it.')+
-    `<div class="sec">Monthly Announcement · 3 slides · posted on the 25th</div>
-    <div class="card" style="padding:12px;border-color:var(--border-gold)"><div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(250px,1fr))">${MONTHLY_SET.map(([id,slot])=>libCard(LIB_SEED.find(x=>x.id===id),slot)).join('')}</div></div>
-    <div class="sec">Everything else</div>
-    <div class="grid">${LIB_SEED.filter(t=>!inSet.has(t.id)).map(t=>libCard(t,'')).join('')}</div>
-      ${libTagsHtml()}
+  const L=libList(),byId=Object.fromEntries(L.map(e=>[e.id,e]));
+  const setCards=MONTHLY_SET.filter(([id])=>byId[id]).map(([id,slot])=>libCard(byId[id],slot)).join('');
+  const rest=L.filter(e=>!MONTHLY_SET_IDS.includes(e.id)||!byId.mcover||!byId.monthly||!byId.sched);
+  const groups=orderGroups([...new Set(rest.map(e=>e.group||'Other'))]);
+  $('view').innerHTML=head('Library','Your posting cadence and the templates behind it. Upload a finished example of each design so Muse can copy it.')+
+    cadenceHtml()+
+    (byId.mcover&&byId.monthly&&byId.sched?`<div class="sec">Monthly Announcement · 3 slides · posted on the 25th</div>
+    <div class="card" style="padding:12px;border-color:var(--border-gold)"><div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(250px,1fr))">${setCards}</div></div>`:'')+
+    groups.map(g=>`<div class="sec">${esc(g)}</div><div class="grid">${rest.filter(e=>(e.group||'Other')===g).map(t=>libCard(t,'')).join('')}</div>`).join('')+
+    `${libTagsHtml()}
       <div class="card" style="max-width:520px;margin-top:16px"><span class="lbl">Worker address (for captions and image uploads)</span><input type="text" data-api="1" value="${esc((()=>{try{return localStorage.getItem('bn_clio_api')||'';}catch(e){return '';}})())}" placeholder="https://clio-api.yourname.workers.dev"/></div>
       <div class="sub" style="margin-top:16px">Finished graphics are stored on your Cloudflare. Set each template's background art here (or from Make graphic) and Clio draws the text on top.</div>`;
 }
@@ -874,6 +932,7 @@ $('banner').addEventListener('click',e=>{const a=e.target.closest('[data-act]');
 $('view').addEventListener('change',e=>{
   if(e.target.id==='tf'){typeF=e.target.value;render();}
   else if(e.target.id==='mf'){monthF=e.target.value;render();}
+  else if(e.target.dataset.ban){const u=e.target.value.trim();if(!u||/^https?:\/\//.test(u))setBanner(e.target.dataset.ban,u);else toast('That does not look like an image link');}
   else if(e.target.dataset.stat){const p=posts.find(x=>x.id===e.target.dataset.stat);if(p){const v=parseInt(String(e.target.value).replace(/[^\d]/g,''))||0;e.target.value=v||'';quietSave({...p,stats:{...(p.stats||{}),[e.target.dataset.f]:v}});toast('Saved');}}
   else if(e.target.dataset.ts){const S={...getTagSets()},id=e.target.dataset.ts;if(S[id]){S[id]={...S[id],[e.target.dataset.f]:e.target.value.trim()};saveTagSets(S);}}
   else if(e.target.dataset.kind){const p=posts.find(x=>x.id===e.target.dataset.kind);if(p)persist({...p,evKind:e.target.value});}
@@ -900,6 +959,11 @@ function act(a,arg){
   else if(a==='evprev'||a==='evnext'){evIdx+=a==='evnext'?1:-1;render();}
   else if(a==='evopen'){openEdit(arg);}
   else if(a==='edtasks')openTasks();
+  else if(a==='libnew')openLibEdit(null);
+  else if(a==='libedit')openLibEdit(arg);
+  else if(a==='librestore'){saveLib(arg,{deleted:false}).then(render);}
+  else if(a==='bantoggle'){saveLib('settings',{showBanners:!showBanners()}).then(render);}
+  else if(a==='bandel')setBanner(arg,'');
   else if(a==='echof'){echoF=arg;render();}
   else if(a==='tsnew'){const S={...getTagSets()};S['t'+Date.now().toString(36)]={name:'',kind:'general',text:''};saveTagSets(S);}
   else if(a==='tsdel'){const S={...getTagSets()};delete S[arg];saveTagSets(S);}
@@ -914,7 +978,8 @@ $('f-title').addEventListener('input',()=>{renderTags();renderWin();});
 $('f-notes').addEventListener('input',renderTags);
 $('f-type').addEventListener('change',renderWin);
 $('f-date').addEventListener('change',renderWin);
-$('f-type').innerHTML=Object.entries(TYPES).map(([k,v])=>`<option value="${k}">${v.l}</option>`).join('');
+function buildTypeOptions(){const cur=$('f-type').value;$('f-type').innerHTML=Object.entries(TYPES).map(([k,v])=>`<option value="${k}">${v.l}</option>`).join('');if(cur)$('f-type').value=cur;}
+buildTypeOptions();
 function fillForm(p){
   $('f-date').value=p.date;$('f-time').value=p.time||'';$('f-type').value=p.type;$('f-plat').value=p.platform||'';
   $('f-title').value=p.title;$('f-cap').value=p.caption||'';$('f-img').value=p.imageUrl||'';imgPrev();$('f-notes').value=p.notes||'';
@@ -1252,6 +1317,65 @@ function tsAdd(names,kind){
   saveTagSets(S);toast(n?n+' added: fill in their tags':'Nothing new to add');
 }
 
+/* ── POST TYPE EDITOR (name, nickname, group, how often; add / hide) ── */
+let ledId=null;
+function ensureLed(){
+  if($('led'))return;
+  const el=document.createElement('div');el.className='ov';el.id='led';
+  el.addEventListener('click',e=>{if(e.target===el)el.classList.remove('show');});
+  document.body.appendChild(el);
+}
+function openLibEdit(id){
+  ensureLed();ledId=id;
+  const e=id?libList(true).find(x=>x.id===id):{name:'',nick:'',size:'1080x1350',use:'',group:'Event posts',freq:''};
+  const groups=[...new Set(libList().map(x=>x.group||'Other'))];
+  $('led').innerHTML=`<div class="box"><h3>${id?'Edit post type':'Add a post type'}</h3>
+  <div class="f2"><div class="f"><label>Name</label><input type="text" id="le-name" value="${esc(e.name)}"/></div><div class="f"><label>Nickname (shows on badges)</label><input type="text" id="le-nick" value="${esc(e.nick)}"/></div></div>
+  <div class="f"><label>Group (pick one or type a new one)</label><input type="text" id="le-group" list="le-groups" value="${esc(e.group||'')}"/><datalist id="le-groups">${groups.map(g=>`<option value="${esc(g)}">`).join('')}</datalist></div>
+  <div class="f"><label>How often / when</label><input type="text" id="le-freq" value="${esc(e.freq||'')}" placeholder="Every Monday, the 25th of every month, 3 days before each big night…"/></div>
+  <div class="f"><label>What it is / timing</label><input type="text" id="le-use" value="${esc(e.use||'')}" placeholder="Monday post: week theme plus each night"/></div>
+  <div class="f"><label>Size</label><input type="text" id="le-size" value="${esc(e.size||'')}" placeholder="1080x1350"/></div>
+  ${id&&!e.custom?'<div class="meta">This is one of your built-in post types. “Hide” removes it from this list; posts already on the calendar keep working.</div>':''}
+  <div class="acts">${id?`<button class="btn btn-d" type="button" onclick="libHide()">${e.custom?'Delete':'Hide'}</button>`:''}<span class="sp"></span><button class="btn btn-g" type="button" onclick="document.getElementById('led').classList.remove('show')">Cancel</button><button class="btn btn-p" type="button" onclick="libSaveEdit()">Save</button></div></div>`;
+  $('led').classList.add('show');
+}
+async function libSaveEdit(){
+  const name=$('le-name').value.trim();if(!name){toast('Give it a name');return;}
+  const patch={name,nick:$('le-nick').value.trim(),group:$('le-group').value.trim()||'Other',freq:$('le-freq').value.trim(),use:$('le-use').value.trim(),size:$('le-size').value.trim()};
+  let id=ledId;
+  if(!id){id='c_'+Date.now().toString(36);patch.custom=true;}
+  await saveLib(id,patch);$('led').classList.remove('show');render();
+}
+async function libHide(){
+  const e=libList(true).find(x=>x.id===ledId);if(!e)return;
+  if(!confirm((e.custom?'Delete':'Hide')+' "'+e.name+'"?'))return;
+  await saveLib(ledId,{deleted:true});$('led').classList.remove('show');render();
+}
+
+/* ── CAMPAIGN BANNERS ── */
+function bannerMap(){return (libOv.banners||{}).map||{};}
+function showBanners(){return (libOv.settings||{}).showBanners!==false;}
+function bannerHtml(m){
+  if(!showBanners())return '';
+  const u=bannerMap()[m];
+  return `<div style="margin:-2px -2px 10px">${u?`<img src="${esc(u)}" alt="" style="width:100%;aspect-ratio:16/9;object-fit:cover;border:1px solid var(--border2);border-radius:var(--radius);display:block"/>`
+    :`<div style="width:100%;aspect-ratio:16/9;border:1px dashed var(--border2);border-radius:var(--radius);display:flex;align-items:center;justify-content:center;color:var(--text3);font-family:var(--serif);font-style:italic">No banner yet</div>`}
+    <div class="tools" style="margin:6px 0 0"><button class="btn btn-g" type="button" onclick="banUpload('${m}')">${u?'Replace banner':'Upload banner'}</button>${u?`<button class="btn btn-d" type="button" data-act="bandel" data-arg="${m}">Remove</button>`:''}</div>
+    <input type="text" data-ban="${m}" value="${esc(u||'')}" placeholder="or paste an image link" style="margin-top:6px"/></div>`;
+}
+let banPend=null;
+function banUpload(m){
+  banPend=m;let f=$('ban-file');
+  if(!f){f=document.createElement('input');f.type='file';f.id='ban-file';f.accept='image/jpeg,image/png,image/webp';f.style.display='none';
+    f.onchange=async()=>{const file=f.files[0];f.value='';if(!file||!banPend)return;
+      try{if(!apiBase()){toast('Set up the Worker address in Library first');return;}toast('Uploading…');
+        const blob=await shrink(file,2000);const d=await apiFetch('/upload',{method:'POST',headers:{'Content-Type':'image/jpeg'},body:blob});
+        await setBanner(banPend,d.url);}catch(e){toast('Upload failed: '+e.message);}};
+    document.body.appendChild(f);}
+  f.click();
+}
+async function setBanner(m,u){const mp={...bannerMap()};if(u)mp[m]=u;else delete mp[m];await saveLib('banners',{map:mp});render();}
+
 /* ── CHECKLIST EDITOR: your own tasks and timing, one list per kind of event ── */
 let tw=null,twKey='';
 function ensureTov(){
@@ -1343,7 +1467,7 @@ function exportBuffer(){
   toast(ready.length+' posts exported'+(skipped?` · ${skipped} skipped (no caption)`:''));
 }
 
-window.closeEdit=closeEdit;window.saveEdit=saveEdit;window.delPost=delPost;window.encore=encore;window.muse=muse;window.addTags=addTags;window.setWin=setWin;window.tw=null;Object.defineProperty(window,'tw',{get:()=>tw,set:v=>{tw=v;}});Object.defineProperty(window,'twKey',{get:()=>twKey});window.twPick=twPick;window.twAdd=twAdd;window.twDelTask=twDelTask;window.twMove=twMove;window.twNewSet=twNewSet;window.twDelSet=twDelSet;window.twSave=twSave;window.libUpload=libUpload;window.aiCaption=aiCaption;window.openGfx=openGfx;window.gfxPick=gfxPick;window.gfxSaveBg=gfxSaveBg;window.gfxUse=gfxUse;window.uploadImg=uploadImg;window.imgPrev=imgPrev;
+window.closeEdit=closeEdit;window.saveEdit=saveEdit;window.delPost=delPost;window.encore=encore;window.muse=muse;window.libSaveEdit=libSaveEdit;window.libHide=libHide;window.banUpload=banUpload;window.addTags=addTags;window.setWin=setWin;window.tw=null;Object.defineProperty(window,'tw',{get:()=>tw,set:v=>{tw=v;}});Object.defineProperty(window,'twKey',{get:()=>twKey});window.twPick=twPick;window.twAdd=twAdd;window.twDelTask=twDelTask;window.twMove=twMove;window.twNewSet=twNewSet;window.twDelSet=twDelSet;window.twSave=twSave;window.libUpload=libUpload;window.aiCaption=aiCaption;window.openGfx=openGfx;window.gfxPick=gfxPick;window.gfxSaveBg=gfxSaveBg;window.gfxUse=gfxUse;window.uploadImg=uploadImg;window.imgPrev=imgPrev;
 window.addEventListener('hashchange',()=>{const h=location.hash.slice(1);if((TABS.some(t=>t[0]===h)||h==='events')&&h!==tab){tab=h;render();}});
 applyTheme(document.documentElement.getAttribute('data-theme')||'dark');
 init();
