@@ -731,8 +731,11 @@ function vLibrary(){
       const n=vposts.filter(p=>p.type===t.id).length;
       return `<div class="card"><h4>${esc(t.name)}</h4><div class="nick">${esc(t.nick)} · ${esc(t.size)}</div>
         <div class="meta">${esc(t.use)}${n?` · ${n} posts`:''}</div>
-        <span class="lbl">Link to template</span><input type="text" data-lib="${t.id}" data-f="link" value="${esc(o.link||'')}" placeholder="https://canva.com/…"/>
-        <span class="lbl">Background art (image link, blank space for text)</span><input type="text" data-lib="${t.id}" data-f="bgUrl" value="${esc(o.bgUrl||'')}" placeholder="Set from Make graphic, or paste a link"/>
+        <span class="lbl">Example image (a finished design Muse tells ChatGPT to copy)</span>
+        ${o.tplImg?`<img src="${esc(o.tplImg)}" alt="" style="width:100%;max-height:220px;object-fit:contain;background:#000;border:1px solid var(--border2);border-radius:var(--radius);margin-bottom:6px"/>`:''}
+        <div class="tools" style="margin:0 0 4px"><button class="btn btn-g" type="button" onclick="libUpload('${t.id}')">${o.tplImg?'Replace example':'Upload example'}</button></div>
+        <span class="lbl">Link to template (optional: Canva, Drive, anything)</span><input type="text" data-lib="${t.id}" data-f="link" value="${esc(o.link||'')}" placeholder="https://canva.com/…"/>
+        <span class="lbl">Blank background (only for Make graphic, where Clio draws the text itself)</span><input type="text" data-lib="${t.id}" data-f="bgUrl" value="${esc(o.bgUrl||'')}" placeholder="Set from Make graphic, or paste a link"/>
         <span class="lbl">Notes</span><input type="text" data-lib="${t.id}" data-f="notes" value="${esc(o.notes||'')}"/>
         ${o.link?`<div style="margin-top:8px"><a href="${esc(o.link)}" target="_blank" rel="noopener"><button class="btn btn-g" type="button">Open template</button></a></div>`:''}</div>`;}).join('')}</div>
       <div class="sub" style="margin-top:16px">Finished graphics are stored on your Cloudflare. Set each template's background art here (or from Make graphic) and Clio draws the text on top.</div>`;
@@ -839,10 +842,35 @@ function museFor(type,title,date){
   if(type==='recap')return `Create a 1080x1350 Instagram graphic for Belladonna, a live entertainment brand. ${STYLE}\n\nLayout:\n1. Small gold line: "BELLADONNA RECAP"\n2. Huge title: "${t.toUpperCase()}"\n3. Subtitle: "CROWN WINNERS"\n4. Winner names, one per line: "[WEEK 1 WINNER]" to "[FINALE WINNER]"\n5. Empty framed area for a photo collage\n6. Gold line: "Next month: [NEXT MONTH THEME]"\n7. Small footer: belladonnanights.com\n\nMood: [ONE LINE OF MOOD].`;
   return `Create a graphic for Belladonna, a live entertainment brand, for this post: "${title}". ${STYLE}\n\nText: "[TEXT]". Footer: belladonnanights.com\n\nMood: [ONE LINE OF MOOD].`;
 }
+let libPend=null;
+function libUpload(id){
+  libPend=id;
+  let f=$('lib-file');
+  if(!f){f=document.createElement('input');f.type='file';f.id='lib-file';f.accept='image/jpeg,image/png,image/webp';f.style.display='none';
+    f.onchange=async()=>{const file=f.files[0];f.value='';if(!file||!libPend)return;
+      try{toast('Uploading…');const blob=await shrink(file,2000);
+        const d=await apiFetch('/upload',{method:'POST',headers:{'Content-Type':'image/jpeg'},body:blob});
+        await saveLib(libPend,{tplImg:d.url});render();toast('Example saved');}catch(e){toast('Upload failed: '+e.message);}};
+    document.body.appendChild(f);}
+  f.click();
+}
+function museEdit(type,title,date){
+  const d=gfxDefaults(type,title,date),L=[];
+  L.push('Use the attached image as an exact template. Keep the layout, artwork, flowers, frames, fonts, gold texture, colors and spacing identical. Change ONLY the wording, as follows. Do not add anything new.');
+  if(d.kicker)L.push('Small top line: "'+d.kicker+'"');
+  if(d.title)L.push('Big title: "'+d.title+'"');
+  if(d.sub)L.push('Subtitle: "'+d.sub+'"');
+  if(d.lines)L.push('Rows, one per line, in this order, each in the same style as the template rows (day, then venue, then game):\n'+d.lines+'\nIf the template has more rows than this, remove the extra rows and re-center the rest. If fewer, add a matching row.');
+  L.push('Footer: "belladonnanights.com"');
+  L.push('Spell every word exactly as written above. Output the same size as the template.');
+  return L.join('\n\n');
+}
 function muse(){
-  const p=museFor($('f-type').value,$('f-title').value||'',$('f-date').value);
+  const tpl=(libOv[$('f-type').value]||{}).tplImg;
+  const p=tpl?museEdit($('f-type').value,$('f-title').value||'',$('f-date').value):museFor($('f-type').value,$('f-title').value||'',$('f-date').value);
+
   $('f-muse').value=p;$('f-muse-wrap').style.display='';
-  (navigator.clipboard?navigator.clipboard.writeText(p).then(()=>toast('Prompt copied'),()=>toast('Select and copy the prompt below')):Promise.resolve(toast('Select and copy the prompt below')));
+  (navigator.clipboard?navigator.clipboard.writeText(p).then(()=>toast(tpl?'Prompt copied. Attach your example image in ChatGPT too':'Prompt copied'),()=>toast('Select and copy the prompt below')):Promise.resolve(toast('Select and copy the prompt below')));
 }
 
 /* ── CLIO API (Cloudflare Worker): ChatGPT captions + R2 image upload ── */
@@ -1023,7 +1051,7 @@ function exportBuffer(){
   toast(ready.length+' posts exported'+(skipped?` · ${skipped} skipped (no caption)`:''));
 }
 
-window.closeEdit=closeEdit;window.saveEdit=saveEdit;window.delPost=delPost;window.encore=encore;window.muse=muse;window.aiCaption=aiCaption;window.openGfx=openGfx;window.gfxPick=gfxPick;window.gfxSaveBg=gfxSaveBg;window.gfxUse=gfxUse;window.uploadImg=uploadImg;window.imgPrev=imgPrev;
+window.closeEdit=closeEdit;window.saveEdit=saveEdit;window.delPost=delPost;window.encore=encore;window.muse=muse;window.libUpload=libUpload;window.aiCaption=aiCaption;window.openGfx=openGfx;window.gfxPick=gfxPick;window.gfxSaveBg=gfxSaveBg;window.gfxUse=gfxUse;window.uploadImg=uploadImg;window.imgPrev=imgPrev;
 window.addEventListener('hashchange',()=>{const h=location.hash.slice(1);if(TABS.some(t=>t[0]===h)&&h!==tab){tab=h;render();}});
 applyTheme(document.documentElement.getAttribute('data-theme')||'dark');
 init();
