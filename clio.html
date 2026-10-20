@@ -1088,7 +1088,7 @@ function libUpload(id){
   if(!f){f=document.createElement('input');f.type='file';f.id='lib-file';f.accept='image/jpeg,image/png,image/webp';f.style.display='none';
     f.onchange=async()=>{const file=f.files[0];f.value='';if(!file||!libPend)return;
       try{if(!apiBase()){toast('Set up the Worker first (see steps)');return;}toast('Uploading…');const blob=await shrink(file,2000);
-        const d=await apiFetch('/upload',{method:'POST',headers:{'Content-Type':'image/jpeg'},body:blob});
+        const d=await apiFetch('/upload',{method:'POST',headers:{'Content-Type':blob.type||'image/jpeg'},body:blob});
         await saveLib(libPend,{tplImg:d.url});render();toast('Example saved');}catch(e){toast('Upload failed: '+e.message);}};
     document.body.appendChild(f);}
   f.click();
@@ -1156,14 +1156,14 @@ function shrink(file,max){return new Promise((ok,no)=>{
   const im=new Image(),u=URL.createObjectURL(file);
   im.onload=()=>{const m=max||1600,k=Math.min(1,m/Math.max(im.width,im.height)),c=document.createElement('canvas');
     c.width=Math.round(im.width*k);c.height=Math.round(im.height*k);c.getContext('2d').drawImage(im,0,0,c.width,c.height);
-    URL.revokeObjectURL(u);c.toBlob(b=>b?ok(b):no(new Error('Could not read image')),'image/jpeg',.9);};
+    URL.revokeObjectURL(u);const png=file.type==='image/png';c.toBlob(b=>b?ok(b):no(new Error('Could not read image')),png?'image/png':'image/jpeg',.9);};
   im.onerror=()=>no(new Error('Could not read image'));im.src=u;});}
 async function uploadImg(inp){
   const f=inp.files[0];inp.value='';if(!f)return;
   const b=$('b-up');b.disabled=true;b.textContent='Uploading…';
   try{
     const blob=await shrink(f);
-    const d=await apiFetch('/upload',{method:'POST',headers:{'Content-Type':'image/jpeg'},body:blob});
+    const d=await apiFetch('/upload',{method:'POST',headers:{'Content-Type':blob.type||'image/jpeg'},body:blob});
     $('f-img').value=d.url;imgPrev();toast('Image uploaded');
   }catch(e){toast('Upload failed: '+e.message);}
   b.disabled=false;b.textContent='Upload image';
@@ -1279,7 +1279,7 @@ async function gfxSaveBg(){
     let blob;
     if(gfxBg._file)blob=await shrink(gfxBg._file,2000);
     else{const t=document.createElement('canvas');t.width=gfxBg.width;t.height=gfxBg.height;t.getContext('2d').drawImage(gfxBg,0,0);blob=await new Promise(o=>t.toBlob(o,'image/jpeg',.9));}
-    const d=await apiFetch('/upload',{method:'POST',headers:{'Content-Type':'image/jpeg'},body:blob});
+    const d=await apiFetch('/upload',{method:'POST',headers:{'Content-Type':blob.type||'image/jpeg'},body:blob});
     await saveLib(gfxType,{bgUrl:d.url});toast('Saved as the template background');
   }catch(e){toast('Save failed: '+e.message);}
   b.disabled=false;b.textContent='Save as template background';
@@ -1288,7 +1288,7 @@ async function gfxUse(){
   const b=$('g-use');b.disabled=true;b.textContent='Uploading…';
   try{
     const blob=await new Promise((ok,no)=>{try{$('g-cv').toBlob(x=>x?ok(x):no(new Error('Could not export')),'image/jpeg',.92);}catch(e){no(new Error('Background blocked by the browser, re-choose it from your computer'));}});
-    const d=await apiFetch('/upload',{method:'POST',headers:{'Content-Type':'image/jpeg'},body:blob});
+    const d=await apiFetch('/upload',{method:'POST',headers:{'Content-Type':blob.type||'image/jpeg'},body:blob});
     $('f-img').value=d.url;imgPrev();$('gov').classList.remove('show');toast('Graphic added to the post');
   }catch(e){toast('Failed: '+e.message);}
   b.disabled=false;b.textContent='Use this image';
@@ -1514,8 +1514,8 @@ function showBanners(){return (libOv.settings||{}).showBanners!==false;}
 function bannerHtml(m){
   if(!showBanners())return '';
   const u=bannerMap()[m];
-  return `<div style="margin:-2px -2px 10px">${u?`<img src="${esc(u)}" alt="" style="width:100%;aspect-ratio:16/9;object-fit:cover;border:1px solid var(--border2);border-radius:var(--radius);display:block"/>`
-    :`<div style="width:100%;aspect-ratio:16/4;border:1px dashed var(--border2);border-radius:var(--radius);display:flex;align-items:center;justify-content:center;color:var(--text3);font-family:var(--serif);font-style:italic">No banner yet</div>`}
+  return `<div style="margin:-2px -2px 10px">${u?`<img src="${esc(u)}" alt="" style="width:100%;height:auto;display:block"/>`
+    :`<div style="width:100%;aspect-ratio:2043/770;border:1px dashed var(--border2);border-radius:var(--radius);display:flex;align-items:center;justify-content:center;color:var(--text3);font-family:var(--serif);font-style:italic">No banner yet</div>`}
     <div class="tools" style="margin:6px 0 0"><button class="btn btn-g" type="button" onclick="banUpload('${m}')">${u?'Replace banner':'Upload banner'}</button>${u?`<button class="btn btn-d" type="button" data-act="bandel" data-arg="${m}">Remove</button>`:''}</div>
     <input type="text" data-ban="${m}" value="${esc(u||'')}" placeholder="or paste an image link" style="margin-top:6px"/></div>`;
 }
@@ -1525,7 +1525,7 @@ function banUpload(m){
   if(!f){f=document.createElement('input');f.type='file';f.id='ban-file';f.accept='image/jpeg,image/png,image/webp';f.style.display='none';
     f.onchange=async()=>{const file=f.files[0];f.value='';if(!file||!banPend)return;
       try{if(!apiBase()){toast('Set up the Worker address in Library first');return;}toast('Uploading…');
-        const blob=await shrink(file,2000);const d=await apiFetch('/upload',{method:'POST',headers:{'Content-Type':'image/jpeg'},body:blob});
+        const blob=await shrink(file,2000);const d=await apiFetch('/upload',{method:'POST',headers:{'Content-Type':blob.type||'image/jpeg'},body:blob});
         await setBanner(banPend,d.url);}catch(e){toast('Upload failed: '+e.message);}};
     document.body.appendChild(f);}
   f.click();
