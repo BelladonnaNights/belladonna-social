@@ -167,7 +167,7 @@ select:focus,input:focus,textarea:focus{outline:none;border-color:var(--gold);}
     </div>
     <div class="f"><label>What it is</label><input type="text" id="f-title"/></div>
     <div class="f"><label>Caption (goes to Buffer)</label><textarea id="f-cap"></textarea>
-      <div class="tools" style="margin:6px 0 0"><button class="btn btn-g" type="button" id="b-cap" onclick="capPrompt()">Copy caption prompt (paste into ChatGPT)</button></div>
+      <div class="tools" style="margin:6px 0 0"><button class="btn btn-g" type="button" id="b-cap" onclick="aiCaption()">Write caption (ChatGPT)</button></div>
       <div id="f-tags" class="bar" style="margin:6px 0 0"></div></div>
     <div class="f"><label>Image (upload, or paste a direct .jpg / .png link)</label><input type="text" id="f-img" placeholder="https://…" oninput="imgPrev()"/>
       <div class="tools" style="margin:6px 0 0"><button class="btn btn-g" type="button" id="b-up" onclick="document.getElementById('f-file').click()">Upload image</button><input type="file" id="f-file" accept="image/jpeg,image/png,image/webp" style="display:none" onchange="uploadImg(this)"/></div>
@@ -520,9 +520,10 @@ async function init(){
           const bad=err=>banner('Firestore says: '+esc(err.message)+'. Clio needs an account with role admin to read and save.',true);
           unsubs.push(fs.onSnapshot(fs.collection(db,COL_POSTS),snap=>{posts=snap.docs.map(d=>({id:d.id,...d.data()}));render();},bad));
           unsubs.push(fs.onSnapshot(fs.collection(db,COL_LIB),snap=>{libOv={};snap.docs.forEach(d=>libOv[d.id]=d.data());render();},bad));
+          unsubs.push(fs.onSnapshot(fs.collection(db,'campaigns'),snap=>{campDocs={};snap.docs.forEach(d=>campDocs[d.id]=d.data());render();setTimeout(syncAllCampaignTitles,800);},err=>console.warn('campaigns:',err.message)));
           unsubs.push(fs.onSnapshot(fs.collection(db,'gig_schedule'),snap=>{gigs=snap.docs.map(d=>({id:d.id,...d.data()}));render();},err=>console.warn('gig_schedule:',err.message)));
           setTimeout(()=>syncBuffer(false),5000);setTimeout(()=>{if(mode==='cloud'&&posts.length)migrateTitles();},3500);setTimeout(()=>{if(mode==='cloud'&&posts.length)runGen(false);},4500);
-        }else{posts=[];libOv={};gigs=[];}
+        }else{posts=[];libOv={};gigs=[];campDocs={};}
         render();
       });
     }catch(e){mode='local';banner('Firebase failed to load ('+esc(e.message)+'). Running in this-browser-only mode.',true);}
@@ -811,23 +812,6 @@ function vCalendar(){
 }
 
 /* ── CAMPAIGNS: each month is a campaign ── */
-async function setCampaign(m,field,val){
-  const map={...campMap()},cur=map[m]||{};
-  const c={...cur,weeks:[...(cur.weeks||[undefined,undefined,undefined,undefined])]};
-  val=val.trim();
-  if(field==='theme')c.theme=val;else c.weeks[+field.slice(1)]=val;
-  map[m]=c;await saveLib('campaigns',{map});
-  // keep the calendar's post titles in step with the themes
-  const L=monthLong(m);
-  if(field==='theme'){
-    const p=posts.find(x=>x.type==='monthly'&&!x.posted&&x.title.includes('('+L+')'))||posts.find(x=>x.type==='monthly'&&!x.posted&&x.genKey&&x.title.endsWith(L));
-    if(p&&val)quietSave({...p,title:'Monthly announcement, 3 slides: '+val+' ('+L+')'});
-  }else{
-    const i=+field.slice(1),wk=posts.filter(x=>x.type==='weekly'&&x.date.startsWith(m)&&/^Weekly (graphic|nights graphic)/.test(x.title)).sort(sortFn)[i];
-    if(wk&&!wk.posted&&val)quietSave({...wk,title:'Weekly graphic: '+val});
-  }
-  render();
-}
 function campCard(m){
   const t=todayStr().slice(0,7),real=vposts.filter(p=>!isMile(p)&&p.date.startsWith(m)),n=real.length;
   const made=real.filter(p=>p.created).length,posted=real.filter(p=>p.posted).length;
@@ -836,10 +820,9 @@ function campCard(m){
   const st=posts.filter(p=>!isMile(p)&&p.date.startsWith(m)&&p.stats&&(p.stats.reach||p.stats.likes||p.stats.comments||p.stats.shares));
   const sum=k=>st.reduce((a,p)=>a+(+p.stats[k]||0),0);
   const best=st.slice().sort((a,b)=>engage(b)-engage(a))[0];
-  const inp=(f,v,ph)=>`<input type="text" data-ct="${m}" data-f="${f}" value="${esc(v||'')}" placeholder="${ph}"/>`;
   return `<div class="card" style="padding:14px">${bannerHtml(m)}<h4 style="font-size:13px">${monthName(m)} ${m===t?'· now':''}</h4>
-    <span class="lbl">Month theme</span>${inp('theme',ci.theme,'Month theme')}
-    <span class="lbl">Weekly themes</span>${[0,1,2,3].map(i=>inp('w'+i,ci.weeks[i],'Week '+(i+1)+' theme')).join('<div style="height:4px"></div>')}
+    <span class="lbl">Month theme <span style="font-size:9px;letter-spacing:.1em;border:1px solid var(--border);border-radius:999px;padding:1px 7px;margin-left:6px;color:var(--text3);white-space:nowrap">Make changes in Planner</span></span><div class="meta" style="margin:0">${ci.theme?esc(ci.theme):'Not set yet'}</div>
+    <span class="lbl">Weekly themes</span>${[0,1,2,3].map(i=>`<div class="meta" style="margin:0">W${i+1} · ${ci.weeks[i]?esc(ci.weeks[i]):'—'}${(((campMap()[m]||{}).perks||[])[i])?' <span style="opacity:.75">· perk: '+esc((campMap()[m].perks)[i])+'</span>':''}</div>`).join('')}
     <span class="lbl">Big night</span>
     ${bigs.length?bigs.map(b=>{const[pn,tot]=evProgress(b);return `<div class="row" style="cursor:default;flex-wrap:wrap"><div class="rt">${esc(evTitle(b))}<small>${esc(dayName(b.date))}</small></div><div class="has" style="display:block">${pn}/${tot} done</div><button class="btn btn-g" style="padding:3px 9px" data-act="evgo" data-arg="${esc(b.id)}">Checklist</button></div><div class="prog" style="margin:2px 0 6px"><i style="width:${Math.round(pn/tot*100)}%"></i></div>`;}).join(''):'<div class="meta">No big night this month.</div>'}
     <span class="lbl">Best Dressed winners</span>
@@ -943,7 +926,7 @@ function vLibrary(){
     <div class="card" style="padding:12px;border-color:var(--border-gold)"><div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(250px,1fr))">${setCards}</div></div>`:'')+
     groups.map(g=>`<div class="sec">${esc(g)}</div><div class="grid">${rest.filter(e=>(e.group||'Other')===g).map(t=>libCard(t,'')).join('')}</div>`).join('')+
     `${libTagsHtml()}
-      <div class="card" style="max-width:520px;margin-top:16px"><span class="lbl">Worker address (for image uploads and Buffer sync)</span><input type="text" data-api="1" value="${esc((()=>{try{return localStorage.getItem('bn_clio_api')||'';}catch(e){return '';}})())}" placeholder="https://clio-api.yourname.workers.dev"/></div>
+      <div class="card" style="max-width:520px;margin-top:16px"><span class="lbl">Worker address (for captions and image uploads)</span><input type="text" data-api="1" value="${esc((()=>{try{return localStorage.getItem('bn_clio_api')||'';}catch(e){return '';}})())}" placeholder="https://clio-api.yourname.workers.dev"/></div>
       <div class="sub" style="margin-top:16px">Finished graphics are stored on your Cloudflare. Set each template's background art here (or from Make graphic) and Clio draws the text on top.</div>`;
 }
 
@@ -969,7 +952,6 @@ $('banner').addEventListener('click',e=>{const a=e.target.closest('[data-act]');
 $('view').addEventListener('change',e=>{
   if(e.target.id==='tf'){typeF=e.target.value;render();}
   else if(e.target.id==='mf'){monthF=e.target.value;render();}
-  else if(e.target.dataset.ct){setCampaign(e.target.dataset.ct,e.target.dataset.f,e.target.value);}
   else if(e.target.dataset.ban){const u=e.target.value.trim();if(!u||/^https?:\/\//.test(u))setBanner(e.target.dataset.ban,u);else toast('That does not look like an image link');}
   else if(e.target.dataset.stat){const p=posts.find(x=>x.id===e.target.dataset.stat);if(p){const v=parseInt(String(e.target.value).replace(/[^\d]/g,''))||0;e.target.value=v||'';quietSave({...p,stats:{...(p.stats||{}),[e.target.dataset.f]:v}});toast('Saved');}}
   else if(e.target.dataset.ts){const S={...getTagSets()},id=e.target.dataset.ts;if(S[id]){S[id]={...S[id],[e.target.dataset.f]:e.target.value.trim()};saveTagSets(S);}}
@@ -1386,7 +1368,29 @@ function monthLong(m){return new Date(m+'-15T12:00:00').toLocaleDateString('en-U
 function nextMonthKey(date){const d=new Date(date.slice(0,7)+'-15T12:00:00');d.setMonth(d.getMonth()+1);return ymd(d).slice(0,7);}
 
 /* campaign themes: override first, else read from the posts already on the calendar */
-function campMap(){return (libOv.campaigns||{}).map||{};}
+/* Campaign themes are made in the Planner's Campaigns tab (Firestore "campaigns", one doc per month). Clio only reads them.
+   Older themes typed into Clio before this change still show for months the Planner has no doc for. */
+let campDocs={};
+function campMap(){
+  const out={...((libOv.campaigns||{}).map||{})};
+  Object.entries(campDocs).forEach(([m,d])=>{
+    const ws=(d.weeks||[]).map(w=>(w&&w.name)||undefined);
+    out[m]={...(out[m]||{}),theme:d.theme||undefined,weeks:[0,1,2,3].map(i=>ws[i]),perks:(d.weeks||[]).map(w=>(w&&w.perk)||'')};
+  });
+  return out;
+}
+/* keep the calendar's post titles in step with the Planner's themes (only posts not yet posted, only when the title differs) */
+function syncCampaignTitles(m){
+  const ci=campInfo(m),L=monthLong(m);
+  if(ci.theme){
+    const p=posts.find(x=>x.type==='monthly'&&!x.posted&&x.title.includes('('+L+')'))||posts.find(x=>x.type==='monthly'&&!x.posted&&x.genKey&&x.title.endsWith(L));
+    const t='Monthly announcement, 3 slides: '+ci.theme+' ('+L+')';
+    if(p&&p.title!==t)quietSave({...p,title:t});
+  }
+  const wks=posts.filter(x=>x.type==='weekly'&&x.date.startsWith(m)&&/^Weekly (graphic|nights graphic)/.test(x.title)).sort(sortFn);
+  [0,1,2,3].forEach(i=>{const wk=wks[i],v=ci.weeks[i];if(wk&&!wk.posted&&v&&wk.title!=='Weekly graphic: '+v)quietSave({...wk,title:'Weekly graphic: '+v});});
+}
+function syncAllCampaignTitles(){if(mode==='cloud')Object.keys(campDocs).forEach(syncCampaignTitles);}
 function derivedWeeks(m){
   return posts.filter(p=>p.type==='weekly'&&p.date.startsWith(m)&&/^Weekly graphic:/.test(p.title)).sort(sortFn).map(p=>p.title.replace(/^Weekly graphic:\s*/,''));
 }
@@ -1607,21 +1611,6 @@ async function syncBuffer(manual){
   bufBusy=false;
 }
 
-/* Caption helper that costs nothing: builds a ready-to-paste prompt for the ChatGPT chat you already use */
-const CAP_RULES='You write social media captions for Belladonna, a gothic, elegant live-entertainment brand in the Pacific Northwest (Music Bingo, Karaoke, Trivia and Sing-Along nights at local venues). Voice: warm, witty, a little mysterious, never cheesy. No emojis, no hashtags, no clip-art phrases like "get ready to party". Under 600 characters. Use only the facts below; never invent a venue, time, prize or date. If a detail is missing, leave it out. End with a short call to action when it fits. Return only the caption text.';
-function capPrompt(){
-  const type=$('f-type').value,title=$('f-title').value.trim(),date=$('f-date').value;
-  if(!title){toast('Add a title first');return;}
-  const wk=(type==='weekly'&&gigs.length&&date)?nightLines(date,addDays(date,6),true):[];
-  const mo=(type==='monthly'&&gigs.length&&date)?(()=>{const d=new Date(date+'T12:00:00');return nightLines(ymd(new Date(d.getFullYear(),d.getMonth()+1,1)),ymd(new Date(d.getFullYear(),d.getMonth()+2,0)),false);})():[];
-  const win=(type==='recap'&&date)?winLines(date.slice(0,7),false).map(x=>'Best Dressed winner - '+x):[];
-  const facts=[...wk,...mo,...win],old=$('f-cap').value.trim(),extra=$('f-notes').value.trim();
-  const p=CAP_RULES+'\n\nPost type: '+(TYPES[type]?.l||type)+'\nPost title: '+title+(date?'\nPost date: '+date:'')+'\nPlatform: '+($('f-plat').value||'IG + FB')+
-    (facts.length?'\nFacts to use (one per line):\n'+facts.join('\n'):'')+(old?'\n\nCurrent draft to improve:\n'+old:'')+(extra?'\n\nExtra direction: '+extra:'');
-  $('f-muse').value=p;$('f-muse-wrap').style.display='';
-  (navigator.clipboard?navigator.clipboard.writeText(p).then(()=>toast('Caption prompt copied. Paste it into ChatGPT, then paste the answer here'),()=>toast('Select and copy the prompt below')):toast('Select and copy the prompt below'));
-}
-
 /* ── BUFFER CSV EXPORT (Buffer's bulk upload: Text, Image URL, Tags, Posting Time) ── */
 function csvCell(s){return '"'+String(s??'').replace(/"/g,'""')+'"';}
 function exportBuffer(){
@@ -1638,7 +1627,7 @@ function exportBuffer(){
   toast(ready.length+' posts exported'+(skipped?` · ${skipped} skipped (no caption)`:''));
 }
 
-window.closeEdit=closeEdit;window.saveEdit=saveEdit;window.delPost=delPost;window.encore=encore;window.muse=muse;window.libSaveEdit=libSaveEdit;window.ledRule=ledRule;window.libHide=libHide;window.banUpload=banUpload;window.addTags=addTags;window.setWin=setWin;window.tw=null;Object.defineProperty(window,'tw',{get:()=>tw,set:v=>{tw=v;}});Object.defineProperty(window,'twKey',{get:()=>twKey});window.twPick=twPick;window.twAdd=twAdd;window.twDelTask=twDelTask;window.twMove=twMove;window.twNewSet=twNewSet;window.twDelSet=twDelSet;window.twSave=twSave;window.libUpload=libUpload;window.aiCaption=aiCaption;window.capPrompt=capPrompt;window.openGfx=openGfx;window.gfxPick=gfxPick;window.gfxSaveBg=gfxSaveBg;window.gfxUse=gfxUse;window.uploadImg=uploadImg;window.imgPrev=imgPrev;
+window.closeEdit=closeEdit;window.saveEdit=saveEdit;window.delPost=delPost;window.encore=encore;window.muse=muse;window.libSaveEdit=libSaveEdit;window.ledRule=ledRule;window.libHide=libHide;window.banUpload=banUpload;window.addTags=addTags;window.setWin=setWin;window.tw=null;Object.defineProperty(window,'tw',{get:()=>tw,set:v=>{tw=v;}});Object.defineProperty(window,'twKey',{get:()=>twKey});window.twPick=twPick;window.twAdd=twAdd;window.twDelTask=twDelTask;window.twMove=twMove;window.twNewSet=twNewSet;window.twDelSet=twDelSet;window.twSave=twSave;window.libUpload=libUpload;window.aiCaption=aiCaption;window.openGfx=openGfx;window.gfxPick=gfxPick;window.gfxSaveBg=gfxSaveBg;window.gfxUse=gfxUse;window.uploadImg=uploadImg;window.imgPrev=imgPrev;
 window.addEventListener('hashchange',()=>{const h=location.hash.slice(1);if((TABS.some(t=>t[0]===h)||h==='events')&&h!==tab){tab=h;render();}});
 applyTheme(document.documentElement.getAttribute('data-theme')||'dark');
 init();
