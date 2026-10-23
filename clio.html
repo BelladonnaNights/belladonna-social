@@ -993,6 +993,8 @@ $('view').addEventListener('change',e=>{
   else if(e.target.dataset.kind){const p=posts.find(x=>x.id===e.target.dataset.kind);if(p)persist({...p,evKind:e.target.value});}
   else if(e.target.dataset.api){const u=normApi(e.target.value);if(u||!e.target.value.trim()){try{localStorage.setItem('bn_clio_api',u);}catch(x){}toast(u?'Worker address saved':'Worker address cleared');}else toast('That does not look like an address');}
   else if(e.target.dataset.lib)saveLib(e.target.dataset.lib,{[e.target.dataset.f]:e.target.value.trim()}).then(render);
+  else if(e.target.dataset.bx){const[c,f]=e.target.dataset.bx.split('|');bankField(c,f,e.target.value);}
+  else if(e.target.dataset.bmp)bankPromptSave(e.target.value);
   else if(e.target.dataset.bk||e.target.dataset.bi)bankChange(e.target);
   else if(e.target.dataset.ls||e.target.dataset.lt)listChange(e.target);
 });
@@ -1576,66 +1578,108 @@ const BANK_SEED=[
   ['debates','Rook Debates & Lists','cv_scroll','ROOK DEBATES'],['inside','Inside Belladonna w/ Ahnna','cv_scroll','INSIDE BELLADONNA'],['hostspot','Host Spotlight','cv_scroll','HOST SPOTLIGHT'],['collage','Post Collage / Event Highlights','cv_scroll','EVENT HIGHLIGHTS'],['bestm','Best Dressed Monthly Winners','cv_scroll','BEST DRESSED'],
   ['reels','Reel & Video Ideas','cv_reel','BELLADONNA REELS'],['stories','Story Ideas (polls, Q&A, vote on next week)','','']
 ];
+const DEFAULT_MUSE=`I'm attaching a TEMPLATE image. Use it as an exact template for every graphic: keep the artwork, frames, flowers, fonts, colors, gold texture, layout and image size identical. Change ONLY the wording (and the picture, when I ask for one). Do not redesign it or add anything new.
+
+Make one PNG for each post I list at the bottom. Give me each one as its own PNG file, in the order listed. Spell every word exactly as I wrote it.
+
+HOW TO READ MY POSTS:
+- Each line is its own post.
+- Text inside ** ** (double asterisks) is a PICTURE I want on that design, not words. Draw that image in the style of the template and do NOT print the words inside the asterisks.
+  Example: Confidence level after 3 drinks: **image of singing crow**. Liquid Courage: Unlocked.
+  -> One PNG. The words "Confidence level after 3 drinks:" and "Liquid Courage: Unlocked." go on the design, with a singing crow illustration.
+  Example: Waiting for my turn to sing. **Image of a skeleton holding a beer**
+  -> One PNG with the words "Waiting for my turn to sing." and a skeleton holding a beer.
+- Text inside [ ] (square brackets) means each bracketed item is its own separate PNG, so the post is a carousel. Make one slide per bracketed item, in order. The words before the first bracket are the small header on every slide, and the bracketed item (without its brackets) is the big main text on its slide.
+  Example: Songs that trigger the bar: [Mr. Brightside], [Don't Stop Believing], [Sweet Caroline], [Man, I Feel Like A Woman], [Bohemian Rhapsody]
+  -> Five PNGs. Each has the header "Songs that trigger the bar:" and one song as the main text.
+- A line with neither ** ** nor [ ] is one PNG with all of its words on it.`;
+function bankPrompt(){return (libOv.bank&&libOv.bank.musePrompt)||DEFAULT_MUSE;}
 function bankData(){
-  const b=libOv.bank;if(b&&b.cats)return b.cats;
-  const o={};BANK_SEED.forEach(([id,name,canvas,badge])=>o[id]={name,canvas,badge,items:[]});return o;
+  const b=libOv.bank;let cats;
+  if(b&&b.cats)cats=JSON.parse(JSON.stringify(b.cats));
+  else{cats={};BANK_SEED.forEach(([id,name,canvas,badge])=>cats[id]={name,canvas,badge,items:[]});}
+  Object.values(cats).forEach(c=>{c.items=c.items||[];const ex=c.items.filter(x=>x.ex);if(ex.length){c.examples=[c.examples||'',...ex.map(x=>x.t)].filter(Boolean).join('\n');c.items=c.items.filter(x=>!x.ex);}});
+  return cats;
 }
 async function saveBank(cats){await saveLib('bank',{cats});render();}
+async function bankField(c,f,v){const cats=bankData();if(!cats[c])return;cats[c][f]=v;await saveLib('bank',{cats});}
+async function bankPromptSave(v){await saveLib('bank',{musePrompt:(v.trim()===DEFAULT_MUSE.trim()||!v.trim())?'':v});}
 function bankFind(ref){
   if(!ref)return null;const[c,i]=ref.split('|'),cat=bankData()[c];if(!cat)return null;
   const item=(cat.items||[]).find(x=>x.id===i);return item?{cat,item,c,i}:null;
 }
 function markBank(ref){
   const h=bankFind(ref);if(!h||h.item.used)return;
-  const cats=JSON.parse(JSON.stringify(bankData()));cats[h.c].items.find(x=>x.id===h.i).used=true;saveBank(cats);
+  const cats=bankData();cats[h.c].items.find(x=>x.id===h.i).used=true;saveBank(cats);
 }
 function fillBank(cur){
   const sel=$('f-bank');if(!sel)return;const cats=bankData();
   sel.innerHTML='<option value="">(none)</option>'+Object.entries(cats).map(([c,v])=>{
-    const its=(v.items||[]).filter(x=>(!x.used&&!x.ex)||c+'|'+x.id===cur);
+    const its=(v.items||[]).filter(x=>!x.used||c+'|'+x.id===cur);
     return its.length?`<optgroup label="${esc(v.name)}">${its.map(x=>`<option value="${c}|${x.id}">${esc(x.t.length>70?x.t.slice(0,70)+'…':x.t)}</option>`).join('')}</optgroup>`:'';
   }).join('');
   sel.value=cur||'';
 }
 function vBank(){
   const cats=bankData(),cvs=libList().filter(x=>x.id.startsWith('cv_'));
-  const tot=Object.values(cats).reduce((n,c)=>n+(c.items||[]).filter(x=>!x.used&&!x.ex).length,0);
-  $('view').innerHTML=head('Content Bank','All your post text in one place, by category. Pick one on a post and The Muse puts it on the right template. Used ones are crossed off.')+
-  `<div class="bar"><button class="btn btn-p" data-act="bknew">+ New category</button><span class="meta" style="margin:0">${tot} unused ready to post</span></div>`+
+  const tot=Object.values(cats).reduce((n,c)=>n+(c.items||[]).filter(x=>!x.used).length,0);
+  $('view').innerHTML=head('Content Bank','All your post text in one place, by category. Press + on a line to add it to that category\'s "Make now" paragraph, then copy it into ChatGPT with the Muse prompt.')+
+  `<div class="card" style="border-color:var(--border-gold)"><div class="f" style="margin-bottom:6px"><label>Muse prompt for ChatGPT (editable: this goes first when you press "Copy prompt + these")</label><textarea id="bkmp" data-bmp="1" style="min-height:240px">${esc(bankPrompt())}</textarea></div>
+    <div class="tools" style="margin:0"><button class="btn btn-gold" data-md="bkcopyp">Copy prompt</button><button class="btn btn-g" data-md="bkresetp">Reset to the original</button></div></div>
+  <div class="bar"><button class="btn btn-p" data-act="bknew">+ New category</button><span class="meta" style="margin:0">${tot} unused ready to post</span></div>`+
   Object.entries(cats).map(([c,v])=>{
-    const all=v.items||[],its=all.filter(x=>!x.used&&!x.ex),usedL=all.filter(x=>x.used||x.ex),un=its.length;
+    const its=v.items||[],un=its.filter(x=>!x.used).length;
     return `<div class="card"><div class="f2"><div class="f"><label>Category</label><input type="text" data-bk="${c}" data-f="name" value="${esc(v.name)}"/></div><div class="f"><label>Badge on the template</label><input type="text" data-bk="${c}" data-f="badge" value="${esc(v.badge||'')}"/></div></div>
     <div class="f"><label>Look</label><select data-bk="${c}" data-f="canvas"><option value="">None</option>${cvs.map(x=>`<option value="${x.id}" ${v.canvas===x.id?'selected':''}>${esc(x.name)}</option>`).join('')}</select></div>
+    <div class="f"><label>Make now (what you want made this time)</label><textarea id="bkq-${c}" data-bx="${c}|queue" style="min-height:90px" placeholder="Press + next to a saved line below, or type here">${esc(v.queue||'')}</textarea>
+      <div class="tools" style="margin:6px 0 0"><button class="btn btn-gold" data-md="bkcopyq" data-arg="${c}">Copy prompt + these</button><button class="btn btn-g" data-md="bkcopyqo" data-arg="${c}">Copy just these</button><button class="btn btn-g" data-md="bkqclear" data-arg="${c}">Clear</button></div></div>
     <div class="meta">${un} unused ready to post</div>
-    ${its.map(x=>`<div style="display:flex;gap:8px;align-items:center;margin-bottom:5px"><input type="checkbox" data-act="bkused" data-arg="${c}|${x.id}" style="width:17px;height:17px" title="Mark used"/><input type="text" data-bi="${c}|${x.id}" value="${esc(x.t)}"/><button class="btn btn-d" data-act="bkdel" data-arg="${c}|${x.id}" style="padding:4px 10px">×</button></div>`).join('')}
+    ${its.map(x=>`<div style="display:flex;gap:8px;align-items:center;margin-bottom:5px"><input type="checkbox" data-act="bkused" data-arg="${c}|${x.id}" ${x.used?'checked':''} style="width:17px;height:17px" title="Mark used"/><input type="text" data-bi="${c}|${x.id}" value="${esc(x.t)}" style="${x.used?'opacity:.45;text-decoration:line-through':''}"/><button class="btn btn-g" data-md="bkq" data-arg="${c}|${x.id}" style="padding:4px 12px" title="Add to Make now">+</button><button class="btn btn-d" data-act="bkdel" data-arg="${c}|${x.id}" style="padding:4px 10px">×</button></div>`).join('')}
     <div class="f" style="margin-top:8px"><label>Add (one per line)</label><textarea id="bkadd-${c}" style="min-height:60px" placeholder="Paste or type posts, one on each line"></textarea>
       <div class="tools" style="margin:6px 0 0"><button class="btn btn-g" data-act="bkadd" data-arg="${c}">Add to bank</button></div></div>
-    <div class="f"><label>Notes</label><textarea data-bk="${c}" data-f="notes" style="min-height:70px" placeholder="Ideas, rules for this category, what works, things to remember">${esc(v.notes||'')}</textarea></div>
-    <div class="f"><label>Used / Examples (${usedL.length})</label>
-      ${usedL.map(x=>`<div style="display:flex;gap:8px;align-items:center;margin-bottom:5px">${x.used?`<input type="checkbox" data-act="bkused" data-arg="${c}|${x.id}" checked style="width:17px;height:17px" title="Untick to put it back in the bank"/>`:'<span class="has" style="display:inline;width:17px;text-align:center" title="Example">★</span>'}<input type="text" data-bi="${c}|${x.id}" value="${esc(x.t)}" style="${x.used?'opacity:.55':''}"/><button class="btn btn-d" data-act="bkdel" data-arg="${c}|${x.id}" style="padding:4px 10px">×</button></div>`).join('')||'<div class="meta">Posts you mark used land here. You can also add examples of posts that did well or show the style you want.</div>'}
-      <textarea id="bkex-${c}" style="min-height:50px;margin-top:6px" placeholder="Add examples, one per line"></textarea>
-      <div class="tools" style="margin:6px 0 0"><button class="btn btn-g" data-act="bkaddex" data-arg="${c}">Add examples</button></div></div>
+    <div class="f"><label>Notes</label><textarea data-bx="${c}|notes" style="min-height:70px" placeholder="Ideas, rules for this category, what works">${esc(v.notes||'')}</textarea></div>
+    <div class="f"><label>Used / Examples (copy this into ChatGPT for more ideas)</label><textarea id="bkx-${c}" data-bx="${c}|examples" style="min-height:90px" placeholder="Paste posts you've used or examples you like, as a paragraph or list">${esc(v.examples||'')}</textarea>
+      <div class="tools" style="margin:6px 0 0"><button class="btn btn-g" data-md="bkcopyx" data-arg="${c}">Copy</button></div></div>
     <div class="acts" style="margin-top:0"><button class="btn btn-d" data-act="bkcatdel" data-arg="${c}">Delete category</button></div></div>`;
   }).join('');
 }
 function bankAct(a,arg){
-  const cats=JSON.parse(JSON.stringify(bankData()));
+  const cats=bankData();
   if(a==='bknew'){cats['k'+Date.now().toString(36)]={name:'New category',canvas:'',badge:'',items:[]};}
   else if(a==='bkadd'){const el=$('bkadd-'+arg);const L=(el.value||'').split('\n').map(x=>x.trim()).filter(Boolean);if(!L.length){toast('Type or paste something first');return;}
     L.forEach((t,i)=>cats[arg].items.push({id:'i'+Date.now().toString(36)+i,t,used:false}));}
-  else if(a==='bkaddex'){const el=$('bkex-'+arg);const L=(el.value||'').split('\n').map(x=>x.trim()).filter(Boolean);if(!L.length){toast('Type or paste something first');return;}
-    L.forEach((t,i)=>cats[arg].items.push({id:'e'+Date.now().toString(36)+i,t,used:false,ex:true}));}
   else if(a==='bkused'){const[c,i]=arg.split('|'),it=cats[c].items.find(x=>x.id===i);if(it)it.used=!it.used;}
   else if(a==='bkdel'){const[c,i]=arg.split('|');cats[c].items=cats[c].items.filter(x=>x.id!==i);}
   else if(a==='bkcatdel'){if(!confirm('Delete "'+cats[arg].name+'" and everything in it?'))return;delete cats[arg];}
   saveBank(cats);
 }
 function bankChange(t){
-  const cats=JSON.parse(JSON.stringify(bankData()));
+  const cats=bankData();
   if(t.dataset.bk){cats[t.dataset.bk][t.dataset.f]=t.value.trim();}
   else if(t.dataset.bi){const[c,i]=t.dataset.bi.split('|'),it=cats[c].items.find(x=>x.id===i);if(!it)return;const v=t.value.trim();if(!v){cats[c].items=cats[c].items.filter(x=>x.id!==i);}else it.t=v;}
   saveBank(cats);
 }
+function copyTxt(t){
+  if(!t)return;
+  (navigator.clipboard?navigator.clipboard.writeText(t).then(()=>toast('Copied'),()=>toast('Could not copy. Select it and copy by hand')):Promise.resolve(toast('Could not copy. Select it and copy by hand')));
+}
+let mdT=0;
+function mdAct(el){
+  const a=el.dataset.md,arg=el.dataset.arg;
+  if(a==='bkq'){const h=bankFind(arg);if(!h)return;const ta=$('bkq-'+h.c);const cur=ta.value.replace(/\s+$/,'');ta.value=(cur?cur+'\n':'')+h.item.t;bankField(h.c,'queue',ta.value);toast('Added to Make now');}
+  else if(a==='bkqclear'){const ta=$('bkq-'+arg);ta.value='';bankField(arg,'queue','');}
+  else if(a==='bkcopyqo')copyTxt($('bkq-'+arg).value.trim());
+  else if(a==='bkcopyx')copyTxt($('bkx-'+arg).value.trim());
+  else if(a==='bkcopyp')copyTxt($('bkmp').value.trim());
+  else if(a==='bkresetp'){$('bkmp').value=DEFAULT_MUSE;bankPromptSave('');}
+  else if(a==='bkcopyq'){
+    const q=($('bkq-'+arg).value||'').trim();if(!q){toast('Add some posts to Make now first');return;}
+    const v=bankData()[arg]||{},cv=libList(true).find(x=>x.id===v.canvas);
+    copyTxt($('bkmp').value.trim()+'\n\n'+(cv?'TEMPLATE LOOK: '+cv.name+' (attach your saved example image from Library)\n':'')+(v.badge?'TOP BADGE TEXT: '+v.badge+'\n':'')+'\nPOSTS TO MAKE (one PNG each, carousels where there are [brackets]):\n'+q);
+  }
+}
+$('view').addEventListener('mousedown',e=>{const el=e.target.closest('[data-md]');if(el){mdT=Date.now();mdAct(el);}});
+$('view').addEventListener('click',e=>{const el=e.target.closest('[data-md]');if(el&&Date.now()-mdT>700)mdAct(el);});
 
 /* ── LISTINGS: monthly update checklist for every place people find you ── */
 const GIGTASKS=['Refresh profile photos and add a short video from a recent night','Update description, packages and prices','Check availability and calendar','Answer every message and lead','Ask recent private-event clients for a review','Add one new photo or clip from this month'];
