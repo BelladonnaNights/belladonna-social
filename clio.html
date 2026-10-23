@@ -252,10 +252,10 @@ const LIB_SEED=[
 ];
 
 const LIB_META={
-  mcover:{group:'Monthly & weekly',freq:'The 25th of every month',use:'Slide 1 of 3: "[MONTH] at Belladonna", tap to swipe'},
-  monthly:{group:'Monthly & weekly',freq:'The 25th of every month',use:'Slide 2 of 3: month name, month theme, four weekly themes, big night'},
-  sched:{group:'Monthly & weekly',freq:'The 25th of every month',use:'Slide 3 of 3: week 1 theme with every venue and night'},
-  weekly:{group:'Monthly & weekly',freq:'Every Monday',use:'Monday post: week theme plus each night'},
+  mcover:{group:'Monthly',freq:'The 25th of every month',use:'Slide 1 of 3: "[MONTH] at Belladonna", tap to swipe'},
+  monthly:{group:'Monthly',freq:'The 25th of every month',use:'Slide 2 of 3: month name, month theme, four weekly themes, big night'},
+  sched:{group:'Monthly',freq:'The 25th of every month',use:'Slide 3 of 3: week 1 theme with every venue and night'},
+  weekly:{group:'Weekly',freq:'Every Monday',use:'Monday post: week theme plus each night'},
   cover:{group:'Event posts',freq:'Every big night, 14 days out',use:'Facebook Event image'},
   count:{group:'Event posts',freq:'7 days before, 3 days before, and the day of',use:'Countdown posts and stories'},
   tonight:{group:'Nightly stories',freq:'Every event night, automatic from HQ',use:'3:00 pm story'},
@@ -263,9 +263,9 @@ const LIB_META={
   best:{group:'After the night',freq:'The morning after every night, automatic from HQ',use:'Next-morning winner photo'},
   recap:{group:'After the night',freq:'End of every month',use:'Winners and best photos'},
   pin:{group:'Always on',freq:'Evergreen, update when the nights change',use:'Pinned post, highlight, and recurring Facebook Event covers'},
-  rook:{group:'Monthly & weekly',freq:'Every Wednesday',use:'Wednesday: a Rook or Snark post, text from your Content Bank',canvas:'cv_atmos',badge:'ROOK SAYS'},
-  crowd:{group:'Monthly & weekly',freq:'Every Friday',use:'Friday: post a real crowd photo or reel (a reminder, no template)',canvas:'',badge:''},
-  note:{group:'Monthly & weekly',freq:'Every Sunday',use:'Sunday: Inside Belladonna note, Rook debate, or Best Dressed winners',canvas:'cv_scroll',badge:'INSIDE BELLADONNA'},
+  rook:{group:'Weekly',freq:'Every Wednesday',use:'Wednesday: a Rook or Snark post, text from your Content Bank',canvas:'cv_atmos',badge:'ROOK SAYS'},
+  crowd:{group:'Weekly',freq:'Every Friday',use:'Friday: post a real crowd photo or reel (a reminder, no template)',canvas:'',badge:''},
+  note:{group:'Weekly',freq:'Every Sunday',use:'Sunday: Inside Belladonna note, Rook debate, or Best Dressed winners',canvas:'cv_scroll',badge:'INSIDE BELLADONNA'},
   cv_snark:{group:'Canvases',freq:'Template, not a post'},cv_atmos:{group:'Canvases',freq:'Template, not a post'},cv_scroll:{group:'Canvases',freq:'Template, not a post'},cv_reel:{group:'Canvases',freq:'Template, not a post'}
 };
 const LIB_FIELDS=['name','nick','size','use','group','freq','canvas','badge'];
@@ -275,6 +275,7 @@ function libList(withDeleted){
     const o=libOv[t.id]||{},m=LIB_META[t.id]||{};
     const e={...t,...m,custom:false};
     LIB_FIELDS.forEach(f=>{if(o[f]!==undefined&&o[f]!==null)e[f]=o[f];});
+    if(o.group==='Monthly & weekly')e.group=m.group||e.group;
     e.deleted=!!o.deleted;out.push(e);
   });
   Object.entries(libOv).forEach(([id,o])=>{
@@ -933,7 +934,7 @@ function libCard(t,slot){
         ${o.link?`<div style="margin-top:8px"><a href="${esc(o.link)}" target="_blank" rel="noopener"><button class="btn btn-g" type="button">Open template</button></a></div>`:''}</div>`;
 }
 const MONTHLY_SET=[['mcover','Slide 1 of 3'],['monthly','Slide 2 of 3'],['sched','Slide 3 of 3']];
-const GROUP_ORDER=['Monthly & weekly','Event posts','Nightly stories','After the night','Always on','Canvases'];
+const GROUP_ORDER=['Monthly','Weekly','Event posts','Nightly stories','After the night','Always on','Canvases'];
 function orderGroups(g){const ix=x=>{const i=GROUP_ORDER.indexOf(x);return i<0?99:i;};return g.slice().sort((a,b)=>ix(a)-ix(b));}
 function cadenceHtml(){
   const L=libList().filter(e=>!e.id.startsWith('cv_')),groups=orderGroups([...new Set(L.map(e=>e.group||'Other'))]);
@@ -1591,24 +1592,30 @@ function markBank(ref){
 function fillBank(cur){
   const sel=$('f-bank');if(!sel)return;const cats=bankData();
   sel.innerHTML='<option value="">(none)</option>'+Object.entries(cats).map(([c,v])=>{
-    const its=(v.items||[]).filter(x=>!x.used||c+'|'+x.id===cur);
+    const its=(v.items||[]).filter(x=>(!x.used&&!x.ex)||c+'|'+x.id===cur);
     return its.length?`<optgroup label="${esc(v.name)}">${its.map(x=>`<option value="${c}|${x.id}">${esc(x.t.length>70?x.t.slice(0,70)+'…':x.t)}</option>`).join('')}</optgroup>`:'';
   }).join('');
   sel.value=cur||'';
 }
 function vBank(){
   const cats=bankData(),cvs=libList().filter(x=>x.id.startsWith('cv_'));
-  const tot=Object.values(cats).reduce((n,c)=>n+(c.items||[]).filter(x=>!x.used).length,0);
+  const tot=Object.values(cats).reduce((n,c)=>n+(c.items||[]).filter(x=>!x.used&&!x.ex).length,0);
   $('view').innerHTML=head('Content Bank','All your post text in one place, by category. Pick one on a post and The Muse puts it on the right template. Used ones are crossed off.')+
   `<div class="bar"><button class="btn btn-p" data-act="bknew">+ New category</button><span class="meta" style="margin:0">${tot} unused ready to post</span></div>`+
   Object.entries(cats).map(([c,v])=>{
-    const its=v.items||[],un=its.filter(x=>!x.used).length;
+    const all=v.items||[],its=all.filter(x=>!x.used&&!x.ex),usedL=all.filter(x=>x.used||x.ex),un=its.length;
     return `<div class="card"><div class="f2"><div class="f"><label>Category</label><input type="text" data-bk="${c}" data-f="name" value="${esc(v.name)}"/></div><div class="f"><label>Badge on the template</label><input type="text" data-bk="${c}" data-f="badge" value="${esc(v.badge||'')}"/></div></div>
     <div class="f"><label>Look</label><select data-bk="${c}" data-f="canvas"><option value="">None</option>${cvs.map(x=>`<option value="${x.id}" ${v.canvas===x.id?'selected':''}>${esc(x.name)}</option>`).join('')}</select></div>
-    <div class="meta">${its.length} saved · ${un} unused</div>
-    ${its.map(x=>`<div style="display:flex;gap:8px;align-items:center;margin-bottom:5px"><input type="checkbox" data-act="bkused" data-arg="${c}|${x.id}" ${x.used?'checked':''} style="width:17px;height:17px" title="Used"/><input type="text" data-bi="${c}|${x.id}" value="${esc(x.t)}" style="${x.used?'opacity:.45;text-decoration:line-through':''}"/><button class="btn btn-d" data-act="bkdel" data-arg="${c}|${x.id}" style="padding:4px 10px">×</button></div>`).join('')}
-    <div class="f" style="margin-top:8px"><label>Add (one per line)</label><textarea id="bkadd-${c}" style="min-height:60px" placeholder="Paste or type posts, one on each line"></textarea></div>
-    <div class="acts" style="margin-top:0"><button class="btn btn-d" data-act="bkcatdel" data-arg="${c}">Delete category</button><span class="sp"></span><button class="btn btn-g" data-act="bkadd" data-arg="${c}">Add to bank</button></div></div>`;
+    <div class="meta">${un} unused ready to post</div>
+    ${its.map(x=>`<div style="display:flex;gap:8px;align-items:center;margin-bottom:5px"><input type="checkbox" data-act="bkused" data-arg="${c}|${x.id}" style="width:17px;height:17px" title="Mark used"/><input type="text" data-bi="${c}|${x.id}" value="${esc(x.t)}"/><button class="btn btn-d" data-act="bkdel" data-arg="${c}|${x.id}" style="padding:4px 10px">×</button></div>`).join('')}
+    <div class="f" style="margin-top:8px"><label>Add (one per line)</label><textarea id="bkadd-${c}" style="min-height:60px" placeholder="Paste or type posts, one on each line"></textarea>
+      <div class="tools" style="margin:6px 0 0"><button class="btn btn-g" data-act="bkadd" data-arg="${c}">Add to bank</button></div></div>
+    <div class="f"><label>Notes</label><textarea data-bk="${c}" data-f="notes" style="min-height:70px" placeholder="Ideas, rules for this category, what works, things to remember">${esc(v.notes||'')}</textarea></div>
+    <div class="f"><label>Used / Examples (${usedL.length})</label>
+      ${usedL.map(x=>`<div style="display:flex;gap:8px;align-items:center;margin-bottom:5px">${x.used?`<input type="checkbox" data-act="bkused" data-arg="${c}|${x.id}" checked style="width:17px;height:17px" title="Untick to put it back in the bank"/>`:'<span class="has" style="display:inline;width:17px;text-align:center" title="Example">★</span>'}<input type="text" data-bi="${c}|${x.id}" value="${esc(x.t)}" style="${x.used?'opacity:.55':''}"/><button class="btn btn-d" data-act="bkdel" data-arg="${c}|${x.id}" style="padding:4px 10px">×</button></div>`).join('')||'<div class="meta">Posts you mark used land here. You can also add examples of posts that did well or show the style you want.</div>'}
+      <textarea id="bkex-${c}" style="min-height:50px;margin-top:6px" placeholder="Add examples, one per line"></textarea>
+      <div class="tools" style="margin:6px 0 0"><button class="btn btn-g" data-act="bkaddex" data-arg="${c}">Add examples</button></div></div>
+    <div class="acts" style="margin-top:0"><button class="btn btn-d" data-act="bkcatdel" data-arg="${c}">Delete category</button></div></div>`;
   }).join('');
 }
 function bankAct(a,arg){
@@ -1616,6 +1623,8 @@ function bankAct(a,arg){
   if(a==='bknew'){cats['k'+Date.now().toString(36)]={name:'New category',canvas:'',badge:'',items:[]};}
   else if(a==='bkadd'){const el=$('bkadd-'+arg);const L=(el.value||'').split('\n').map(x=>x.trim()).filter(Boolean);if(!L.length){toast('Type or paste something first');return;}
     L.forEach((t,i)=>cats[arg].items.push({id:'i'+Date.now().toString(36)+i,t,used:false}));}
+  else if(a==='bkaddex'){const el=$('bkex-'+arg);const L=(el.value||'').split('\n').map(x=>x.trim()).filter(Boolean);if(!L.length){toast('Type or paste something first');return;}
+    L.forEach((t,i)=>cats[arg].items.push({id:'e'+Date.now().toString(36)+i,t,used:false,ex:true}));}
   else if(a==='bkused'){const[c,i]=arg.split('|'),it=cats[c].items.find(x=>x.id===i);if(it)it.used=!it.used;}
   else if(a==='bkdel'){const[c,i]=arg.split('|');cats[c].items=cats[c].items.filter(x=>x.id!==i);}
   else if(a==='bkcatdel'){if(!confirm('Delete "'+cats[arg].name+'" and everything in it?'))return;delete cats[arg];}
