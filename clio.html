@@ -556,8 +556,10 @@ async function init(){
 async function persist(p){
   const i=posts.findIndex(x=>x.id===p.id);
   if(i>=0)posts[i]=p;else posts.push(p);
-  if(mode==='cloud'){const{id,...rest}=p;await fs.setDoc(fs.doc(db,COL_POSTS,id),rest);}
-  else localStorage.setItem(LS,JSON.stringify(posts));
+  try{
+    if(mode==='cloud'){const{id,...rest}=clean(p);await fs.setDoc(fs.doc(db,COL_POSTS,id),rest);}
+    else localStorage.setItem(LS,JSON.stringify(posts));
+  }catch(e){saveFail(e);}
   render();
 }
 async function removePost(id){
@@ -568,12 +570,21 @@ async function removePost(id){
   else localStorage.setItem(LS,JSON.stringify(posts));
   render();
 }
-async function saveLib(id,patch){
-  libOv[id]={...(libOv[id]||{}),...patch};
-  if(mode==='cloud')await fs.setDoc(fs.doc(db,COL_LIB,id),libOv[id]);
-  else localStorage.setItem(LS_LIB,JSON.stringify(libOv));
-  toast('Saved');
+const clean=o=>JSON.parse(JSON.stringify(o));
+function saveFail(e){
+  const m=(e&&e.message)||String(e);
+  banner('This did NOT save to Firebase: '+esc(m)+(/permission|insufficient/i.test(m)?'. Firebase refused it: the latest firestore.rules must be published, and this account needs Clio access (role admin, or adminAccess.clio ticked in HQ).':'. Check your connection and try again.'),true);
+  toast('Not saved. See the red message at the top');
 }
+async function saveLib(id,patch){
+  libOv[id]=clean({...(libOv[id]||{}),...patch});
+  try{
+    if(mode==='cloud')await fs.setDoc(fs.doc(db,COL_LIB,id),libOv[id]);
+    else localStorage.setItem(LS_LIB,JSON.stringify(libOv));
+    toast(mode==='cloud'?'Saved to Firebase':'Saved on this browser only');
+  }catch(e){saveFail(e);}
+}
+window.addEventListener('unhandledrejection',e=>{const m=String((e.reason&&e.reason.message)||e.reason||'');if(/firestore|permission|insufficient|firebase|network|quota|unavailable/i.test(m))saveFail(e.reason);});
 async function seedMissing(){
   const have=new Set(posts.map(p=>p.id));
   const add=buildSeed().filter(s=>!have.has(s.id));
@@ -630,7 +641,7 @@ function nightLines(from,to,perDate){
 }
 
 /* ── SHELL ── */
-function setTab(t){tab=t;location.hash=t;render();window.scrollTo(0,0);}
+function setTab(t){editing=false;tab=t;location.hash=t;render();window.scrollTo(0,0);}
 function vSignIn(){
   $('view').innerHTML=head('Belladonna Clio','Sign in with your admin account.')+(authChecked?`<div class="card" style="max-width:380px"><span class="lbl">Email or username</span><input type="text" id="si-id" autocomplete="username"/><span class="lbl">Password</span><input type="password" id="si-pw" autocomplete="current-password"/><div style="margin-top:12px"><button class="btn btn-p" data-act="signin">Sign in</button></div></div>`:'<div class="empty">Checking sign-in…</div>');
 }
@@ -646,7 +657,9 @@ async function signIn(){
     await authMod.signInWithEmailAndPassword(auth,id,pw);
   }catch(e){toast('Sign-in failed');}
 }
+let editing=false,pendingRender=false;
 function render(){
+  if(editing){pendingRender=true;return;}
   const so=$('so');if(so)so.style.display=(mode==='cloud'&&user)?'':'none';
   if(mode==='cloud'&&!user){$('tabs').innerHTML='';banner('');vSignIn();return;}
   syncTypes();
@@ -897,7 +910,7 @@ let echoF='need';
 function engage(p){const s=p.stats||{};return (+s.likes||0)+(+s.comments||0)+(+s.shares||0);}
 function quietSave(p){
   const i=posts.findIndex(x=>x.id===p.id);if(i>=0)posts[i]=p;else posts.push(p);
-  if(mode==='cloud'){const{id,...rest}=p;fs.setDoc(fs.doc(db,COL_POSTS,id),rest);}else localStorage.setItem(LS,JSON.stringify(posts));
+  if(mode==='cloud'){const{id,...rest}=clean(p);fs.setDoc(fs.doc(db,COL_POSTS,id),rest).catch(saveFail);}else localStorage.setItem(LS,JSON.stringify(posts));
 }
 function vEcho(){
   const t=todayStr(),since=addDays(t,-60);
@@ -960,7 +973,7 @@ function vLibrary(){
     <div class="card" style="padding:12px;border-color:var(--border-gold)"><div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(250px,1fr))">${setCards}</div></div>`:'')+
     groups.map(g=>`<div class="sec">${esc(g)}</div><div class="grid">${rest.filter(e=>(e.group||'Other')===g).map(t=>libCard(t,'')).join('')}</div>`).join('')+
     `${libTagsHtml()}
-      <div class="card" style="max-width:520px;margin-top:16px"><span class="lbl">Worker address (for image uploads and Buffer sync)</span><input type="text" data-api="1" value="${esc((()=>{try{return localStorage.getItem('bn_clio_api')||'';}catch(e){return '';}})())}" placeholder="https://clio-api.yourname.workers.dev"/></div>
+      <div class="card" style="max-width:520px;margin-top:16px"><span class="lbl">Worker address (for image uploads and Buffer sync)</span><input type="text" data-api="1" value="${esc(getApi())}" placeholder="https://clio-api.yourname.workers.dev"/></div>
       <div class="sub" style="margin-top:16px">Finished graphics are stored on your Cloudflare. Set each template's background art here (or from Make graphic) and Clio draws the text on top.</div>`;
 }
 
@@ -991,7 +1004,7 @@ $('view').addEventListener('change',e=>{
   else if(e.target.dataset.stat){const p=posts.find(x=>x.id===e.target.dataset.stat);if(p){const v=parseInt(String(e.target.value).replace(/[^\d]/g,''))||0;e.target.value=v||'';quietSave({...p,stats:{...(p.stats||{}),[e.target.dataset.f]:v}});toast('Saved');}}
   else if(e.target.dataset.ts){const S={...getTagSets()},id=e.target.dataset.ts;if(S[id]){S[id]={...S[id],[e.target.dataset.f]:e.target.value.trim()};saveTagSets(S);}}
   else if(e.target.dataset.kind){const p=posts.find(x=>x.id===e.target.dataset.kind);if(p)persist({...p,evKind:e.target.value});}
-  else if(e.target.dataset.api){const u=normApi(e.target.value);if(u||!e.target.value.trim()){try{localStorage.setItem('bn_clio_api',u);}catch(x){}toast(u?'Worker address saved':'Worker address cleared');}else toast('That does not look like an address');}
+  else if(e.target.dataset.api){const u=normApi(e.target.value);if(u||!e.target.value.trim()){setApi(u);}else toast('That does not look like an address');}
   else if(e.target.dataset.lib)saveLib(e.target.dataset.lib,{[e.target.dataset.f]:e.target.value.trim()}).then(render);
   else if(e.target.dataset.bx){const[c,f]=e.target.dataset.bx.split('|');bankField(c,f,e.target.value);}
   else if(e.target.dataset.bmp)bankPromptSave(e.target.value);
@@ -1189,12 +1202,18 @@ function normApi(v){
   u=u.replace(/\/+$/,'');
   return /^https:\/\/[\w.-]+\.[a-z]{2,}$/i.test(u)?u:'';
 }
+function getApi(){
+  let u=(libOv.settings||{}).apiBase||'';
+  if(!u){try{u=localStorage.getItem('bn_clio_api')||'';}catch(e){}if(u&&mode==='cloud'&&user)saveLib('settings',{apiBase:u});}
+  return u;
+}
+function setApi(u){try{localStorage.setItem('bn_clio_api',u);}catch(e){}return saveLib('settings',{apiBase:u});}
 function apiBase(){
-  let u='';try{u=localStorage.getItem('bn_clio_api')||'';}catch(e){}
+  let u=getApi();
   if(!u){
     u=normApi(prompt('Paste your Clio Worker address (like https://clio-api.yourname.workers.dev). One time only.')||'');
     if(!u)return '';
-    try{localStorage.setItem('bn_clio_api',u);}catch(e){}
+    setApi(u);
   }
   return u;
 }
@@ -1678,6 +1697,13 @@ function mdAct(el){
     copyTxt($('bkmp').value.trim()+'\n\n'+(cv?'TEMPLATE LOOK: '+cv.name+' (attach your saved example image from Library)\n':'')+(v.badge?'TOP BADGE TEXT: '+v.badge+'\n':'')+'\nPOSTS TO MAKE (one PNG each, carousels where there are [brackets]):\n'+q);
   }
 }
+const TYPING='[data-bx],[data-bmp],[data-ls],[data-lt],[data-lib],[data-ts],[data-ct],[data-bk],[data-bi],[data-stat],[data-ban]',AUTOSAVE='[data-bx],[data-bmp],[data-ls],[data-lib],[data-ts],[data-ct]';
+$('view').addEventListener('input',e=>{
+  const t=e.target;if(!t.matches||!t.matches(TYPING))return;
+  editing=true;
+  if(t.matches(AUTOSAVE)){clearTimeout(t._at);t._at=setTimeout(()=>t.dispatchEvent(new Event('change',{bubbles:true})),900);}
+});
+$('view').addEventListener('focusout',()=>setTimeout(()=>{if(document.activeElement&&document.activeElement.matches&&document.activeElement.matches(TYPING))return;editing=false;if(pendingRender){pendingRender=false;render();}},60));
 $('view').addEventListener('mousedown',e=>{const el=e.target.closest('[data-md]');if(el){mdT=Date.now();mdAct(el);}});
 $('view').addEventListener('click',e=>{const el=e.target.closest('[data-md]');if(el&&Date.now()-mdT>700)mdAct(el);});
 
@@ -1818,7 +1844,7 @@ async function migrateTitles(){
 
 async function syncBuffer(manual){
   if(bufBusy)return;
-  let stored='';try{stored=localStorage.getItem('bn_clio_api')||'';}catch(e){}
+  const stored=getApi();
   if(!manual&&!stored)return;
   const t=todayStr();
   const cand=posts.filter(p=>!isMile(p)&&(p.caption||'').trim()&&!p.posted&&p.date<=addDays(t,1));
@@ -1878,7 +1904,7 @@ function exportBuffer(){
 }
 
 window.closeEdit=closeEdit;window.saveEdit=saveEdit;window.delPost=delPost;window.encore=encore;window.muse=muse;window.libSaveEdit=libSaveEdit;window.ledRule=ledRule;window.libHide=libHide;window.banUpload=banUpload;window.addTags=addTags;window.setWin=setWin;window.tw=null;Object.defineProperty(window,'tw',{get:()=>tw,set:v=>{tw=v;}});Object.defineProperty(window,'twKey',{get:()=>twKey});window.twPick=twPick;window.twAdd=twAdd;window.twDelTask=twDelTask;window.twMove=twMove;window.twNewSet=twNewSet;window.twDelSet=twDelSet;window.twSave=twSave;window.libUpload=libUpload;window.aiCaption=aiCaption;window.capPrompt=capPrompt;window.openGfx=openGfx;window.gfxPick=gfxPick;window.gfxSaveBg=gfxSaveBg;window.gfxUse=gfxUse;window.uploadImg=uploadImg;window.imgPrev=imgPrev;
-window.addEventListener('hashchange',()=>{const h=location.hash.slice(1);if((TABS.some(t=>t[0]===h)||h==='events')&&h!==tab){tab=h;render();}});
+window.addEventListener('hashchange',()=>{const h=location.hash.slice(1);if((TABS.some(t=>t[0]===h)||h==='events')&&h!==tab){editing=false;tab=h;render();}});
 applyTheme(document.documentElement.getAttribute('data-theme')||'dark');
 init();
 </script>
