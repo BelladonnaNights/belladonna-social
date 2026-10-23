@@ -1008,6 +1008,7 @@ $('view').addEventListener('change',e=>{
   else if(e.target.dataset.lib)saveLib(e.target.dataset.lib,{[e.target.dataset.f]:e.target.value.trim()}).then(render);
   else if(e.target.dataset.bx){const[c,f]=e.target.dataset.bx.split('|');bankField(c,f,e.target.value);}
   else if(e.target.dataset.bmp)bankPromptSave(e.target.value);
+  else if(e.target.dataset.bbp)brainPromptSave(e.target.value);
   else if(e.target.dataset.bk||e.target.dataset.bi)bankChange(e.target);
   else if(e.target.dataset.ls||e.target.dataset.lt)listChange(e.target);
 });
@@ -1612,6 +1613,19 @@ HOW TO READ MY POSTS:
   Example: Songs that trigger the bar: [Mr. Brightside], [Don't Stop Believing], [Sweet Caroline], [Man, I Feel Like A Woman], [Bohemian Rhapsody]
   -> Five PNGs. Each has the header "Songs that trigger the bar:" and one song as the main text.
 - A line with neither ** ** nor [ ] is one PNG with all of its words on it.`;
+const DEFAULT_BRAIN=`You are my social media brainstorming partner for Belladonna Nights, a live entertainment business that hosts Music Bingo, Karaoke, Trivia and Sing-Along nights at bars and venues in the Pacific Northwest. Our look is dark, gothic and a little witty. Our mascot is Rook, a raven/crow. Our voice is funny, warm, a little unhinged, never mean, and written for people on a night out.
+
+I'll give you ONE CATEGORY of post below, with my notes and examples. Give me 20 NEW post ideas for that category.
+
+RULES:
+- Match the style and length of my examples, but do NOT repeat or lightly reword anything in my examples or in "already in my bank".
+- Each idea must be short enough to be the main text on a graphic (usually under 20 words).
+- Write one idea per line, with no numbering, no bullets and no commentary, so I can paste them straight into my content bank.
+- Use my reading rules where they help: put an image idea inside ** ** (like **image of a skeleton holding a beer**), and put carousel slides in [ ] brackets, one bracket per slide (like Songs that trigger the bar: [Song one], [Song two], [Song three]). Make about 3 of the 20 carousels and about 5 of the 20 include an image idea.
+- Mix funny, relatable, and a few that invite people to comment or tag a friend.
+- No emojis, no hashtags, no mention of specific real people.
+- If my notes give rules for this category, follow them over anything above.`;
+function brainPrompt(){return (libOv.bank&&libOv.bank.brainPrompt)||DEFAULT_BRAIN;}
 function bankPrompt(){return (libOv.bank&&libOv.bank.musePrompt)||DEFAULT_MUSE;}
 function bankData(){
   const b=libOv.bank;let cats;
@@ -1622,6 +1636,7 @@ function bankData(){
 }
 async function saveBank(cats){await saveLib('bank',{cats});render();}
 async function bankField(c,f,v){const cats=bankData();if(!cats[c])return;cats[c][f]=v;await saveLib('bank',{cats});}
+async function brainPromptSave(v){await saveLib('bank',{brainPrompt:(v.trim()===DEFAULT_BRAIN.trim()||!v.trim())?'':v});}
 async function bankPromptSave(v){await saveLib('bank',{musePrompt:(v.trim()===DEFAULT_MUSE.trim()||!v.trim())?'':v});}
 function bankFind(ref){
   if(!ref)return null;const[c,i]=ref.split('|'),cat=bankData()[c];if(!cat)return null;
@@ -1643,7 +1658,9 @@ function vBank(){
   const cats=bankData(),cvs=libList().filter(x=>x.id.startsWith('cv_'));
   const tot=Object.values(cats).reduce((n,c)=>n+(c.items||[]).filter(x=>!x.used).length,0);
   $('view').innerHTML=head('Content Bank','All your post text in one place, by category. Press + on a line to add it to that category\'s "Make now" paragraph, then copy it into ChatGPT with the Muse prompt.')+
-  `<div class="card" style="border-color:var(--border-gold)"><div class="f" style="margin-bottom:6px"><label>Muse prompt for ChatGPT (editable: this goes first when you press "Copy prompt + these")</label><textarea id="bkmp" data-bmp="1" style="min-height:240px">${esc(bankPrompt())}</textarea></div>
+  `<div class="card" style="border-color:var(--border-gold)"><div class="f" style="margin-bottom:6px"><label>Brainstorming prompt for ChatGPT (editable: goes first when you press "Copy brainstorm prompt" on a category)</label><textarea id="bkbp" data-bbp="1" style="min-height:200px">${esc(brainPrompt())}</textarea></div>
+    <div class="tools" style="margin:0"><button class="btn btn-gold" data-md="bkcopybp">Copy prompt</button><button class="btn btn-g" data-md="bkresetbp">Reset to the original</button></div></div>
+  <div class="card" style="border-color:var(--border-gold)"><div class="f" style="margin-bottom:6px"><label>Design prompt for ChatGPT, makes the PNGs from your template (editable: goes first when you press "Copy prompt + these")</label><textarea id="bkmp" data-bmp="1" style="min-height:240px">${esc(bankPrompt())}</textarea></div>
     <div class="tools" style="margin:0"><button class="btn btn-gold" data-md="bkcopyp">Copy prompt</button><button class="btn btn-g" data-md="bkresetp">Reset to the original</button></div></div>
   <div class="bar"><button class="btn btn-p" data-act="bknew">+ New category</button><span class="meta" style="margin:0">${tot} unused ready to post</span></div>`+
   Object.entries(cats).map(([c,v])=>{
@@ -1658,7 +1675,7 @@ function vBank(){
       <div class="tools" style="margin:6px 0 0"><button class="btn btn-g" data-act="bkadd" data-arg="${c}">Add to bank</button></div></div>
     <div class="f"><label>Notes</label><textarea data-bx="${c}|notes" style="min-height:70px" placeholder="Ideas, rules for this category, what works">${esc(v.notes||'')}</textarea></div>
     <div class="f"><label>Used / Examples (copy this into ChatGPT for more ideas)</label><textarea id="bkx-${c}" data-bx="${c}|examples" style="min-height:90px" placeholder="Paste posts you've used or examples you like, as a paragraph or list">${esc(v.examples||'')}</textarea>
-      <div class="tools" style="margin:6px 0 0"><button class="btn btn-g" data-md="bkcopyx" data-arg="${c}">Copy</button></div></div>
+      <div class="tools" style="margin:6px 0 0"><button class="btn btn-g" data-md="bkcopyx" data-arg="${c}">Copy</button><button class="btn btn-gold" data-md="bkcopyb" data-arg="${c}">Copy brainstorm prompt</button></div></div>
     <div class="acts" style="margin-top:0"><button class="btn btn-d" data-act="bkcatdel" data-arg="${c}">Delete category</button></div></div>`;
   }).join('');
 }
@@ -1690,6 +1707,14 @@ function mdAct(el){
   else if(a==='bkcopyqo')copyTxt($('bkq-'+arg).value.trim());
   else if(a==='bkcopyx')copyTxt($('bkx-'+arg).value.trim());
   else if(a==='bkcopyp')copyTxt($('bkmp').value.trim());
+  else if(a==='bkcopybp')copyTxt($('bkbp').value.trim());
+  else if(a==='bkresetbp'){$('bkbp').value=DEFAULT_BRAIN;brainPromptSave('');}
+  else if(a==='bkcopyb'){
+    const v=bankData()[arg]||{},cv=libList(true).find(x=>x.id===v.canvas);
+    const notes=($('bkx-'+arg)?document.querySelector('[data-bx="'+arg+'|notes"]').value:'').trim(),ex=$('bkx-'+arg).value.trim();
+    const bank=(v.items||[]).map(x=>x.t).join('\n');
+    copyTxt($('bkbp').value.trim()+'\n\nCATEGORY: '+(v.name||'')+(v.badge?'\nBADGE ON THE GRAPHIC: '+v.badge:'')+(cv?'\nTEMPLATE LOOK: '+cv.name:'')+'\n\nMY NOTES FOR THIS CATEGORY:\n'+(notes||'(none)')+'\n\nEXAMPLES AND POSTS I HAVE ALREADY USED:\n'+(ex||'(none yet)')+'\n\nALREADY IN MY BANK (do not repeat these):\n'+(bank||'(empty)'));
+  }
   else if(a==='bkresetp'){$('bkmp').value=DEFAULT_MUSE;bankPromptSave('');}
   else if(a==='bkcopyq'){
     const q=($('bkq-'+arg).value||'').trim();if(!q){toast('Add some posts to Make now first');return;}
@@ -1697,7 +1722,7 @@ function mdAct(el){
     copyTxt($('bkmp').value.trim()+'\n\n'+(cv?'TEMPLATE LOOK: '+cv.name+' (attach your saved example image from Library)\n':'')+(v.badge?'TOP BADGE TEXT: '+v.badge+'\n':'')+'\nPOSTS TO MAKE (one PNG each, carousels where there are [brackets]):\n'+q);
   }
 }
-const TYPING='[data-bx],[data-bmp],[data-ls],[data-lt],[data-lib],[data-ts],[data-ct],[data-bk],[data-bi],[data-stat],[data-ban]',AUTOSAVE='[data-bx],[data-bmp],[data-ls],[data-lib],[data-ts],[data-ct]';
+const TYPING='[data-bx],[data-bmp],[data-bbp],[data-ls],[data-lt],[data-lib],[data-ts],[data-ct],[data-bk],[data-bi],[data-stat],[data-ban]',AUTOSAVE='[data-bx],[data-bmp],[data-bbp],[data-ls],[data-lib],[data-ts],[data-ct]';
 $('view').addEventListener('input',e=>{
   const t=e.target;if(!t.matches||!t.matches(TYPING))return;
   editing=true;
