@@ -576,12 +576,12 @@ function saveFail(e){
   banner('This did NOT save to Firebase: '+esc(m)+(/permission|insufficient/i.test(m)?'. Firebase refused it: the latest firestore.rules must be published, and this account needs Clio access (role admin, or adminAccess.clio ticked in HQ).':'. Check your connection and try again.'),true);
   toast('Not saved. See the red message at the top');
 }
-async function saveLib(id,patch){
+async function saveLib(id,patch,quiet){
   libOv[id]=clean({...(libOv[id]||{}),...patch});
   try{
     if(mode==='cloud')await fs.setDoc(fs.doc(db,COL_LIB,id),libOv[id]);
     else localStorage.setItem(LS_LIB,JSON.stringify(libOv));
-    toast(mode==='cloud'?'Saved to Firebase':'Saved on this browser only');
+    if(!quiet)toast(mode==='cloud'?'Saved to Firebase':'Saved on this browser only');
   }catch(e){saveFail(e);}
 }
 window.addEventListener('unhandledrejection',e=>{const m=String((e.reason&&e.reason.message)||e.reason||'');if(/firestore|permission|insufficient|firebase|network|quota|unavailable/i.test(m))saveFail(e.reason);});
@@ -1662,10 +1662,12 @@ function vBank(){
     <div class="tools" style="margin:0"><button class="btn btn-gold" data-md="bkcopybp">Copy prompt</button><button class="btn btn-g" data-md="bkresetbp">Reset to the original</button></div></div>
   <div class="card" style="border-color:var(--border-gold)"><div class="f" style="margin-bottom:6px"><label>Design prompt for ChatGPT, makes the PNGs from your template (editable: goes first when you press "Copy prompt + these")</label><textarea id="bkmp" data-bmp="1" style="min-height:240px">${esc(bankPrompt())}</textarea></div>
     <div class="tools" style="margin:0"><button class="btn btn-gold" data-md="bkcopyp">Copy prompt</button><button class="btn btn-g" data-md="bkresetp">Reset to the original</button></div></div>
-  <div class="bar"><button class="btn btn-p" data-act="bknew">+ New category</button><span class="meta" style="margin:0">${tot} unused ready to post</span></div>`+
+  <div class="bar"><button class="btn btn-p" data-act="bknew">+ New category</button><button class="btn btn-g" data-act="bkopenall">Open all</button><button class="btn btn-g" data-act="bkcloseall">Close all</button><span class="meta" style="margin:0">${tot} unused ready to post</span></div>`+
   Object.entries(cats).map(([c,v])=>{
     const its=v.items||[],un=its.filter(x=>!x.used).length;
-    return `<div class="card"><div class="f2"><div class="f"><label>Category</label><input type="text" data-bk="${c}" data-f="name" value="${esc(v.name)}"/></div><div class="f"><label>Badge on the template</label><input type="text" data-bk="${c}" data-f="badge" value="${esc(v.badge||'')}"/></div></div>
+    const open=!!((libOv.bank||{}).open||{})[c],qn=(v.queue||'').split('\n').filter(x=>x.trim()).length;
+    return `<div class="card"><div data-act="bkfold" data-arg="${c}" style="cursor:pointer;display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span style="color:var(--gold2);width:14px">${open?'▾':'▸'}</span><b style="font-weight:600">${esc(v.name)}</b>${v.badge?`<span class="nick">${esc(v.badge)}</span>`:''}<span class="has" style="display:inline;margin-left:auto">${un} unused${qn?' · '+qn+' in Make now':''}</span></div>
+    ${open?`<div style="margin-top:10px"><div class="f2"><div class="f"><label>Category</label><input type="text" data-bk="${c}" data-f="name" value="${esc(v.name)}"/></div><div class="f"><label>Badge on the template</label><input type="text" data-bk="${c}" data-f="badge" value="${esc(v.badge||'')}"/></div></div>
     <div class="f"><label>Look</label><select data-bk="${c}" data-f="canvas"><option value="">None</option>${cvs.map(x=>`<option value="${x.id}" ${v.canvas===x.id?'selected':''}>${esc(x.name)}</option>`).join('')}</select></div>
     <div class="f"><label>Make now (what you want made this time)</label><textarea id="bkq-${c}" data-bx="${c}|queue" style="min-height:90px" placeholder="Press + next to a saved line below, or type here">${esc(v.queue||'')}</textarea>
       <div class="tools" style="margin:6px 0 0"><button class="btn btn-gold" data-md="bkcopyq" data-arg="${c}">Copy prompt + these</button><button class="btn btn-g" data-md="bkcopyqo" data-arg="${c}">Copy just these</button><button class="btn btn-g" data-md="bkqclear" data-arg="${c}">Clear</button></div></div>
@@ -1676,12 +1678,16 @@ function vBank(){
     <div class="f"><label>Notes</label><textarea data-bx="${c}|notes" style="min-height:70px" placeholder="Ideas, rules for this category, what works">${esc(v.notes||'')}</textarea></div>
     <div class="f"><label>Used / Examples (copy this into ChatGPT for more ideas)</label><textarea id="bkx-${c}" data-bx="${c}|examples" style="min-height:90px" placeholder="Paste posts you've used or examples you like, as a paragraph or list">${esc(v.examples||'')}</textarea>
       <div class="tools" style="margin:6px 0 0"><button class="btn btn-g" data-md="bkcopyx" data-arg="${c}">Copy</button><button class="btn btn-gold" data-md="bkcopyb" data-arg="${c}">Copy brainstorm prompt</button></div></div>
-    <div class="acts" style="margin-top:0"><button class="btn btn-d" data-act="bkcatdel" data-arg="${c}">Delete category</button></div></div>`;
+    <div class="acts" style="margin-top:0"><button class="btn btn-d" data-act="bkcatdel" data-arg="${c}">Delete category</button></div></div>`:''}</div>`;
   }).join('');
 }
 function bankAct(a,arg){
+  const open={...((libOv.bank||{}).open||{})};
+  if(a==='bkfold'){if(open[arg])delete open[arg];else open[arg]=true;saveLib('bank',{open},true).then(render);return;}
+  if(a==='bkopenall'){const o={};Object.keys(bankData()).forEach(k=>o[k]=true);saveLib('bank',{open:o},true).then(render);return;}
+  if(a==='bkcloseall'){saveLib('bank',{open:{}},true).then(render);return;}
   const cats=bankData();
-  if(a==='bknew'){cats['k'+Date.now().toString(36)]={name:'New category',canvas:'',badge:'',items:[]};}
+  if(a==='bknew'){const id='k'+Date.now().toString(36);cats[id]={name:'New category',canvas:'',badge:'',items:[]};open[id]=true;saveLib('bank',{cats,open}).then(render);return;}
   else if(a==='bkadd'){const el=$('bkadd-'+arg);const L=(el.value||'').split('\n').map(x=>x.trim()).filter(Boolean);if(!L.length){toast('Type or paste something first');return;}
     L.forEach((t,i)=>cats[arg].items.push({id:'i'+Date.now().toString(36)+i,t,used:false}));}
   else if(a==='bkused'){const[c,i]=arg.split('|'),it=cats[c].items.find(x=>x.id===i);if(it)it.used=!it.used;}
