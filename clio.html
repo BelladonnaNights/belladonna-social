@@ -40,9 +40,15 @@ input[type=checkbox]{accent-color:var(--gold);}
 .logo-sub{font-family:var(--cinzel);font-size:.62rem;letter-spacing:.32em;text-transform:uppercase;color:var(--gold);font-weight:600;margin-top:3px;}
 .tabs{display:flex;overflow-x:auto;-webkit-overflow-scrolling:touch;flex:1;scrollbar-width:none;}
 .tabs::-webkit-scrollbar{display:none}
-.tab{padding:21px 1rem;font-family:var(--cinzel);font-size:.66rem;letter-spacing:.13em;text-transform:uppercase;font-weight:600;color:var(--text3);cursor:pointer;border:none;border-bottom:2px solid transparent;background:none;white-space:nowrap;transition:all .2s;}
+.tab{padding:21px .7rem;font-family:var(--cinzel);font-size:.64rem;letter-spacing:.1em;text-transform:uppercase;font-weight:600;color:var(--text3);cursor:pointer;border:none;border-bottom:2px solid transparent;background:none;white-space:nowrap;transition:all .2s;}
 .tab:hover{color:var(--text2)}
 .tab.on{color:var(--gold);border-bottom-color:var(--gold);}
+.burger{display:none;font-size:18px;line-height:1;padding:6px 12px}
+.nav.compact .tabs{display:none}.nav.compact .burger{display:inline-block}.nav.compact #th,.nav.compact #so{display:none!important}.nav.compact{justify-content:space-between}
+#navmenu{display:none;position:fixed;top:65px;left:0;right:0;background:var(--surface);border-bottom:1px solid var(--border-gold);z-index:60;padding:6px 1.25rem 12px;box-shadow:0 12px 24px rgba(0,0,0,.35);max-height:calc(100vh - 70px);overflow-y:auto}
+body.menu-open #navmenu{display:block}
+#navmenu .tab{display:block;width:100%;text-align:left;padding:13px 4px;border-bottom:1px solid var(--border)}
+#navmenu .tab.on{border-bottom-color:var(--gold)}
 .mode{font-family:var(--cinzel);font-size:9px;letter-spacing:.08em;text-transform:uppercase;padding:3px 10px;border-radius:999px;border:1px solid var(--border2);color:var(--text3);white-space:nowrap;flex-shrink:0;}
 .mode.cloud{color:var(--live);border-color:var(--live);}
 .mode.local{color:var(--gold);border-color:var(--border-gold);}
@@ -150,7 +156,9 @@ select:focus,input:focus,textarea:focus{outline:none;border-color:var(--gold);}
   <button class="btn btn-g" id="th" data-act="theme">☀ Light</button>
   <button class="btn btn-g" id="so" data-act="signout" style="display:none">Sign out</button>
   <button class="btn btn-p" data-act="new">+ Post</button>
+  <button class="btn btn-g burger" id="burger" data-act="burger" aria-label="Menu">☰</button>
 </nav>
+<div id="navmenu"></div>
 <div class="gold-line"></div>
 <div class="wrap"><div id="banner"></div><div id="view"></div></div>
 
@@ -276,10 +284,10 @@ function libList(withDeleted){
     const e={...t,...m,custom:false};
     LIB_FIELDS.forEach(f=>{if(o[f]!==undefined&&o[f]!==null)e[f]=o[f];});
     if(o.group==='Monthly & weekly')e.group=m.group||e.group;
-    e.deleted=!!o.deleted;out.push(e);
+    e.silenced=!!o.silenced;e.deleted=!!o.deleted;out.push(e);
   });
   Object.entries(libOv).forEach(([id,o])=>{
-    if(o&&o.custom){const e={id,custom:true,name:o.name||'Untitled',nick:o.nick||'',size:o.size||'',use:o.use||'',group:o.group||'Other',freq:o.freq||'',canvas:o.canvas||'',badge:o.badge||'',deleted:!!o.deleted};out.push(e);}
+    if(o&&o.custom){const e={id,custom:true,name:o.name||'Untitled',nick:o.nick||'',size:o.size||'',use:o.use||'',group:o.group||'Other',freq:o.freq||'',canvas:o.canvas||'',badge:o.badge||'',silenced:!!o.silenced,deleted:!!o.deleted};out.push(e);}
   });
   return withDeleted?out:out.filter(e=>!e.deleted);
 }
@@ -503,7 +511,7 @@ function applyTheme(t){
   try{localStorage.setItem('bn_clio_theme',t);}catch(e){}
   const b=document.getElementById('th');if(b)b.textContent=t==='dark'?'☀ Light':'☾ Dark';
 }
-const TABS=[['dashboard','Dashboard'],['calendar','Calendar'],['campaigns','Campaigns'],['studio','Studio'],['echo','Echo'],['bank','Content Bank'],['listings','Listings'],['library','Library']];
+const TABS=[['dashboard','Dashboard'],['calendar','Calendar'],['campaigns','Campaigns'],['studio','Studio'],['echo','Echo'],['bank','Content Bank'],['listings','Listings'],['cadence','Cadence'],['library','Library']];
 if(!TABS.some(t=>t[0]===tab)&&tab!=='events')tab='dashboard';
 
 const $=id=>document.getElementById(id);
@@ -623,6 +631,7 @@ function virtualRows(){
     const v=g.venue||'venue',k=g.kind||'night',t=t24(g.time);
     const mk=(code,date,time,type,title)=>{
       const id='g_'+g.id+'_'+code;if(have.has(id))return;
+      if((libOv[type]||{}).silenced)return;
       out.push({id,date,time,type,title,platform:TYPES[type].plat,caption:'',imageUrl:'',notes:(g.host&&g.host!=='Unassigned')?'Host: '+g.host:'',created:false,posted:false,auto:true});
     };
     mk('tonight',g.date,'15:00','tonight','Tonight story: '+v+', '+k+(t?' at '+fmtTime(t):''));
@@ -641,7 +650,7 @@ function nightLines(from,to,perDate){
 }
 
 /* ── SHELL ── */
-function setTab(t){editing=false;tab=t;location.hash=t;render();window.scrollTo(0,0);}
+function setTab(t){document.body.classList.remove('menu-open');editing=false;tab=t;location.hash=t;render();window.scrollTo(0,0);}
 function vSignIn(){
   $('view').innerHTML=head('Belladonna Clio','Sign in with your admin account.')+(authChecked?`<div class="card" style="max-width:380px"><span class="lbl">Email or username</span><input type="text" id="si-id" autocomplete="username"/><span class="lbl">Password</span><input type="password" id="si-pw" autocomplete="current-password"/><div style="margin-top:12px"><button class="btn btn-p" data-act="signin">Sign in</button></div></div>`:'<div class="empty">Checking sign-in…</div>');
 }
@@ -657,6 +666,15 @@ async function signIn(){
     await authMod.signInWithEmailAndPassword(auth,id,pw);
   }catch(e){toast('Sign-in failed');}
 }
+function fitNav(){
+  const nav=document.querySelector('.nav'),tb=$('tabs');if(!nav||!tb)return;
+  nav.classList.remove('compact');
+  if(tb.scrollWidth>tb.clientWidth+1)nav.classList.add('compact');
+  if(!nav.classList.contains('compact'))document.body.classList.remove('menu-open');
+}
+window.addEventListener('resize',fitNav);
+document.addEventListener('click',e=>{if(document.body.classList.contains('menu-open')&&!e.target.closest('#navmenu')&&!e.target.closest('#burger'))document.body.classList.remove('menu-open');});
+document.getElementById('navmenu').addEventListener('click',e=>{const a=e.target.closest('[data-act]');if(a){if(a.dataset.act!=='tab')document.body.classList.remove('menu-open');act(a.dataset.act,a.dataset.arg);}});
 let editing=false,pendingRender=false;
 function render(){
   if(editing){pendingRender=true;return;}
@@ -664,10 +682,13 @@ function render(){
   if(mode==='cloud'&&!user){$('tabs').innerHTML='';banner('');vSignIn();return;}
   syncTypes();
   vposts=posts.concat(virtualRows());
-  $('tabs').innerHTML=TABS.map(([k,l])=>`<button class="tab ${tab===k?'on':''}" data-act="tab" data-arg="${k}">${l}</button>`).join('');
+  const tabBtns=TABS.map(([k,l])=>`<button class="tab ${tab===k?'on':''}" data-act="tab" data-arg="${k}">${l}</button>`).join('');
+  $('tabs').innerHTML=tabBtns;
+  $('navmenu').innerHTML=tabBtns+`<button class="tab" data-act="theme">${document.documentElement.getAttribute('data-theme')==='light'?'☾ Dark mode':'☀ Light mode'}</button>`+((mode==='cloud'&&user)?'<button class="tab" data-act="signout">Sign out</button>':'');
+  fitNav();
   if(!posts.length)banner(`Clio's calendar is empty. <button class="btn btn-p" data-act="seed">Load my 2026–2027 calendars (${buildSeed().length} rows)</button>`);
   else if($('banner').querySelector('.banner:not(.err)'))banner('');
-  ({dashboard:vDashboard,events:vEvents,calendar:vCalendar,campaigns:vCampaigns,studio:vStudio,echo:vEcho,bank:vBank,listings:vListings,library:vLibrary})[tab]();
+  ({dashboard:vDashboard,events:vEvents,calendar:vCalendar,campaigns:vCampaigns,studio:vStudio,echo:vEcho,bank:vBank,listings:vListings,cadence:vCadence,library:vLibrary})[tab]();
 }
 function head(t,s){return `<div class="title">${t}</div><div class="sub">${s}</div>`;}
 
@@ -821,7 +842,7 @@ function vCalendar(){
   if(calMode==='grid'){vGrid();return;}
   const t=todayStr();
   const months=[...new Set(vposts.map(p=>p.date.slice(0,7)))].sort();
-  const views=[['todo','To do'],['overdue','Overdue'],['all','Everything'],['history','History'],['auto','Made by cadence']];
+  const views=[['todo','To do'],['overdue','Overdue'],['all','Everything'],['history','History']];
   let list=vposts.slice();
   if(typeF!=='all')list=list.filter(p=>p.type===typeF);
   if(monthF!=='all')list=list.filter(p=>p.date.startsWith(monthF));
@@ -829,7 +850,6 @@ function vCalendar(){
   if(calView==='todo')list=list.filter(p=>overdue(p,t)||(p.date>=t&&p.date<=end&&!p.posted));
   if(calView==='overdue')list=list.filter(p=>overdue(p,t));
   if(calView==='history')list=list.filter(p=>p.posted);
-  if(calView==='auto')list=list.filter(p=>p.gen&&p.date>=t&&!p.posted);
   list.sort(sortFn);
   if(calView==='history')list.reverse();
   $('view').innerHTML=head('Calendar',calView==='history'?'Everything that has gone out.':'Check “Made” when the graphic exists, “Posted” when it is live.')+overviewStats()+
@@ -949,17 +969,29 @@ function libCard(t,slot){
 const MONTHLY_SET=[['mcover','Slide 1 of 3'],['monthly','Slide 2 of 3'],['sched','Slide 3 of 3']];
 const GROUP_ORDER=['Monthly','Weekly','Event posts','Nightly stories','After the night','Always on','Canvases'];
 function orderGroups(g){const ix=x=>{const i=GROUP_ORDER.indexOf(x);return i<0?99:i;};return g.slice().sort((a,b)=>ix(a)-ix(b));}
-function cadenceHtml(){
-  const L=libList().filter(e=>!e.id.startsWith('cv_')),groups=orderGroups([...new Set(L.map(e=>e.group||'Other'))]);
-  return `<div class="sec">Posting cadence</div><div class="sub" style="margin:0 0 8px">Everything you post on a rhythm, grouped. Each line has a rule (like “every Monday” or “7, 3 days before and the day of each big night”), and Clio creates the posts for the next 60 days from those rules. Change a rule and the new posts follow it. Posts already on your calendar are never duplicated or moved.</div>
-  <div class="bar"><button class="btn btn-p" data-act="libnew">+ Add a post type</button><button class="btn btn-g" data-act="gennow">Create posts now (${planGen().length} waiting)</button><button class="btn btn-g" data-act="genlist">See what it made (${posts.filter(p=>p.gen&&!p.posted&&p.date>=todayStr()).length})</button>
-  <label style="display:flex;gap:8px;align-items:center;cursor:pointer;font-size:13px;color:var(--text2)"><input type="checkbox" data-act="gentoggle" ${(libOv.settings||{}).autoGen===false?'':'checked'} style="width:17px;height:17px"/> Create them automatically when I open Clio</label></div>`+
-  groups.map(g=>`<div class="monthh" style="font-size:1.1rem;margin:14px 0 6px">${esc(g)}</div>`+
-    L.filter(e=>(e.group||'Other')===g).map(e=>`<div class="card" style="padding:10px 12px;margin-bottom:6px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+function freqText(e){
+  if(e.silenced)return 'Silenced';
+  const r=ruleOf(e.id);
+  if(!r.kind||r.kind==='none')return e.freq||'Manual';
+  return describeRule(r)+((r.time&&r.kind!=='hq')?' at '+fmtTime(r.time):'');
+}
+function cadRow(e,dim){
+  return `<div class="card" style="padding:10px 12px;margin-bottom:6px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;${dim?'opacity:.55':''}">
       <div style="flex:1;min-width:220px"><div><b style="font-weight:600">${esc(e.name)}</b>${e.nick?` <span class="nick">(${esc(e.nick)})</span>`:''}</div>
-      <div class="meta" style="margin:0">${esc(e.use||'')}${e.use&&(e.freq||describeRule(ruleOf(e.id)))?' · ':''}<span style="color:var(--gold2)">${esc(e.freq||describeRule(ruleOf(e.id)))}</span>${['none',undefined].includes(ruleOf(e.id).kind)?' <span class="has" style="display:inline">· manual</span>':''}${ruleOf(e.id).kind==='hq'?' <span class="has" style="display:inline">· automatic</span>':''}</div></div>
-      <button class="btn btn-g" data-act="libedit" data-arg="${e.id}">Edit</button></div>`).join('')).join('')+
+      <div class="meta" style="margin:0">${esc(e.use||'')}${e.use?' · ':''}<span style="color:var(--gold2)">${esc(freqText(e))}</span></div></div>
+      <button class="btn btn-g" data-act="libedit" data-arg="${e.id}">Edit</button></div>`;
+}
+function cadenceHtml(){
+  const all=libList().filter(e=>!e.id.startsWith('cv_')),L=all.filter(e=>!e.silenced),sil=all.filter(e=>e.silenced),groups=orderGroups([...new Set(L.map(e=>e.group||'Other'))]);
+  return `<div class="sub" style="margin:0 0 8px">Everything you post on a rhythm, grouped. Each line has a Frequency (like “every Monday” or “7, 3 days before and the day of each big night”), and Clio creates the posts for the next 60 days from it. Change a frequency and the new posts follow it. Posts already on your calendar are never duplicated or moved. Silenced ones are turned off and sit at the bottom.</div>
+  <div class="bar"><button class="btn btn-p" data-act="libnew">+ Add a post type</button><button class="btn btn-g" data-act="gennow">Create posts now (${planGen().length} waiting)</button>
+  <label style="display:flex;gap:8px;align-items:center;cursor:pointer;font-size:13px;color:var(--text2)"><input type="checkbox" data-act="gentoggle" ${(libOv.settings||{}).autoGen===false?'':'checked'} style="width:17px;height:17px"/> Create them automatically when I open Clio</label></div>`+
+  groups.map(g=>`<div class="monthh" style="font-size:1.1rem;margin:14px 0 6px">${esc(g)}</div>`+L.filter(e=>(e.group||'Other')===g).map(e=>cadRow(e,false)).join('')).join('')+
+  (sil.length?`<div class="monthh" style="font-size:1.1rem;margin:22px 0 6px">Silenced (turned off)</div>`+sil.map(e=>cadRow(e,true)).join(''):'')+
   (libList(true).some(e=>e.deleted)?`<div class="meta" style="margin-top:10px">Hidden: ${libList(true).filter(e=>e.deleted).map(e=>`${esc(e.name)} <button class="chip" data-act="librestore" data-arg="${e.id}">Restore</button>`).join(' ')}</div>`:'');
+}
+function vCadence(){
+  $('view').innerHTML=head('Cadence','What you post and when. Clio creates the posts from these frequencies.')+cadenceHtml();
 }
 const MONTHLY_SET_IDS=['mcover','monthly','sched'];
 function vLibrary(){
@@ -967,8 +999,7 @@ function vLibrary(){
   const setCards=MONTHLY_SET.filter(([id])=>byId[id]).map(([id,slot])=>libCard(byId[id],slot)).join('');
   const rest=L.filter(e=>!MONTHLY_SET_IDS.includes(e.id)||!byId.mcover||!byId.monthly||!byId.sched);
   const groups=orderGroups([...new Set(rest.map(e=>e.group||'Other'))]);
-  $('view').innerHTML=head('Library','Your posting cadence and the templates behind it. Upload a finished example of each design so Muse can copy it.')+
-    cadenceHtml()+
+  $('view').innerHTML=head('Library','The templates behind your posts. Upload a finished example of each design so Muse can copy it.')+
     (byId.mcover&&byId.monthly&&byId.sched?`<div class="sec">Monthly Announcement · 3 slides · posted on the 25th</div>
     <div class="card" style="padding:12px;border-color:var(--border-gold)"><div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(250px,1fr))">${setCards}</div></div>`:'')+
     groups.map(g=>`<div class="sec">${esc(g)}</div><div class="grid">${rest.filter(e=>(e.group||'Other')===g).map(t=>libCard(t,'')).join('')}</div>`).join('')+
@@ -1014,6 +1045,7 @@ $('view').addEventListener('change',e=>{
 });
 function act(a,arg){
   if(a==='tab')setTab(arg);
+  else if(a==='burger')document.body.classList.toggle('menu-open');
   else if(a==='view'){calView=arg;calMode='list';if(tab!=='calendar')tab='calendar';render();}
   else if(a==='seed')seedMissing();
   else if(a==='export')exportBuffer();
@@ -1036,7 +1068,6 @@ function act(a,arg){
   else if(a==='campf'){campFilter=arg;render();}
   else if(a==='evgo'){const L=upcomingEvents().findIndex(x=>x.id===arg);evIdx=Math.max(0,L);setTab('dashboard');}
   else if(a==='gennow')runGen(true);
-  else if(a==='genlist'){calView='auto';calMode='list';setTab('calendar');}
   else if(a==='gentoggle'){saveLib('settings',{autoGen:(libOv.settings||{}).autoGen===false}).then(render);}
   else if(a==='libedit')openLibEdit(arg);
   else if(a==='librestore'){saveLib(arg,{deleted:false}).then(render);}
@@ -1506,6 +1537,7 @@ function planGen(){
   };
   const bigs=posts.filter(p=>p.type==='big');
   libList().forEach(e=>{
+    if(e.silenced)return;
     const r=ruleOf(e.id);if(!r||r.kind==='none'||r.kind==='hq')return;
     if(r.kind==='monthly_day'){
       let d=new Date(t.slice(0,7)+'-01T12:00:00');
@@ -1549,33 +1581,36 @@ function openLibEdit(id){
   <div class="f2"><div class="f"><label>Name</label><input type="text" id="le-name" value="${esc(e.name)}"/></div><div class="f"><label>Nickname (shows on badges)</label><input type="text" id="le-nick" value="${esc(e.nick)}"/></div></div>
   <div class="f"><label>Group (pick one or type a new one)</label><input type="text" id="le-group" list="le-groups" value="${esc(e.group||'')}"/><datalist id="le-groups">${groups.map(g=>`<option value="${esc(g)}">`).join('')}</datalist></div>
   <div class="f2"><div class="f"><label>Canvas (the template look it uses)</label><select id="le-canvas"><option value="">None</option>${libList().filter(x=>x.id.startsWith('cv_')).map(x=>`<option value="${x.id}" ${e.canvas===x.id?'selected':''}>${esc(x.name)}</option>`).join('')}</select></div><div class="f"><label>Badge name (top plaque)</label><input type="text" id="le-badge" value="${esc(e.badge||'')}" placeholder="ROOK SAYS"/></div></div>
-  <div class="f"><label>How often / when</label><input type="text" id="le-freq" value="${esc(e.freq||'')}" placeholder="Every Monday, the 25th of every month, 3 days before each big night…"/></div>
-  <div class="f" id="le-rulebox"><label>Rule: how Clio creates these posts</label>
-    <select id="le-rule" onchange="ledRule()"><option value="none">Manual (I add them myself)</option><option value="monthly_day">Every month on a day</option><option value="weekday">Every week on a weekday</option><option value="month_end">Last day of every month</option><option value="before_event">Before each big night</option>${(e.id&&ruleOf(e.id).kind==='hq')?'<option value="hq">Automatic from HQ</option>':''}</select>
+  <div class="f" id="le-rulebox"><label>Frequency</label>
+    <select id="le-rule" onchange="ledRule()"><option value="none">Manual (I add them myself)</option><option value="weekday">Every week on a day</option><option value="monthly_day">Every month on a day</option><option value="month_end">Last day of every month</option><option value="before_event">Before each big night</option>${(e.id&&ruleOf(e.id).kind==='hq')?'<option value="hq">Automatic from HQ</option>':''}<option value="silenced">Silenced (turned off)</option></select>
     <div class="f2" style="margin-top:6px"><div class="f" id="le-dayw"><label>Day of month</label><input type="text" inputmode="numeric" id="le-day" value="${(ruleOf(e.id||'')||{}).day||25}"/></div>
     <div class="f" id="le-wdw"><label>Weekday</label><select id="le-wd">${WD.map((d,i)=>`<option value="${i}" ${((ruleOf(e.id||'')||{}).weekday??1)===i?'selected':''}>${d}</option>`).join('')}</select></div>
     <div class="f" id="le-offw"><label>Days before (comma list, 0 = day of)</label><input type="text" id="le-offs" value="${((ruleOf(e.id||'')||{}).offsets||[7]).join(', ')}"/></div>
-    <div class="f" id="le-timew"><label>Post time</label><input type="time" id="le-time" value="${(ruleOf(e.id||'')||{}).time||'12:00'}"/></div></div></div>
+    <div class="f" id="le-timew"><label>Post time</label><input type="time" id="le-time" value="${(ruleOf(e.id||'')||{}).time||'12:00'}"/></div></div>
+    <div class="f" id="le-notew" style="margin-top:6px"><label>Note on timing (optional, for manual ones)</label><input type="text" id="le-freq" value="${esc(e.freq||'')}" placeholder="Evergreen, update when the nights change…"/></div></div>
   <div class="f"><label>What it is / timing</label><input type="text" id="le-use" value="${esc(e.use||'')}" placeholder="Monday post: week theme plus each night"/></div>
   <div class="f"><label>Size</label><input type="text" id="le-size" value="${esc(e.size||'')}" placeholder="1080x1350"/></div>
   ${id&&!e.custom?'<div class="meta">This is one of your built-in post types. “Hide” removes it from this list; posts already on the calendar keep working.</div>':''}
   <div class="acts">${id?`<button class="btn btn-d" type="button" onclick="libHide()">${e.custom?'Delete':'Hide'}</button>`:''}<span class="sp"></span><button class="btn btn-g" type="button" onclick="document.getElementById('led').classList.remove('show')">Cancel</button><button class="btn btn-p" type="button" onclick="libSaveEdit()">Save</button></div></div>`;
   $('led').classList.add('show');
-  $('le-rule').value=ruleOf(e.id||'').kind||'none';ledRule();
+  $('le-rule').value=(e.silenced?'silenced':(ruleOf(e.id||'').kind||'none'));ledRule();
 }
 function ledRule(){
   const k=$('le-rule').value;
   $('le-dayw').style.display=k==='monthly_day'?'':'none';
   $('le-wdw').style.display=k==='weekday'?'':'none';
   $('le-offw').style.display=k==='before_event'?'':'none';
-  $('le-timew').style.display=(k==='none'||k==='hq')?'none':'';
-  $('le-rule').disabled=k==='hq';
+  $('le-timew').style.display=(k==='none'||k==='hq'||k==='silenced')?'none':'';
+  $('le-notew').style.display=(k==='none'||k==='silenced')?'':'none';
 }
 async function libSaveEdit(){
   const name=$('le-name').value.trim();if(!name){toast('Give it a name');return;}
-  const patch={name,nick:$('le-nick').value.trim(),group:$('le-group').value.trim()||'Other',freq:$('le-freq').value.trim(),use:$('le-use').value.trim(),size:$('le-size').value.trim(),canvas:$('le-canvas').value,badge:$('le-badge').value.trim()};
+  const patch={name,nick:$('le-nick').value.trim(),group:$('le-group').value.trim()||'Other',freq:'',use:$('le-use').value.trim(),size:$('le-size').value.trim(),canvas:$('le-canvas').value,badge:$('le-badge').value.trim()};
   const k=$('le-rule').value;
-  if(k==='hq')patch.rule={kind:'hq'};
+  patch.freq=(k==='none'||k==='silenced')?$('le-freq').value.trim():'';
+  patch.silenced=(k==='silenced');
+  if(k==='silenced'){}
+  else if(k==='hq')patch.rule={kind:'hq'};
   else if(k==='none')patch.rule={kind:'none'};
   else{patch.rule={kind:k,time:$('le-time').value||'12:00'};
     if(k==='monthly_day')patch.rule.day=Math.min(31,Math.max(1,parseInt($('le-day').value)||1));
