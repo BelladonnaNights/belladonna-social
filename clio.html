@@ -44,8 +44,8 @@ input[type=checkbox]{accent-color:var(--gold);}
 .tab:hover{color:var(--text2)}
 .tab.on{color:var(--gold);border-bottom-color:var(--gold);}
 .burger{display:none;font-size:18px;line-height:1;padding:6px 12px}
-.nav.compact .tabs{display:none}.nav.compact .burger{display:inline-block}.nav.compact #th,.nav.compact #so{display:none!important}.nav.compact{justify-content:space-between}
-#navmenu{display:none;position:fixed;top:65px;left:0;right:0;background:var(--surface);border-bottom:1px solid var(--border-gold);z-index:60;padding:6px 1.25rem 12px;box-shadow:0 12px 24px rgba(0,0,0,.35);max-height:calc(100vh - 70px);overflow-y:auto}
+.nav.compact .tabs{display:none}.nav.compact .burger{display:inline-block}.nav.compact #th,.nav.compact #so{display:none!important}.nav.compact .logo-group{margin-right:auto}
+#navmenu{display:none;position:fixed;top:68px;right:12px;left:auto;width:min(260px,calc(100vw - 24px));background:var(--surface);border:1px solid var(--border-gold);border-radius:var(--rl);z-index:60;padding:6px 16px 10px;box-shadow:0 12px 24px rgba(0,0,0,.35);max-height:calc(100vh - 70px);overflow-y:auto}
 body.menu-open #navmenu{display:block}
 #navmenu .tab{display:block;width:100%;text-align:left;padding:13px 4px;border-bottom:1px solid var(--border)}
 #navmenu .tab.on{border-bottom-color:var(--gold)}
@@ -564,7 +564,7 @@ async function init(){
     libOv=JSON.parse(localStorage.getItem(LS_LIB)||'{}');
   }
   const m=$('mode');
-  m.textContent=mode==='cloud'?'Synced · belladonna-hq':'This browser only';
+  m.textContent=mode==='cloud'?'Synced':'This browser only';
   m.className='mode '+(mode==='cloud'?'cloud':'local');
   render();
 }
