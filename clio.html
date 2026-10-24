@@ -306,7 +306,7 @@ function syncTypes(){
     if(e.deleted)return;
     const label=e.nick||e.name;
     if(TYPES[e.id])TYPES[e.id].l=label;
-    else if(e.custom)TYPES[e.id]={l:label,c:'#444441',bg:'#f4f3f0',plat:'IG + FB'};
+    else if(e.custom&&!e.id.startsWith('cv_'))TYPES[e.id]={l:label,c:'#444441',bg:'#f4f3f0',plat:'IG + FB'};
   });
   const sig=Object.entries(TYPES).map(([k,v])=>k+':'+v.l).join('|');
   if(sig!==typeSig){typeSig=sig;if(typeof buildTypeOptions==='function')buildTypeOptions();}
@@ -823,7 +823,7 @@ function gridTile(p){
 }
 function vGrid(F){
   const tpls=libList().filter(x=>x.id.startsWith('cv_')||(libOv[x.id]||{}).tplImg);
-  const tile=x=>{const u=(libOv[x.id]||{}).tplImg;return `<div class="gt" title="${esc(x.name)}">${u?`<img src="${esc(u)}" alt="" loading="lazy" onerror="this.style.display='none'"/>`:''}<div class="gtl" style="${u?'justify-content:flex-end;background:linear-gradient(transparent 60%,rgba(0,0,0,.75));color:#fff':''}"><span>${esc(x.name)}</span>${u?'':'<span class="meta" style="margin:0">no example yet</span>'}</div></div>`;};
+  const tile=x=>{const u=(libOv[x.id]||{}).tplImg;return `<div class="gt" data-act="tplview" data-arg="${x.id}" style="aspect-ratio:4/5" title="${esc(x.name)}">${u?`<img src="${esc(u)}" alt="" loading="lazy" onerror="this.style.display='none'"/>`:''}<div class="gtl" style="${u?'justify-content:flex-end;background:linear-gradient(transparent 60%,rgba(0,0,0,.75));color:#fff':''}"><span>${esc(x.name)}</span>${u?'':'<span class="meta" style="margin:0">no example yet</span>'}</div></div>`;};
   $('view').innerHTML=head('Studio','All your templates side by side, so you can see how they look together on the feed.')+studioBar(F||studioSets())+
     `<div class="sec">Your ${tpls.length} templates</div>`+
     (tpls.length?`<div class="ggrid" style="max-width:none">${tpls.map(tile).join('')}</div>`:'<div class="empty">No templates yet.</div>');
@@ -962,18 +962,24 @@ function vEcho(){
 }
 
 /* ── LIBRARY ── */
+function usedBy(id){
+  const cats=Object.values(bankData()).filter(c=>c.canvas===id).map(c=>c.name);
+  const types=libList().filter(x=>x.canvas===id&&!x.id.startsWith('cv_')).map(x=>x.name);
+  return [...types.map(n=>n+' (post type)'),...cats.map(n=>n+' (bank category)')];
+}
 function libCard(t,slot){
-  const o=libOv[t.id]||{};
+  const o=libOv[t.id]||{},isCv=t.id.startsWith('cv_'),ub=isCv?usedBy(t.id):[];
   const n=vposts.filter(p=>p.type===t.id).length;
-  return `<div class="card">${slot?`<div class="nick" style="color:var(--gold2)">${slot}</div>`:''}<h4>${esc(t.name)}</h4><div class="nick">${esc(t.nick)} · ${esc(t.size)}</div>
+  return `<div class="card">${slot?`<div class="nick" style="color:var(--gold2)">${slot}</div>`:''}${isCv?`<span class="lbl">Template name</span><input type="text" data-lib="${t.id}" data-f="name" value="${esc(t.name)}"/><div class="nick">${esc(t.size)}</div>`:`<h4>${esc(t.name)}</h4><div class="nick">${esc(t.nick)} · ${esc(t.size)}</div>`}
         <div class="meta">${esc(t.use)}${n?` · ${n} posts`:''}</div>
+        ${isCv?`<div class="meta" style="color:var(--gold2)"><b>Used by:</b> ${ub.length?ub.map(esc).join(' · '):'nothing yet (pick this look in a Content Bank category)'}</div>`:''}
         <span class="lbl">Example image (a finished design Muse tells ChatGPT to copy)</span>
         ${o.tplImg?`<img src="${esc(o.tplImg)}" alt="" style="width:100%;height:auto;display:block;margin-bottom:6px"/>`:''}
         <div class="tools" style="margin:0 0 4px"><button class="btn btn-g" type="button" onclick="libUpload('${t.id}')">${o.tplImg?'Replace example':'Upload example'}</button></div>
         <span class="lbl">Link to template (optional: Canva, Drive, anything)</span><input type="text" data-lib="${t.id}" data-f="link" value="${esc(o.link||'')}" placeholder="https://canva.com/…"/>
         <span class="lbl">Blank background (only for Make graphic, where Clio draws the text itself)</span><input type="text" data-lib="${t.id}" data-f="bgUrl" value="${esc(o.bgUrl||'')}" placeholder="Set from Make graphic, or paste a link"/>
         <span class="lbl">Notes</span><input type="text" data-lib="${t.id}" data-f="notes" value="${esc(o.notes||'')}"/>
-        ${o.link?`<div style="margin-top:8px"><a href="${esc(o.link)}" target="_blank" rel="noopener"><button class="btn btn-g" type="button">Open template</button></a></div>`:''}</div>`;
+        ${o.link?`<div style="margin-top:8px"><a href="${esc(o.link)}" target="_blank" rel="noopener"><button class="btn btn-g" type="button">Open template</button></a></div>`:''}${isCv?`<div style="margin-top:8px"><button class="btn btn-d" type="button" data-act="tpldel" data-arg="${t.id}">Remove template</button></div>`:''}</div>`;
 }
 const MONTHLY_SET=[['mcover','Slide 1 of 3'],['monthly','Slide 2 of 3'],['sched','Slide 3 of 3']];
 const GROUP_ORDER=['Monthly','Weekly','Event posts','Nightly stories','After the night','Always on','Canvases'];
@@ -1053,11 +1059,12 @@ const MONTHLY_SET_IDS=['mcover','monthly','sched'];
 function vLibrary(){
   const L=libList(),byId=Object.fromEntries(L.map(e=>[e.id,e]));
   const setCards=MONTHLY_SET.filter(([id])=>byId[id]).map(([id,slot])=>libCard(byId[id],slot)).join('');
-  const rest=L.filter(e=>!MONTHLY_SET_IDS.includes(e.id)||!byId.mcover||!byId.monthly||!byId.sched);
+  const rest=L.filter(e=>(!MONTHLY_SET_IDS.includes(e.id)||!byId.mcover||!byId.monthly||!byId.sched)&&!(!e.id.startsWith('cv_')&&(e.canvas||e.id==='crowd')));
   const groups=orderGroups([...new Set(rest.map(e=>e.group||'Other'))]);
   $('view').innerHTML=head('Library','The templates behind your posts. Upload a finished example of each design so Muse can copy it.')+
     (byId.mcover&&byId.monthly&&byId.sched?`<div class="sec">Monthly Announcement · 3 slides · posted on the 25th</div>
     <div class="card" style="padding:12px;border-color:var(--border-gold)"><div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(250px,1fr))">${setCards}</div></div>`:'')+
+    `<div class="bar"><button class="btn btn-p" data-act="tplnew">+ Add a template</button><span class="meta" style="margin:0">One card per template. "Used by" shows which post types and Content Bank categories use it.</span></div>`+
     groups.map(g=>`<div class="sec">${esc(g)}</div><div class="grid">${rest.filter(e=>(e.group||'Other')===g).map(t=>libCard(t,'')).join('')}</div>`).join('')+
     `${libTagsHtml()}
       <div class="card" style="max-width:520px;margin-top:16px"><span class="lbl">Worker address (for image uploads and Buffer sync)</span><input type="text" data-api="1" value="${esc(getApi())}" placeholder="https://clio-api.yourname.workers.dev"/></div>
@@ -1125,6 +1132,14 @@ function act(a,arg){
   else if(a==='evopen'){openEdit(arg);}
   else if(a==='edtasks')openTasks();
   else if(a==='libnew')openLibEdit(null);
+  else if(a==='tplnew'){const nm=(prompt('Name for the new template (e.g. Crow Imagery)')||'').trim();if(!nm)return;
+    saveLib('cv_'+Date.now().toString(36),{custom:true,name:nm,nick:nm,size:'1080x1350',use:'',group:'Canvases',freq:'Template, not a post'}).then(()=>{render();toast('Template added. Upload its example below.');});}
+  else if(a==='tpldel'){const t=libList().find(x=>x.id===arg);if(!t)return;const ub=usedBy(arg);
+    if(!confirm('Remove "'+t.name+'"?'+(ub.length?'\n\nStill used by: '+ub.join(', ')+'\nThose will fall back to No template.':'')))return;
+    saveLib(arg,{deleted:true}).then(async()=>{if(ub.length){const cats=bankData();Object.values(cats).forEach(c=>{if(c.canvas===arg)c.canvas='';});await saveLib('bank',{cats});}render();});}
+  else if(a==='tplview'){const t=libList().find(x=>x.id===arg);if(!t)return;const u=(libOv[arg]||{}).tplImg,ub=usedBy(arg);
+    let v=document.getElementById('tplv');if(!v){v=document.createElement('div');v.id='tplv';v.style.cssText='position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.88);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:16px;cursor:pointer';v.onclick=()=>v.remove();document.body.appendChild(v);}
+    v.innerHTML=`<div style="font-family:var(--cinzel);color:var(--gold);letter-spacing:.14em;text-transform:uppercase">${esc(t.name)}</div><div style="aspect-ratio:4/5;height:min(78vh,calc(92vw*1.25));max-width:92vw;background:var(--surface3);border:1px solid var(--border-gold);display:flex;align-items:center;justify-content:center;overflow:hidden">${u?`<img src="${esc(u)}" alt="" style="width:100%;height:100%;object-fit:contain"/>`:'<span style="color:var(--text2)">No example uploaded yet (Library)</span>'}</div><div style="color:var(--text2);font-size:12px;text-align:center;max-width:90vw">${ub.length?'Used by: '+ub.map(esc).join(' · '):'Not used by anything yet'} · tap anywhere to close</div>`;}
   else if(a==='campf'){campFilter=arg;render();}
   else if(a==='evgo'){const L=upcomingEvents().findIndex(x=>x.id===arg);evIdx=Math.max(0,L);setTab('dashboard');}
   else if(a==='gennow')runGen(true);
@@ -1806,6 +1821,7 @@ function vBank(){
     return hdr+`<div class="card"><div data-act="bkfold" data-arg="${c}" style="cursor:pointer;display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span style="color:var(--gold2);width:14px">${open?'▾':'▸'}</span><b style="font-weight:600">${esc(v.name)}</b>${v.badge?`<span class="nick">${esc(v.badge)}</span>`:''}<span class="has" style="display:inline;margin-left:auto">${un} unused${qn?' · '+qn+' in Make now':''}</span></div>
     ${open?`<div style="margin-top:10px"><div class="f2"><div class="f"><label>Category</label><input type="text" data-bk="${c}" data-f="name" value="${esc(v.name)}"/></div><div class="f"><label>Badge on the template</label><input type="text" data-bk="${c}" data-f="badge" value="${esc(v.badge||'')}"/></div></div>
     <div class="f"><label>Look</label><select data-bk="${c}" data-f="canvas"><option value="">None</option>${cvs.map(x=>`<option value="${x.id}" ${v.canvas===x.id?'selected':''}>${esc(x.name)}</option>`).join('')}</select></div>
+    <div class="f"><label>Prompt notes (added to "Copy prompt + these" for this category)</label><textarea data-bx="${c}|pnotes" style="min-height:70px" placeholder="Extra instructions this category always needs, e.g. Two sentences per post: sentence one goes on the top of the PNG, sentence two goes on the bottom.">${esc(v.pnotes||'')}</textarea></div>
     <div class="f"><label>Make now (what you want made this time)</label><textarea id="bkq-${c}" data-bx="${c}|queue" style="min-height:90px" placeholder="Press + next to a saved line below, or type here">${esc(v.queue||'')}</textarea>
       <div class="tools" style="margin:6px 0 0"><button class="btn btn-gold" data-md="bkcopyq" data-arg="${c}">Copy prompt + these</button><button class="btn btn-g" data-md="bkcopyqo" data-arg="${c}">Copy just these</button><button class="btn btn-g" data-md="bkqclear" data-arg="${c}">Clear</button></div></div>
     <div class="meta">${un} unused ready to post</div>
@@ -1866,7 +1882,7 @@ function mdAct(el){
   else if(a==='bkcopyq'){
     const q=($('bkq-'+arg).value||'').trim();if(!q){toast('Add some posts to Make now first');return;}
     const v=bankData()[arg]||{},cv=libList(true).find(x=>x.id===v.canvas);
-    copyTxt($('bkmp').value.trim()+'\n\n'+(cv?'TEMPLATE LOOK: '+cv.name+' (attach your saved example image from Library)\n':'')+(v.badge?'TOP BADGE TEXT: '+v.badge+'\n':'')+'\nPOSTS TO MAKE (one PNG each, carousels where there are [brackets]):\n'+q);
+    copyTxt($('bkmp').value.trim()+'\n\n'+(cv?'TEMPLATE LOOK: '+cv.name+' (attach your saved example image from Library)\n':'')+(v.badge?'TOP BADGE TEXT: '+v.badge+'\n':'')+((v.pnotes||'').trim()?'\nNOTES FOR THIS CATEGORY:\n'+v.pnotes.trim()+'\n':'')+'\nPOSTS TO MAKE (one PNG each, carousels where there are [brackets]):\n'+q);
   }
 }
 const TYPING='[data-bx],[data-bmp],[data-bbp],[data-ls],[data-lt],[data-lib],[data-ts],[data-ct],[data-bk],[data-bi],[data-stat],[data-ban]',AUTOSAVE='[data-bx],[data-bmp],[data-bbp],[data-ls],[data-lib],[data-ts],[data-ct]';
