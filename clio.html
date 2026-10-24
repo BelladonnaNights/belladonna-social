@@ -993,11 +993,55 @@ function cadRow(e,dim){
       <div class="meta" style="margin:0">${esc(e.use||'')}${e.use?' · ':''}<span style="color:var(--gold2)">${esc(freqText(e))}</span></div></div>
       <button class="btn btn-g" data-act="libedit" data-arg="${e.id}">Edit</button></div>`;
 }
-function cadenceHtml(){
-  const all=libList().filter(e=>!e.id.startsWith('cv_')),L=all.filter(e=>!e.silenced),sil=all.filter(e=>e.silenced),groups=orderGroups([...new Set(L.map(e=>e.group||'Other'))]);
+function cadTop(){
   return `<div class="sub" style="margin:0 0 8px">Everything you post on a rhythm, grouped. Each line has a Frequency (like “every Monday” or “7, 3 days before and the day of each big night”), and Clio creates the posts for the next 60 days from it. Change a frequency and the new posts follow it. Posts already on your calendar are never duplicated or moved. Silenced ones are turned off and sit at the bottom.</div>
   <div class="bar"><button class="btn btn-p" data-act="libnew">+ Add a post type</button><button class="btn btn-g" data-act="gennow">Create posts now (${planGen().length} waiting)</button>
-  <label style="display:flex;gap:8px;align-items:center;cursor:pointer;font-size:13px;color:var(--text2)"><input type="checkbox" data-act="gentoggle" ${(libOv.settings||{}).autoGen===false?'':'checked'} style="width:17px;height:17px"/> Create them automatically when I open Clio</label></div>`+
+  <label style="display:flex;gap:8px;align-items:center;cursor:pointer;font-size:13px;color:var(--text2)"><input type="checkbox" data-act="gentoggle" ${(libOv.settings||{}).autoGen===false?'':'checked'} style="width:17px;height:17px"/> Create them automatically when I open Clio</label></div>`;
+}
+let cadMonth=todayStr().slice(0,7),cadSel=null;
+function cadModeNow(){return (libOv.settings||{}).cadMode||'list';}
+function cadOcc(from,to){
+  const out={},add=(e,ds)=>{if(ds>=from&&ds<=to)(out[ds]=out[ds]||[]).push(e);};
+  const bigs=posts.filter(p=>p.type==='big');
+  libList().forEach(e=>{
+    if(e.id.startsWith('cv_')||e.silenced)return;
+    const r=ruleOf(e.id);if(!r||!r.kind||r.kind==='none'||r.kind==='hq')return;
+    if(r.kind==='monthly_day'||r.kind==='month_end'){
+      let d=new Date(from.slice(0,7)+'-01T12:00:00');
+      while(ymd(d).slice(0,7)<=to.slice(0,7)){const y=d.getFullYear(),m=d.getMonth()+1,ld=lastDay(y,m);add(e,y+'-'+pad(m)+'-'+pad(r.kind==='month_end'?ld:Math.min(+r.day||1,ld)));d.setMonth(d.getMonth()+1);}
+    }else if(r.kind==='weekday'||r.kind==='nth_week'){
+      for(let ds=from;ds<=to;ds=addDays(ds,1)){if(new Date(ds+'T12:00:00').getDay()===+r.weekday&&(r.kind==='weekday'||(r.weeks||[]).includes(weekOfMonth(ds))))add(e,ds);}
+    }else if(r.kind==='before_event'){
+      bigs.forEach(b=>(r.offsets||[]).forEach(off=>add(e,addDays(b.date,-off))));
+    }
+  });
+  return out;
+}
+function cadCalHtml(){
+  const t=todayStr(),[Y,M]=cadMonth.split('-').map(Number);
+  const startDow=new Date(Y,M-1,1).getDay(),dim=new Date(Y,M,0).getDate(),cells=[];
+  for(let i=0;i<startDow;i++)cells.push(null);
+  for(let d=1;d<=dim;d++)cells.push(Y+'-'+pad(M)+'-'+pad(d));
+  while(cells.length%7)cells.push(null);
+  const occ=cadOcc(Y+'-'+pad(M)+'-01',Y+'-'+pad(M)+'-'+pad(dim));
+  const made=(e,ds)=>posts.some(p=>p.type===e.id&&p.date===ds);
+  const grid=cells.map(ds=>{
+    if(!ds)return '<div class="mc out"></div>';
+    const L=occ[ds]||[];
+    const pills=L.slice(0,4).map(e=>{const T=TYPES[e.id]||TYPES.other;return `<span class="mp" style="background:${T.bg};color:${T.c}" title="${esc(e.name)}">${made(e,ds)?'✓ ':''}${esc(T.l)}</span>`;}).join('');
+    return `<div class="mc ${ds===t?'today':''} ${ds===cadSel?'sel':''}" data-act="cday" data-arg="${ds}"><div class="md">${+ds.slice(8)}</div>${pills}${L.length>4?`<span class="mp more">+${L.length-4}</span>`:''}</div>`;
+  }).join('');
+  const sel=cadSel&&cadSel.startsWith(cadMonth)?(occ[cadSel]||[]):null;
+  return `<div class="mnav"><button class="btn btn-g" data-act="cmprev">‹</button><div class="mt">${new Date(Y,M-1,1).toLocaleDateString('en-US',{month:'long',year:'numeric'})}</div><button class="btn btn-g" data-act="cmtoday">Today</button><button class="btn btn-g" data-act="cmnext">›</button></div>
+  <div class="mgrid">${DN.map(d=>`<div class="mh">${d}</div>`).join('')}${grid}</div>
+  <div class="meta" style="margin-top:8px">This shows what your Frequencies will make, month by month. ✓ = already on your calendar. Automatic-from-HQ night posts and silenced types are not shown.</div>`+
+  (sel?`<div class="sec">${dayName(cadSel)}</div>${sel.length?sel.map(e=>cadRow(e,false)).join(''):'<div class="empty">Nothing from your cadence on this day.</div>'}`:'');
+}
+function cadenceHtml(){
+  const all=libList().filter(e=>!e.id.startsWith('cv_')),L=all.filter(e=>!e.silenced),sil=all.filter(e=>e.silenced),groups=orderGroups([...new Set(L.map(e=>e.group||'Other'))]);
+  const modes=`<div class="bar"><button class="chip ${cadModeNow()==='list'?'on':''}" data-act="cadmode" data-arg="list">List</button><button class="chip ${cadModeNow()==='cal'?'on':''}" data-act="cadmode" data-arg="cal">Calendar view</button></div>`;
+  if(cadModeNow()==='cal')return modes+cadTop()+cadCalHtml();
+  return modes+cadTop()+
   groups.map(g=>`<div class="monthh" style="font-size:1.1rem;margin:14px 0 6px">${esc(g)}</div>`+L.filter(e=>(e.group||'Other')===g).map(e=>cadRow(e,false)).join('')).join('')+
   (sil.length?`<div class="monthh" style="font-size:1.1rem;margin:22px 0 6px">Silenced (turned off)</div>`+sil.map(e=>cadRow(e,true)).join(''):'')+
   (libList(true).some(e=>e.deleted)?`<div class="meta" style="margin-top:10px">Hidden: ${libList(true).filter(e=>e.deleted).map(e=>`${esc(e.name)} <button class="chip" data-act="librestore" data-arg="${e.id}">Restore</button>`).join(' ')}</div>`:'');
@@ -1058,6 +1102,10 @@ $('view').addEventListener('change',e=>{
 function act(a,arg){
   if(a==='tab')setTab(arg);
   else if(a==='burger')document.body.classList.toggle('menu-open');
+  else if(a==='cadmode'){saveLib('settings',{cadMode:arg},true).then(render);}
+  else if(a==='cday'){cadSel=arg;render();}
+  else if(a==='cmprev'||a==='cmnext'){const[y,m]=cadMonth.split('-').map(Number);const d=new Date(y,m-1+(a==='cmnext'?1:-1),1);cadMonth=d.getFullYear()+'-'+pad(d.getMonth()+1);cadSel=null;render();}
+  else if(a==='cmtoday'){cadMonth=todayStr().slice(0,7);cadSel=todayStr();render();}
   else if(a==='view'){studioF=arg;setTab('studio');}
   else if(a==='seed')seedMissing();
   else if(a==='export')exportBuffer();
