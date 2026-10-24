@@ -300,6 +300,9 @@ function libList(withDeleted){
   });
   return withDeleted?out:out.filter(e=>!e.deleted);
 }
+const NOT_TPL=['rook','crowd','note'];
+function isTpl(x){return x.id.startsWith('cv_')||(!x.custom&&!NOT_TPL.includes(x.id));}
+function tplList(){return libList().filter(isTpl);}
 let typeSig='';
 function syncTypes(){
   libList(true).forEach(e=>{
@@ -822,7 +825,7 @@ function gridTile(p){
     <div class="gtd">${new Date(p.date+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})}${p.imageUrl?'':' · no image yet'}</div></div>`;
 }
 function vGrid(F){
-  const tpls=libList().filter(x=>x.id.startsWith('cv_')||(libOv[x.id]||{}).tplImg);
+  const tpls=tplList();
   const tile=x=>{const u=(libOv[x.id]||{}).tplImg;return `<div class="gt" data-act="tplview" data-arg="${x.id}" style="aspect-ratio:4/5" title="${esc(x.name)}">${u?`<img src="${esc(u)}" alt="" loading="lazy" onerror="this.style.display='none'"/>`:''}<div class="gtl" style="${u?'justify-content:flex-end;background:linear-gradient(transparent 60%,rgba(0,0,0,.75));color:#fff':''}"><span>${esc(x.name)}</span>${u?'':'<span class="meta" style="margin:0">no example yet</span>'}</div></div>`;};
   $('view').innerHTML=head('Studio','All your templates side by side, so you can see how they look together on the feed.')+studioBar(F||studioSets())+
     `<div class="sec">Your ${tpls.length} templates</div>`+
@@ -964,15 +967,15 @@ function vEcho(){
 /* ── LIBRARY ── */
 function usedBy(id){
   const cats=Object.values(bankData()).filter(c=>c.canvas===id).map(c=>c.name);
-  const types=libList().filter(x=>x.canvas===id&&!x.id.startsWith('cv_')).map(x=>x.name);
+  const types=libList().filter(x=>!x.id.startsWith('cv_')&&(x.canvas===id||x.id===id)).map(x=>x.name);
   return [...types.map(n=>n+' (post type)'),...cats.map(n=>n+' (bank category)')];
 }
 function libCard(t,slot){
-  const o=libOv[t.id]||{},isCv=t.id.startsWith('cv_'),ub=isCv?usedBy(t.id):[];
+  const o=libOv[t.id]||{},isCv=t.id.startsWith('cv_'),isT=isTpl(t),ub=isT?usedBy(t.id):[];
   const n=vposts.filter(p=>p.type===t.id).length;
   return `<div class="card">${slot?`<div class="nick" style="color:var(--gold2)">${slot}</div>`:''}${isCv?`<span class="lbl">Template name</span><input type="text" data-lib="${t.id}" data-f="name" value="${esc(t.name)}"/><div class="nick">${esc(t.size)}</div>`:`<h4>${esc(t.name)}</h4><div class="nick">${esc(t.nick)} · ${esc(t.size)}</div>`}
         <div class="meta">${esc(t.use)}${n?` · ${n} posts`:''}</div>
-        ${isCv?`<div class="meta" style="color:var(--gold2)"><b>Used by:</b> ${ub.length?ub.map(esc).join(' · '):'nothing yet (pick this look in a Content Bank category)'}</div>`:''}
+        ${isT?`<div class="meta" style="color:var(--gold2)"><b>Used by:</b> ${ub.length?ub.map(esc).join(' · '):'nothing yet (pick this look in a Content Bank category)'}</div>`:''}
         <span class="lbl">Example image (a finished design Muse tells ChatGPT to copy)</span>
         ${o.tplImg?`<img src="${esc(o.tplImg)}" alt="" style="width:100%;height:auto;display:block;margin-bottom:6px"/>`:''}
         <div class="tools" style="margin:0 0 4px"><button class="btn btn-g" type="button" onclick="libUpload('${t.id}')">${o.tplImg?'Replace example':'Upload example'}</button></div>
@@ -1684,7 +1687,7 @@ function openLibEdit(id){
   $('led').innerHTML=`<div class="box"><h3>${id?'Edit post type':'Add a post type'}</h3>
   <div class="f2"><div class="f"><label>Name</label><input type="text" id="le-name" value="${esc(e.name)}"/></div><div class="f"><label>Nickname (shows on badges)</label><input type="text" id="le-nick" value="${esc(e.nick)}"/></div></div>
   <div class="f"><label>Group (pick one or type a new one)</label><input type="text" id="le-group" list="le-groups" value="${esc(e.group||'')}"/><datalist id="le-groups">${groups.map(g=>`<option value="${esc(g)}">`).join('')}</datalist></div>
-  <div class="f2"><div class="f"><label>Canvas (the template look it uses)</label><select id="le-canvas"><option value="">None</option>${libList().filter(x=>x.id.startsWith('cv_')).map(x=>`<option value="${x.id}" ${e.canvas===x.id?'selected':''}>${esc(x.name)}</option>`).join('')}</select></div><div class="f"><label>Badge name (top plaque)</label><input type="text" id="le-badge" value="${esc(e.badge||'')}" placeholder="ROOK SAYS"/></div></div>
+  <div class="f2"><div class="f"><label>Canvas (the template look it uses)</label><select id="le-canvas"><option value="">None</option>${tplList().map(x=>`<option value="${x.id}" ${e.canvas===x.id?'selected':''}>${esc(x.name)}</option>`).join('')}</select></div><div class="f"><label>Badge name (top plaque)</label><input type="text" id="le-badge" value="${esc(e.badge||'')}" placeholder="ROOK SAYS"/></div></div>
   <div class="f" id="le-rulebox"><label>Frequency</label>
     <select id="le-rule" onchange="ledRule()"><option value="none">Manual (I add them myself)</option><option value="weekday">Every week on a day</option><option value="nth_week">Certain weeks of the month</option><option value="monthly_day">Every month on a day</option><option value="month_end">Last day of every month</option><option value="before_event">Before each big night</option>${(e.id&&ruleOf(e.id).kind==='hq')?'<option value="hq">Automatic from HQ</option>':''}<option value="silenced">Silenced (turned off)</option></select>
     <div class="f2" style="margin-top:6px"><div class="f" id="le-dayw"><label>Day of month</label><input type="text" inputmode="numeric" id="le-day" value="${(ruleOf(e.id||'')||{}).day||25}"/></div>
@@ -1808,7 +1811,7 @@ function fillBank(cur){
   sel.value=cur||'';
 }
 function vBank(){
-  const cats=bankData(),cvs=libList().filter(x=>x.id.startsWith('cv_'));
+  const cats=bankData(),cvs=tplList();
   const tot=Object.values(cats).reduce((n,c)=>n+(c.items||[]).filter(x=>!x.used).length,0);
   $('view').innerHTML=head('Content Bank','All your post text in one place, by category. Press + on a line to add it to that category\'s "Make now" paragraph, then copy it into ChatGPT with the Muse prompt.')+
 `<div class="bar"><button class="btn btn-p" data-act="bknew">+ New category</button><button class="btn btn-g" data-act="bkopenall">Open all</button><button class="btn btn-g" data-act="bkcloseall">Close all</button><span class="meta" style="margin:0">${tot} unused ready to post</span></div>`+
