@@ -556,11 +556,11 @@ async function init(){
         authChecked=true;user=u;unsubs.forEach(f=>f());unsubs=[];
         if(u){
           const bad=err=>banner('Firestore says: '+esc(err.message)+'. Clio needs an account with role admin to read and save.',true);
-          unsubs.push(fs.onSnapshot(fs.collection(db,COL_POSTS),snap=>{posts=snap.docs.map(d=>({id:d.id,...d.data()}));render();},bad));
+          unsubs.push(fs.onSnapshot(fs.collection(db,COL_POSTS),snap=>{posts=snap.docs.map(d=>({id:d.id,...d.data()}));postsLoaded=true;render();bigSoon();},bad));
           unsubs.push(fs.onSnapshot(fs.collection(db,COL_LIB),snap=>{libOv={};snap.docs.forEach(d=>libOv[d.id]=d.data());render();},bad));
-          unsubs.push(fs.onSnapshot(fs.collection(db,'gig_schedule'),snap=>{gigs=snap.docs.map(d=>({id:d.id,...d.data()}));render();},err=>console.warn('gig_schedule:',err.message)));
+          unsubs.push(fs.onSnapshot(fs.collection(db,'gig_schedule'),snap=>{gigs=snap.docs.map(d=>({id:d.id,...d.data()}));gigsLoaded=true;render();bigSoon();},err=>console.warn('gig_schedule:',err.message)));
           setTimeout(()=>syncBuffer(false),5000);setTimeout(()=>{if(mode==='cloud'&&posts.length)migrateTitles();},3500);setTimeout(()=>{if(mode==='cloud'&&posts.length)runGen(false);},4500);
-        }else{posts=[];libOv={};gigs=[];}
+        }else{posts=[];libOv={};gigs=[];gigsLoaded=false;postsLoaded=false;}
         render();
       });
     }catch(e){mode='local';banner('Firebase failed to load ('+esc(e.message)+'). Running in this-browser-only mode.',true);}
@@ -941,6 +941,32 @@ function vStudio(){
 /* ── ECHO ── */
 let echoF='need';
 function engage(p){const s=p.stats||{};return (+s.likes||0)+(+s.comments||0)+(+s.shares||0);}
+/* ── BIG NIGHTS FROM HQ / PLANNER: any gig_schedule entry ticked "Big night" becomes a Big Night post here ── */
+let gigsLoaded=false,postsLoaded=false,bigTimer=null;
+function bigSoon(){clearTimeout(bigTimer);bigTimer=setTimeout(()=>{syncBigNights().catch(e=>console.warn('big nights sync:',e));},1200);}
+async function rawDel(id){posts=posts.filter(p=>p.id!==id);if(mode==='cloud')await fs.deleteDoc(fs.doc(db,COL_POSTS,id));}
+async function syncBigNights(){
+  if(mode!=='cloud'||!user||!gigsLoaded||!postsLoaded)return;
+  const t=todayStr(),evOf=p=>p.title.replace(/^Big night:\s*/i,'');
+  const depsOf=ev=>posts.filter(p=>p.gen&&!p.posted&&['cover','count'].includes(p.type)&&p.title.endsWith(': '+ev));
+  const want=new Map();
+  gigs.filter(g=>g.bigNight&&g.date&&g.status!=='cancelled').forEach(g=>want.set('hqbig_'+g.id,g));
+  let changed=false;
+  for(const p of posts.filter(x=>x.type==='big'&&x.hqGig)){
+    const g=want.get(p.id);
+    if(!g){if(p.posted)continue;for(const d of depsOf(evOf(p)))await rawDel(d.id);await rawDel(p.id);changed=true;continue;}
+    const title='Big night: '+(g.bigName||((g.kind||'Event')+' at '+g.venue)),time=t24(g.time)||'';
+    if(p.title!==title||p.date!==g.date||(p.time||'')!==time){
+      for(const d of depsOf(evOf(p)))await rawDel(d.id);
+      quietSave({...p,title,date:g.date,time});changed=true;
+    }
+  }
+  for(const [id,g] of want){
+    if(posts.some(p=>p.id===id)||g.date<t)continue;
+    quietSave({id,date:g.date,time:t24(g.time)||'',type:'big',title:'Big night: '+(g.bigName||((g.kind||'Event')+' at '+g.venue)),platform:TYPES.big.plat,caption:'',imageUrl:'',notes:g.notes||'',created:false,posted:false,hqGig:g.gigId||id.slice(6)});changed=true;
+  }
+  if(changed){render();setTimeout(()=>{if(mode==='cloud'&&posts.length)runGen(false);},800);}
+}
 function quietSave(p){
   const i=posts.findIndex(x=>x.id===p.id);if(i>=0)posts[i]=p;else posts.push(p);
   if(mode==='cloud'){const{id,...rest}=clean(p);fs.setDoc(fs.doc(db,COL_POSTS,id),rest).catch(saveFail);}else localStorage.setItem(LS,JSON.stringify(posts));
@@ -1649,9 +1675,7 @@ function genTitle(id,name,date,ctx){
   if(id==='cover')return 'Facebook Event: '+ev;
   if(id==='count')return ctx.off===0?'Countdown, day of: '+ev:'Countdown, '+ctx.off+' days: '+ev;
   if(id==='recap')return 'Monthly recap: '+monthLong(date.slice(0,7));
-  if(id==='rook')return 'Wednesday Rook / Snark post';
-  if(id==='crowd')return 'Friday: post a live crowd photo or reel';
-  if(id==='note')return 'Sunday Tavern Scroll note';
+  if(id==='rook'||id==='crowd'||id==='note')return name;
   return name+(ev?': '+ev:'');
 }
 function planGen(){
@@ -1755,7 +1779,18 @@ async function libSaveEdit(){
     if(k==='before_event')patch.rule.offsets=$('le-offs').value.split(',').map(x=>parseInt(x.trim())).filter(x=>!isNaN(x)&&x>=0);}
   let id=ledId;
   if(!id){id='c_'+Date.now().toString(36);patch.custom=true;}
-  await saveLib(id,patch);$('led').classList.remove('show');render();
+  const oldName=(libList(true).find(x=>x.id===id)||{}).name||'';
+  await saveLib(id,patch);$('led').classList.remove('show');
+  if(oldName&&oldName!==name){
+    const fixed=['rook','crowd','note'];
+    for(const p of posts.filter(x=>x.type===id&&!x.posted&&(x.gen||x.genKey))){
+      let t=p.title||'';
+      if(t.includes(oldName))t=t.split(oldName).join(name);
+      else if(fixed.includes(id))t=name;
+      if(t!==p.title)await quietSave({...p,title:t});
+    }
+  }
+  render();
   if(k==='silenced')await offerClear(id);
 }
 async function libHide(){
@@ -2053,7 +2088,12 @@ async function twSave(){
 
 /* ── BUFFER SYNC: Buffer says it sent a post, Clio ticks Posted ── */
 let bufBusy=false;
+const LEGACY_TITLES={rook:'Wednesday Rook / Snark post',crowd:'Friday: post a live crowd photo or reel',note:'Sunday Tavern Scroll note'};
 async function migrateTitles(){
+  for(const p of posts.filter(x=>LEGACY_TITLES[x.type]===x.title&&!x.posted)){
+    const nm=(libList(true).find(e=>e.id===p.type)||{}).name;
+    if(nm)quietSave({...p,title:nm});
+  }
   if((libOv.migrations||{}).slides3)return;
   const L=posts.filter(p=>p.type==='monthly'&&/, 2 slides/.test(p.title));
   for(const p of L)await persist({...p,title:p.title.replace(', 2 slides',', 3 slides')});
