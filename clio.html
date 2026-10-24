@@ -986,8 +986,10 @@ function freqText(e){
   return describeRule(r)+((r.time&&r.kind!=='hq')?' at '+fmtTime(r.time):'');
 }
 function cadRow(e,dim){
+  const img=(libOv[e.id]||{}).tplImg||((e.canvas&&(libOv[e.canvas]||{}).tplImg)||'');
   return `<div class="card" style="padding:10px 12px;margin-bottom:6px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;${dim?'opacity:.55':''}">
-      <div style="flex:1;min-width:220px"><div><b style="font-weight:600">${esc(e.name)}</b>${e.nick?` <span class="nick">(${esc(e.nick)})</span>`:''}</div>
+      ${img?`<img src="${esc(img)}" alt="" loading="lazy" title="Your example template" style="width:40px;height:50px;object-fit:contain;background:var(--surface3);border:1px solid var(--border2);border-radius:4px;flex-shrink:0" onerror="this.style.display='none'"/>`:''}
+      <div style="flex:1;min-width:180px"><div><b style="font-weight:600">${esc(e.name)}</b>${e.nick?` <span class="nick">(${esc(e.nick)})</span>`:''}</div>
       <div class="meta" style="margin:0">${esc(e.use||'')}${e.use?' · ':''}<span style="color:var(--gold2)">${esc(freqText(e))}</span></div></div>
       <button class="btn btn-g" data-act="libedit" data-arg="${e.id}">Edit</button></div>`;
 }
@@ -1519,11 +1521,13 @@ function describeRule(r){
   if(!r)return '';
   if(r.kind==='monthly_day')return 'The '+r.day+ordSuf(r.day)+' of every month';
   if(r.kind==='weekday')return 'Every '+WD[r.weekday];
+  if(r.kind==='nth_week'){const w=(r.weeks||[]).slice().sort();return (w.length>1?'Weeks ':'Week ')+(w.length>2?w.slice(0,-1).join(', ')+' and '+w[w.length-1]:w.join(' and '))+' of each month, '+WD[r.weekday]+'s';}
   if(r.kind==='month_end')return 'Last day of every month';
   if(r.kind==='before_event')return (r.offsets||[]).map(o=>o===0?'the day of':o+' days before').join(', ')+' each big night';
   if(r.kind==='hq')return 'Automatic from HQ';
   return '';
 }
+function weekOfMonth(ds){const d=new Date(ds+'T12:00:00'),back=(d.getDay()+6)%7,m=new Date(d);m.setDate(d.getDate()-back);return Math.ceil(m.getDate()/7);}
 function ordSuf(n){n=+n;return (n%100>=11&&n%100<=13)?'th':({1:'st',2:'nd',3:'rd'}[n%10]||'th');}
 function lastDay(y,m){return new Date(y,m,0).getDate();}
 function monthLong(m){return new Date(m+'-15T12:00:00').toLocaleDateString('en-US',{month:'long'});}
@@ -1578,6 +1582,9 @@ function planGen(){
       for(let i=0;i<4;i++){const y=d.getFullYear(),m=d.getMonth()+1,day=Math.min(+r.day||1,lastDay(y,m));add(e,y+'-'+pad(m)+'-'+pad(day),r.time,y+'-'+pad(m),undefined,{});d.setMonth(d.getMonth()+1);}
     }else if(r.kind==='weekday'){
       for(let ds=t;ds<=end;ds=addDays(ds,1)){if(new Date(ds+'T12:00:00').getDay()===+r.weekday)add(e,ds,r.time,ds,undefined,{});}
+    }else if(r.kind==='nth_week'){
+      const wk=r.weeks||[];
+      for(let ds=t;ds<=end;ds=addDays(ds,1)){if(new Date(ds+'T12:00:00').getDay()===+r.weekday&&wk.includes(weekOfMonth(ds)))add(e,ds,r.time,ds,undefined,{});}
     }else if(r.kind==='month_end'){
       let d=new Date(t.slice(0,7)+'-01T12:00:00');
       for(let i=0;i<4;i++){const y=d.getFullYear(),m=d.getMonth()+1;add(e,y+'-'+pad(m)+'-'+pad(lastDay(y,m)),r.time,y+'-'+pad(m),undefined,{});d.setMonth(d.getMonth()+1);}
@@ -1616,11 +1623,12 @@ function openLibEdit(id){
   <div class="f"><label>Group (pick one or type a new one)</label><input type="text" id="le-group" list="le-groups" value="${esc(e.group||'')}"/><datalist id="le-groups">${groups.map(g=>`<option value="${esc(g)}">`).join('')}</datalist></div>
   <div class="f2"><div class="f"><label>Canvas (the template look it uses)</label><select id="le-canvas"><option value="">None</option>${libList().filter(x=>x.id.startsWith('cv_')).map(x=>`<option value="${x.id}" ${e.canvas===x.id?'selected':''}>${esc(x.name)}</option>`).join('')}</select></div><div class="f"><label>Badge name (top plaque)</label><input type="text" id="le-badge" value="${esc(e.badge||'')}" placeholder="ROOK SAYS"/></div></div>
   <div class="f" id="le-rulebox"><label>Frequency</label>
-    <select id="le-rule" onchange="ledRule()"><option value="none">Manual (I add them myself)</option><option value="weekday">Every week on a day</option><option value="monthly_day">Every month on a day</option><option value="month_end">Last day of every month</option><option value="before_event">Before each big night</option>${(e.id&&ruleOf(e.id).kind==='hq')?'<option value="hq">Automatic from HQ</option>':''}<option value="silenced">Silenced (turned off)</option></select>
+    <select id="le-rule" onchange="ledRule()"><option value="none">Manual (I add them myself)</option><option value="weekday">Every week on a day</option><option value="nth_week">Certain weeks of the month</option><option value="monthly_day">Every month on a day</option><option value="month_end">Last day of every month</option><option value="before_event">Before each big night</option>${(e.id&&ruleOf(e.id).kind==='hq')?'<option value="hq">Automatic from HQ</option>':''}<option value="silenced">Silenced (turned off)</option></select>
     <div class="f2" style="margin-top:6px"><div class="f" id="le-dayw"><label>Day of month</label><input type="text" inputmode="numeric" id="le-day" value="${(ruleOf(e.id||'')||{}).day||25}"/></div>
     <div class="f" id="le-wdw"><label>Weekday</label><select id="le-wd">${WD.map((d,i)=>`<option value="${i}" ${((ruleOf(e.id||'')||{}).weekday??1)===i?'selected':''}>${d}</option>`).join('')}</select></div>
     <div class="f" id="le-offw"><label>Days before (comma list, 0 = day of)</label><input type="text" id="le-offs" value="${((ruleOf(e.id||'')||{}).offsets||[7]).join(', ')}"/></div>
     <div class="f" id="le-timew"><label>Post time</label><input type="time" id="le-time" value="${(ruleOf(e.id||'')||{}).time||'12:00'}"/></div></div>
+    <div class="f" id="le-weeksw" style="margin-top:6px"><label>Which weeks (week 1 = the week of the first Monday, same as your Campaign weeks)</label><div class="checks">${[1,2,3,4,5].map(n=>`<label><input type="checkbox" class="le-wk" value="${n}" ${(((ruleOf(e.id||'')||{}).kind==='nth_week'?ruleOf(e.id).weeks:[1,3])||[]).includes(n)?'checked':''}/> Week ${n}</label>`).join('')}</div></div>
     <div class="f" id="le-notew" style="margin-top:6px"><label>Note on timing (optional, for manual ones)</label><input type="text" id="le-freq" value="${esc(e.freq||'')}" placeholder="Evergreen, update when the nights change…"/></div></div>
   <div class="f"><label>What it is / timing</label><input type="text" id="le-use" value="${esc(e.use||'')}" placeholder="Monday post: week theme plus each night"/></div>
   <div class="f"><label>Size</label><input type="text" id="le-size" value="${esc(e.size||'')}" placeholder="1080x1350"/></div>
@@ -1632,7 +1640,8 @@ function openLibEdit(id){
 function ledRule(){
   const k=$('le-rule').value;
   $('le-dayw').style.display=k==='monthly_day'?'':'none';
-  $('le-wdw').style.display=k==='weekday'?'':'none';
+  $('le-wdw').style.display=(k==='weekday'||k==='nth_week')?'':'none';
+  $('le-weeksw').style.display=k==='nth_week'?'':'none';
   $('le-offw').style.display=k==='before_event'?'':'none';
   $('le-timew').style.display=(k==='none'||k==='hq'||k==='silenced')?'none':'';
   $('le-notew').style.display=(k==='none'||k==='silenced')?'':'none';
@@ -1649,6 +1658,7 @@ async function libSaveEdit(){
   else{patch.rule={kind:k,time:$('le-time').value||'12:00'};
     if(k==='monthly_day')patch.rule.day=Math.min(31,Math.max(1,parseInt($('le-day').value)||1));
     if(k==='weekday')patch.rule.weekday=+$('le-wd').value;
+    if(k==='nth_week'){patch.rule.weekday=+$('le-wd').value;patch.rule.weeks=[...document.querySelectorAll('.le-wk:checked')].map(x=>+x.value);if(!patch.rule.weeks.length){toast('Tick at least one week');return;}}
     if(k==='before_event')patch.rule.offsets=$('le-offs').value.split(',').map(x=>parseInt(x.trim())).filter(x=>!isNaN(x)&&x>=0);}
   let id=ledId;
   if(!id){id='c_'+Date.now().toString(36);patch.custom=true;}
