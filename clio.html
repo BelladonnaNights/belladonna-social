@@ -970,19 +970,25 @@ function usedBy(id){
   const types=libList().filter(x=>!x.id.startsWith('cv_')&&(x.canvas===id||x.id===id)).map(x=>x.name);
   return [...types.map(n=>n+' (post type)'),...cats.map(n=>n+' (bank category)')];
 }
+function tplOpenMap(){return (libOv.tplui||{}).open||{};}
 function libCard(t,slot){
   const o=libOv[t.id]||{},isCv=t.id.startsWith('cv_'),isT=isTpl(t),ub=isT?usedBy(t.id):[];
-  const n=vposts.filter(p=>p.type===t.id).length;
-  return `<div class="card">${slot?`<div class="nick" style="color:var(--gold2)">${slot}</div>`:''}${isCv?`<span class="lbl">Template name</span><input type="text" data-lib="${t.id}" data-f="name" value="${esc(t.name)}"/><div class="nick">${esc(t.size)}</div>`:`<h4>${esc(t.name)}</h4><div class="nick">${esc(t.nick)} · ${esc(t.size)}</div>`}
-        <div class="meta">${esc(t.use)}${n?` · ${n} posts`:''}</div>
-        ${isT?`<div class="meta" style="color:var(--gold2)"><b>Used by:</b> ${ub.length?ub.map(esc).join(' · '):'nothing yet (pick this look in a Content Bank category)'}</div>`:''}
-        <span class="lbl">Example image (a finished design Muse tells ChatGPT to copy)</span>
-        ${o.tplImg?`<img src="${esc(o.tplImg)}" alt="" style="width:100%;height:auto;display:block;margin-bottom:6px"/>`:''}
-        <div class="tools" style="margin:0 0 4px"><button class="btn btn-g" type="button" onclick="libUpload('${t.id}')">${o.tplImg?'Replace example':'Upload example'}</button></div>
-        <span class="lbl">Link to template (optional: Canva, Drive, anything)</span><input type="text" data-lib="${t.id}" data-f="link" value="${esc(o.link||'')}" placeholder="https://canva.com/…"/>
-        <span class="lbl">Blank background (only for Make graphic, where Clio draws the text itself)</span><input type="text" data-lib="${t.id}" data-f="bgUrl" value="${esc(o.bgUrl||'')}" placeholder="Set from Make graphic, or paste a link"/>
-        <span class="lbl">Notes</span><input type="text" data-lib="${t.id}" data-f="notes" value="${esc(o.notes||'')}"/>
-        ${o.link?`<div style="margin-top:8px"><a href="${esc(o.link)}" target="_blank" rel="noopener"><button class="btn btn-g" type="button">Open template</button></a></div>`:''}${isCv?`<div style="margin-top:8px"><button class="btn btn-d" type="button" data-act="tpldel" data-arg="${t.id}">Remove template</button></div>`:''}</div>`;
+  const n=vposts.filter(p=>p.type===t.id).length,open=!!tplOpenMap()[t.id];
+  const head=`<div data-act="tplfold" data-arg="${t.id}" style="cursor:pointer"><div style="display:flex;gap:6px;align-items:center"><span style="color:var(--gold2);width:12px">${open?'▾':'▸'}</span><b style="font-weight:600;font-size:.9rem;line-height:1.2">${esc(t.name)}</b></div>${slot?`<div class="nick" style="color:var(--gold2);margin:2px 0 0 18px">${slot}</div>`:''}
+    <div style="margin-top:6px;aspect-ratio:4/5;background:var(--surface3);border:1px solid var(--border);overflow:hidden;display:flex;align-items:center;justify-content:center">${o.tplImg?`<img src="${esc(o.tplImg)}" alt="" style="width:100%;height:100%;object-fit:contain"/>`:'<span class="meta" style="margin:0">no example yet</span>'}</div></div>`;
+  if(!open)return `<div class="card" style="padding:10px">${head}</div>`;
+  return `<div class="card" style="grid-column:1/-1">${head}
+    <div style="margin-top:10px;max-width:640px">
+    <div class="f2"><div class="f"><label>Template name</label><input type="text" data-lib="${t.id}" data-f="name" value="${esc(t.name)}"/></div><div class="f"><label>Nickname (short label)</label><input type="text" data-lib="${t.id}" data-f="nick" value="${esc(t.nick||'')}"/></div></div>
+    <div class="f2"><div class="f"><label>Size</label><input type="text" data-lib="${t.id}" data-f="size" value="${esc(t.size||'')}" placeholder="1080x1350"/></div><div class="f"><label>What it is / when it's used</label><input type="text" data-lib="${t.id}" data-f="use" value="${esc(t.use||'')}"/></div></div>
+    ${isT?`<div class="meta" style="color:var(--gold2)"><b>Used by:</b> ${ub.length?ub.map(esc).join(' · '):'nothing yet (pick this look in a Content Bank category)'}</div>`:''}
+    ${n?`<div class="meta">${n} posts on the calendar</div>`:''}
+    <span class="lbl">Example image (a finished design Muse tells ChatGPT to copy)</span>
+    <div class="tools" style="margin:0 0 4px"><button class="btn btn-g" type="button" onclick="libUpload('${t.id}')">${o.tplImg?'Replace example':'Upload example'}</button></div>
+    <span class="lbl">Link to template (optional: Canva, Drive, anything)</span><input type="text" data-lib="${t.id}" data-f="link" value="${esc(o.link||'')}" placeholder="https://canva.com/…"/>
+    <span class="lbl">Blank background (only for Make graphic, where Clio draws the text itself)</span><input type="text" data-lib="${t.id}" data-f="bgUrl" value="${esc(o.bgUrl||'')}" placeholder="Set from Make graphic, or paste a link"/>
+    <span class="lbl">Notes</span><input type="text" data-lib="${t.id}" data-f="notes" value="${esc(o.notes||'')}"/>
+    <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">${o.link?`<a href="${esc(o.link)}" target="_blank" rel="noopener"><button class="btn btn-g" type="button">Open template</button></a>`:''}${isCv?`<button class="btn btn-d" type="button" data-act="tpldel" data-arg="${t.id}">Remove template</button>`:''}</div></div></div>`;
 }
 const MONTHLY_SET=[['mcover','Slide 1 of 3'],['monthly','Slide 2 of 3'],['sched','Slide 3 of 3']];
 const GROUP_ORDER=['Monthly','Weekly','Event posts','Nightly stories','After the night','Always on','Canvases'];
@@ -1066,9 +1072,9 @@ function vLibrary(){
   const groups=orderGroups([...new Set(rest.map(e=>e.group||'Other'))]);
   $('view').innerHTML=head('Library','The templates behind your posts. Upload a finished example of each design so Muse can copy it.')+
     (byId.mcover&&byId.monthly&&byId.sched?`<div class="sec">Monthly Announcement · 3 slides · posted on the 25th</div>
-    <div class="card" style="padding:12px;border-color:var(--border-gold)"><div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(250px,1fr))">${setCards}</div></div>`:'')+
+    <div class="card" style="padding:12px;border-color:var(--border-gold)"><div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(170px,1fr))">${setCards}</div></div>`:'')+
     `<div class="bar"><button class="btn btn-p" data-act="tplnew">+ Add a template</button><span class="meta" style="margin:0">One card per template. "Used by" shows which post types and Content Bank categories use it.</span></div>`+
-    groups.map(g=>`<div class="sec">${esc(g)}</div><div class="grid">${rest.filter(e=>(e.group||'Other')===g).map(t=>libCard(t,'')).join('')}</div>`).join('')+
+    groups.map(g=>`<div class="sec">${esc(g)}</div><div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(170px,1fr))">${rest.filter(e=>(e.group||'Other')===g).map(t=>libCard(t,'')).join('')}</div>`).join('')+
     `${libTagsHtml()}
       <div class="card" style="max-width:520px;margin-top:16px"><span class="lbl">Worker address (for image uploads and Buffer sync)</span><input type="text" data-api="1" value="${esc(getApi())}" placeholder="https://clio-api.yourname.workers.dev"/></div>
       <div class="sub" style="margin-top:16px">Finished graphics are stored on your Cloudflare. Set each template's background art here (or from Make graphic) and Clio draws the text on top.</div>`;
@@ -1135,8 +1141,9 @@ function act(a,arg){
   else if(a==='evopen'){openEdit(arg);}
   else if(a==='edtasks')openTasks();
   else if(a==='libnew')openLibEdit(null);
+  else if(a==='tplfold'){const o={...tplOpenMap()};if(o[arg])delete o[arg];else o[arg]=true;saveLib('tplui',{open:o},true).then(render);}
   else if(a==='tplnew'){const nm=(prompt('Name for the new template (e.g. Crow Imagery)')||'').trim();if(!nm)return;
-    saveLib('cv_'+Date.now().toString(36),{custom:true,name:nm,nick:nm,size:'1080x1350',use:'',group:'Canvases',freq:'Template, not a post'}).then(()=>{render();toast('Template added. Upload its example below.');});}
+    {const id='cv_'+Date.now().toString(36);saveLib(id,{custom:true,name:nm,nick:nm,size:'1080x1350',use:'',group:'Canvases',freq:'Template, not a post'}).then(()=>saveLib('tplui',{open:{...tplOpenMap(),[id]:true}},true)).then(()=>{render();toast('Template added: fill in its details and upload an example.');});}}
   else if(a==='tpldel'){const t=libList().find(x=>x.id===arg);if(!t)return;const ub=usedBy(arg);
     if(!confirm('Remove "'+t.name+'"?'+(ub.length?'\n\nStill used by: '+ub.join(', ')+'\nThose will fall back to No template.':'')))return;
     saveLib(arg,{deleted:true}).then(async()=>{if(ub.length){const cats=bankData();Object.values(cats).forEach(c=>{if(c.canvas===arg)c.canvas='';});await saveLib('bank',{cats});}render();});}
