@@ -1896,7 +1896,7 @@ function vBank(){
     <div class="f"><label>Look</label><select data-bk="${c}" data-f="canvas"><option value="">None</option>${cvs.map(x=>`<option value="${x.id}" ${v.canvas===x.id?'selected':''}>${esc(x.name)}</option>`).join('')}</select></div>
     <div class="f"><label>Prompt notes (added to "Copy prompt + these" for this category)</label><textarea data-bx="${c}|pnotes" style="min-height:70px" placeholder="Extra instructions this category always needs, e.g. Two sentences per post: sentence one goes on the top of the PNG, sentence two goes on the bottom.">${esc(v.pnotes||'')}</textarea></div>
     <div class="f"><label>Make now (what you want made this time)</label><textarea id="bkq-${c}" data-bx="${c}|queue" style="min-height:90px" placeholder="Press + next to a saved line below, or type here">${esc(v.queue||'')}</textarea>
-      <div class="tools" style="margin:6px 0 0"><button class="btn btn-gold" data-md="bkcopyq" data-arg="${c}">Copy prompt + these</button><button class="btn btn-g" data-md="bkcopyqo" data-arg="${c}">Copy just these</button><button class="btn btn-g" data-md="bkqclear" data-arg="${c}">Clear</button></div></div>
+      <div class="tools" style="margin:6px 0 0"><button class="btn btn-gold" data-md="bkcopyq" data-arg="${c}">Copy prompt + these</button><button class="btn btn-g" data-md="bkcopyqo" data-arg="${c}">Copy just these</button><button class="btn btn-g" data-md="bkcopypn" data-arg="${c}">Copy prompt notes</button><button class="btn btn-g" data-md="bkqclear" data-arg="${c}">Clear</button></div></div>
     <div class="meta">${un} unused ready to post</div>
     ${its.map(x=>`<div style="display:flex;gap:8px;align-items:center;margin-bottom:5px"><input type="checkbox" data-act="bkused" data-arg="${c}|${x.id}" ${x.used?'checked':''} style="width:17px;height:17px" title="Mark used"/><input type="text" data-bi="${c}|${x.id}" value="${esc(x.t)}" style="${x.used?'opacity:.45;text-decoration:line-through':''}"/><button class="btn btn-g" data-md="bkq" data-arg="${c}|${x.id}" style="padding:4px 12px" title="Add to Make now">+</button><button class="btn btn-d" data-act="bkdel" data-arg="${c}|${x.id}" style="padding:4px 10px">×</button></div>`).join('')}
     <div class="f" style="margin-top:8px"><label>Add (one per line)</label><textarea id="bkadd-${c}" style="min-height:60px" placeholder="Paste or type posts, one on each line"></textarea>
@@ -1942,6 +1942,7 @@ function mdAct(el){
   const a=el.dataset.md,arg=el.dataset.arg;
   if(a==='bkq'){const h=bankFind(arg);if(!h)return;const ta=$('bkq-'+h.c);const cur=ta.value.replace(/\s+$/,'');ta.value=(cur?cur+'\n':'')+h.item.t;bankField(h.c,'queue',ta.value);toast('Added to Make now');}
   else if(a==='bkqclear'){const ta=$('bkq-'+arg);ta.value='';bankField(arg,'queue','');}
+  else if(a==='bkcopypn'){const el=document.querySelector('[data-bx="'+arg+'|pnotes"]'),t=((el?el.value:(bankData()[arg]||{}).pnotes)||'').trim();if(!t){toast('No prompt notes yet for this category');return;}copyTxt(t);}
   else if(a==='bkcopyqo')copyTxt($('bkq-'+arg).value.trim());
   else if(a==='bkcopyx')copyTxt($('bkx-'+arg).value.trim());
   else if(a==='bkcopyp')copyTxt($('bkmp').value.trim());
