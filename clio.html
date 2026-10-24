@@ -1878,9 +1878,12 @@ function vBank(){
   $('view').innerHTML=head('Content Bank','All your post text in one place, by category. Press + on a line to add it to that category\'s "Make now" paragraph, then copy it into ChatGPT with the Muse prompt.')+
 `<div class="bar"><button class="btn btn-p" data-act="bknew">+ New category</button><button class="btn btn-g" data-act="bkopenall">Open all</button><button class="btn btn-g" data-act="bkcloseall">Close all</button><span class="meta" style="margin:0">${tot} unused ready to post</span></div>`+
   (()=>{let last=null;const ord=[...cvs.map(x=>x.id),''],ix=k=>{const i=ord.indexOf(k||'');return i<0?ord.length:i;};
+  const withCats=new Set(Object.values(cats).map(v=>ord.includes(v.canvas||'')?(v.canvas||''):'')),done=new Set();
+  const H=k=>{done.add(k);const cvd=cvs.find(x=>x.id===k);return `<div class="monthh" style="font-size:1.1rem;margin:20px 0 8px;display:flex;align-items:center;gap:10px">${cvd&&(libOv[cvd.id]||{}).tplImg?`<img src="${esc(libOv[cvd.id].tplImg)}" alt="" style="width:30px;height:38px;object-fit:contain;background:var(--surface3);border:1px solid var(--border2);border-radius:4px" onerror="this.style.display='none'"/>`:''}<span>${esc(cvd?cvd.name:'No template')}</span></div>`+(cvd?`<div class="tools" style="margin:0 0 8px"><button class="btn btn-g" data-act="bknewt" data-arg="${k}">+ Add a category to ${esc(cvd.name)}</button>${withCats.has(k)?'':'<span class="meta" style="margin:0">No categories yet</span>'}</div>`:'');};
+  const emptyBefore=ixk=>cvs.map(x=>x.id).filter(k=>!withCats.has(k)&&!done.has(k)&&ix(k)<ixk).map(H).join('');
   return Object.entries(cats).sort((a,b)=>ix(a[1].canvas)-ix(b[1].canvas)).map(([c,v])=>{
     const cvk=ord.includes(v.canvas||'')?(v.canvas||''):'',cvd=cvs.find(x=>x.id===cvk);
-    const hdr=cvk!==last?(last=cvk,`<div class="monthh" style="font-size:1.1rem;margin:20px 0 8px;display:flex;align-items:center;gap:10px">${cvd&&(libOv[cvd.id]||{}).tplImg?`<img src="${esc(libOv[cvd.id].tplImg)}" alt="" style="width:30px;height:38px;object-fit:contain;background:var(--surface3);border:1px solid var(--border2);border-radius:4px" onerror="this.style.display='none'"/>`:''}<span>${esc(cvd?cvd.name:'No template')}</span></div>`):'';
+    const hdr=cvk!==last?(last=cvk,emptyBefore(ix(cvk))+H(cvk)):'';
     const its=v.items||[],un=its.filter(x=>!x.used).length;
     const open=!!((libOv.bank||{}).open||{})[c],qn=(v.queue||'').split('\n').filter(x=>x.trim()).length;
     return hdr+`<div class="card"><div data-act="bkfold" data-arg="${c}" style="cursor:pointer;display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span style="color:var(--gold2);width:14px">${open?'▾':'▸'}</span><b style="font-weight:600">${esc(v.name)}</b>${v.badge?`<span class="nick">${esc(v.badge)}</span>`:''}<span class="has" style="display:inline;margin-left:auto">${un} unused${qn?' · '+qn+' in Make now':''}</span></div>
@@ -1897,7 +1900,7 @@ function vBank(){
     <div class="f"><label>Used / Examples (copy this into ChatGPT for more ideas)</label><textarea id="bkx-${c}" data-bx="${c}|examples" style="min-height:90px" placeholder="Paste posts you've used or examples you like, as a paragraph or list">${esc(v.examples||'')}</textarea>
       <div class="tools" style="margin:6px 0 0"><button class="btn btn-g" data-md="bkcopyx" data-arg="${c}">Copy</button><button class="btn btn-gold" data-md="bkcopyb" data-arg="${c}">Copy brainstorm prompt</button></div></div>
     <div class="acts" style="margin-top:0"><button class="btn btn-d" data-act="bkcatdel" data-arg="${c}">Delete category</button></div></div>`:''}</div>`;
-  }).join('');})()+
+  }).join('')+cvs.map(x=>x.id).filter(k=>!done.has(k)).map(H).join('');})()+
 `<div class="card" style="border-color:var(--border-gold)"><div class="f" style="margin-bottom:6px"><label>Brainstorming prompt for ChatGPT (editable: goes first when you press "Copy brainstorm prompt" on a category)</label><textarea id="bkbp" data-bbp="1" style="min-height:200px">${esc(brainPrompt())}</textarea></div>
     <div class="tools" style="margin:0"><button class="btn btn-gold" data-md="bkcopybp">Copy prompt</button><button class="btn btn-g" data-md="bkresetbp">Reset to the original</button></div></div>
   <div class="card" style="border-color:var(--border-gold)"><div class="f" style="margin-bottom:6px"><label>Design prompt for ChatGPT, makes the PNGs from your template (editable: goes first when you press "Copy prompt + these")</label><textarea id="bkmp" data-bmp="1" style="min-height:240px">${esc(bankPrompt())}</textarea></div>
@@ -1909,6 +1912,7 @@ function bankAct(a,arg){
   if(a==='bkopenall'){const o={};Object.keys(bankData()).forEach(k=>o[k]=true);saveLib('bank',{open:o},true).then(render);return;}
   if(a==='bkcloseall'){saveLib('bank',{open:{}},true).then(render);return;}
   const cats=bankData();
+  if(a==='bknewt'){const id='k'+Date.now().toString(36);cats[id]={name:'New category',canvas:arg,badge:'',items:[]};open[id]=true;saveLib('bank',{cats,open}).then(render);return;}
   if(a==='bknew'){const id='k'+Date.now().toString(36);cats[id]={name:'New category',canvas:'',badge:'',items:[]};open[id]=true;saveLib('bank',{cats,open}).then(render);return;}
   else if(a==='bkadd'){const el=$('bkadd-'+arg);const L=(el.value||'').split('\n').map(x=>x.trim()).filter(Boolean);if(!L.length){toast('Type or paste something first');return;}
     L.forEach((t,i)=>cats[arg].items.push({id:'i'+Date.now().toString(36)+i,t,used:false}));}
