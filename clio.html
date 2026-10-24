@@ -143,6 +143,7 @@ select:focus,input:focus,textarea:focus{outline:none;border-color:var(--gold);}
 .tools{display:flex;gap:8px;margin:2px 0 10px;flex-wrap:wrap}
 .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(90px);background:var(--gold);color:var(--btn-text);font-size:11px;font-weight:700;padding:8px 20px;border-radius:999px;transition:transform .22s;pointer-events:none;z-index:999;font-family:var(--cinzel);letter-spacing:.08em;text-transform:uppercase;max-width:90vw;text-align:center;}
 .toast.show{transform:translateX(-50%) translateY(0)}
+.dropz{outline:2px dashed var(--gold);outline-offset:4px;border-radius:6px}
 .ggrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:3px;max-width:520px}
 .gt{position:relative;aspect-ratio:3/4;background:linear-gradient(160deg,var(--surface3),var(--surface));border:1px solid var(--border);overflow:hidden;cursor:pointer}
 .gt:hover{border-color:var(--border-gold)}
@@ -974,13 +975,14 @@ function tplOpenMap(){return (libOv.tplui||{}).open||{};}
 function libCard(t,slot){
   const o=libOv[t.id]||{},isCv=t.id.startsWith('cv_'),isT=isTpl(t),ub=isT?usedBy(t.id):[];
   const n=vposts.filter(p=>p.type===t.id).length,open=!!tplOpenMap()[t.id];
-  const head=`<div data-act="tplfold" data-arg="${t.id}" style="cursor:pointer"><div style="display:flex;gap:6px;align-items:center"><span style="color:var(--gold2);width:12px">${open?'▾':'▸'}</span><b style="font-weight:600;font-size:.9rem;line-height:1.2">${esc(t.name)}</b></div>${slot?`<div class="nick" style="color:var(--gold2);margin:2px 0 0 18px">${slot}</div>`:''}
+  const head=`<div data-act="tplfold" data-arg="${t.id}" data-tid="${t.id}" draggable="true" style="cursor:pointer"><div style="display:flex;gap:6px;align-items:center"><span style="color:var(--gold2);width:12px">${open?'▾':'▸'}</span><b style="font-weight:600;font-size:.9rem;line-height:1.2">${esc(t.name)}</b></div>${slot?`<div class="nick" style="color:var(--gold2);margin:2px 0 0 18px">${slot}</div>`:''}
     <div style="margin-top:6px;aspect-ratio:4/5;background:var(--surface3);border:1px solid var(--border);overflow:hidden;display:flex;align-items:center;justify-content:center">${o.tplImg?`<img src="${esc(o.tplImg)}" alt="" style="width:100%;height:100%;object-fit:contain"/>`:'<span class="meta" style="margin:0">no example yet</span>'}</div></div>`;
   if(!open)return `<div class="card" style="padding:10px">${head}</div>`;
   return `<div class="card" style="grid-column:1/-1">${head}
     <div style="margin-top:10px;max-width:640px">
     <div class="f2"><div class="f"><label>Template name</label><input type="text" data-lib="${t.id}" data-f="name" value="${esc(t.name)}"/></div><div class="f"><label>Nickname (short label)</label><input type="text" data-lib="${t.id}" data-f="nick" value="${esc(t.nick||'')}"/></div></div>
     <div class="f2"><div class="f"><label>Size</label><input type="text" data-lib="${t.id}" data-f="size" value="${esc(t.size||'')}" placeholder="1080x1350"/></div><div class="f"><label>What it is / when it's used</label><input type="text" data-lib="${t.id}" data-f="use" value="${esc(t.use||'')}"/></div></div>
+    <div class="f"><label>Section</label><select data-lib="${t.id}" data-f="group">${tplSections().map(g=>`<option value="${esc(g)}" ${(t.group||'Other')===g?'selected':''}>${esc(g)}</option>`).join('')}</select></div>
     ${isT?`<div class="meta" style="color:var(--gold2)"><b>Used by:</b> ${ub.length?ub.map(esc).join(' · '):'nothing yet (pick this look in a Content Bank category)'}</div>`:''}
     ${n?`<div class="meta">${n} posts on the calendar</div>`:''}
     <span class="lbl">Example image (a finished design Muse tells ChatGPT to copy)</span>
@@ -1065,16 +1067,18 @@ function vCadence(){
   $('view').innerHTML=head('Cadence','What you post and when. Clio creates the posts from these frequencies.')+cadenceHtml();
 }
 const MONTHLY_SET_IDS=['mcover','monthly','sched'];
+function tplSections(){
+  const present=orderGroups([...new Set(tplList().map(e=>e.group||'Other'))]),saved=(libOv.tplui||{}).sections;
+  if(!Array.isArray(saved))return present;
+  return [...saved,...present.filter(g=>!saved.includes(g))];
+}
 function vLibrary(){
-  const L=libList(),byId=Object.fromEntries(L.map(e=>[e.id,e]));
-  const setCards=MONTHLY_SET.filter(([id])=>byId[id]).map(([id,slot])=>libCard(byId[id],slot)).join('');
-  const rest=L.filter(e=>(!MONTHLY_SET_IDS.includes(e.id)||!byId.mcover||!byId.monthly||!byId.sched)&&!(!e.id.startsWith('cv_')&&(e.canvas||e.id==='crowd')));
-  const groups=orderGroups([...new Set(rest.map(e=>e.group||'Other'))]);
-  $('view').innerHTML=head('Library','The templates behind your posts. Upload a finished example of each design so Muse can copy it.')+
-    (byId.mcover&&byId.monthly&&byId.sched?`<div class="sec">Monthly Announcement · 3 slides · posted on the 25th</div>
-    <div class="card" style="padding:12px;border-color:var(--border-gold)"><div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(170px,1fr))">${setCards}</div></div>`:'')+
-    `<div class="bar"><button class="btn btn-p" data-act="tplnew">+ Add a template</button><span class="meta" style="margin:0">One card per template. "Used by" shows which post types and Content Bank categories use it.</span></div>`+
-    groups.map(g=>`<div class="sec">${esc(g)}</div><div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(170px,1fr))">${rest.filter(e=>(e.group||'Other')===g).map(t=>libCard(t,'')).join('')}</div>`).join('')+
+  const T=tplList(),secs=tplSections(),slot=Object.fromEntries(MONTHLY_SET);
+  $('view').innerHTML=head('Library','The templates behind your posts. Upload a finished example of each design so Muse can copy it. Drag a template onto a section to move it.')+
+    `<div class="bar"><button class="btn btn-p" data-act="tplnew">+ Add a template</button><button class="btn btn-g" data-act="secnew">+ Add a section</button></div>`+
+    secs.map((g,ix)=>{const its=T.filter(e=>(e.group||'Other')===g);
+      return `<div data-sec="${esc(g)}" style="margin-bottom:6px"><div class="sec" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><input type="text" data-secn="${esc(g)}" value="${esc(g)}" style="width:auto;min-width:140px;max-width:260px;font-family:var(--cinzel);letter-spacing:.12em;text-transform:uppercase"/><span class="meta" style="margin:0">${its.length} template${its.length===1?'':'s'}</span><button class="btn btn-g" type="button" data-act="secup" data-arg="${esc(g)}" ${ix?'':'disabled'}>↑</button><button class="btn btn-g" type="button" data-act="secdn" data-arg="${esc(g)}" ${ix<secs.length-1?'':'disabled'}>↓</button><button class="btn btn-d" type="button" data-act="secdel" data-arg="${esc(g)}">Delete section</button></div>
+      <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(170px,1fr));min-height:50px">${its.length?its.map(t=>libCard(t,slot[t.id]||'')).join(''):'<div class="meta" style="margin:0">Empty. Drag a template here.</div>'}</div></div>`;}).join('')+
     `${libTagsHtml()}
       <div class="card" style="max-width:520px;margin-top:16px"><span class="lbl">Worker address (for image uploads and Buffer sync)</span><input type="text" data-api="1" value="${esc(getApi())}" placeholder="https://clio-api.yourname.workers.dev"/></div>
       <div class="sub" style="margin-top:16px">Finished graphics are stored on your Cloudflare. Set each template's background art here (or from Make graphic) and Clio draws the text on top.</div>`;
@@ -1095,6 +1099,10 @@ $('view').addEventListener('click',e=>{
   const row=e.target.closest('.row,.gt');
   if(row)openEdit(row.dataset.id);
 });
+$('view').addEventListener('dragstart',e=>{const t=e.target.closest&&e.target.closest('[data-tid]');if(t){e.dataTransfer.setData('text/plain',t.dataset.tid);e.dataTransfer.effectAllowed='move';}});
+$('view').addEventListener('dragover',e=>{const z=e.target.closest&&e.target.closest('[data-sec]');if(z){e.preventDefault();document.querySelectorAll('.dropz').forEach(x=>x!==z&&x.classList.remove('dropz'));z.classList.add('dropz');}});
+$('view').addEventListener('drop',e=>{const z=e.target.closest&&e.target.closest('[data-sec]');if(!z)return;e.preventDefault();z.classList.remove('dropz');const id=e.dataTransfer.getData('text/plain');if(!id||(libList().find(x=>x.id===id)||{}).group===z.dataset.sec)return;saveLib(id,{group:z.dataset.sec}).then(render);});
+$('view').addEventListener('dragend',()=>document.querySelectorAll('.dropz').forEach(x=>x.classList.remove('dropz')));
 $('tabs').addEventListener('click',e=>{const a=e.target.closest('[data-act]');if(a)act(a.dataset.act,a.dataset.arg);});
 document.querySelector('.nav').addEventListener('click',e=>{const a=e.target.closest('[data-act]');if(a&&a.dataset.act!=='tab')act(a.dataset.act,a.dataset.arg);});
 document.addEventListener('keydown',e=>{if(e.key==='Enter'&&(e.target.id==='si-pw'||e.target.id==='si-id'))signIn();});
@@ -1108,7 +1116,11 @@ $('view').addEventListener('change',e=>{
   else if(e.target.dataset.ts){const S={...getTagSets()},id=e.target.dataset.ts;if(S[id]){S[id]={...S[id],[e.target.dataset.f]:e.target.value.trim()};saveTagSets(S);}}
   else if(e.target.dataset.kind){const p=posts.find(x=>x.id===e.target.dataset.kind);if(p)persist({...p,evKind:e.target.value});}
   else if(e.target.dataset.api){const u=normApi(e.target.value);if(u||!e.target.value.trim()){setApi(u);}else toast('That does not look like an address');}
-  else if(e.target.dataset.lib)saveLib(e.target.dataset.lib,{[e.target.dataset.f]:e.target.value.trim()}).then(render);
+  else if(e.target.dataset.secn!==undefined){const old=e.target.dataset.secn,nm=e.target.value.trim();if(!nm||nm===old){render();return;}
+    const sc=tplSections();if(sc.includes(nm)){toast('That section name is taken');render();return;}
+    (async()=>{for(const t of tplList().filter(x=>(x.group||'Other')===old))await saveLib(t.id,{group:nm},true);await saveLib('tplui',{sections:sc.map(g=>g===old?nm:g)},true);render();})();}
+  else if(e.target.dataset.lib){if(e.target.tagName==='SELECT'){e.target.blur();editing=false;pendingRender=false;}saveLib(e.target.dataset.lib,{[e.target.dataset.f]:e.target.value.trim()}).then(render);}
+  else if(0)saveLib(e.target.dataset.lib,{[e.target.dataset.f]:e.target.value.trim()}).then(render);
   else if(e.target.dataset.bx){const[c,f]=e.target.dataset.bx.split('|');bankField(c,f,e.target.value);}
   else if(e.target.dataset.bmp)bankPromptSave(e.target.value);
   else if(e.target.dataset.bbp)brainPromptSave(e.target.value);
@@ -1141,6 +1153,12 @@ function act(a,arg){
   else if(a==='evopen'){openEdit(arg);}
   else if(a==='edtasks')openTasks();
   else if(a==='libnew')openLibEdit(null);
+  else if(a==='secnew'){const nm=(prompt('Name for the new section')||'').trim();if(!nm)return;const sc=tplSections();if(sc.includes(nm)){toast('That section already exists');return;}
+    saveLib('tplui',{sections:[...sc,nm]},true).then(render);}
+  else if(a==='secup'||a==='secdn'){const sc=tplSections(),i=sc.indexOf(arg),k=a==='secup'?i-1:i+1;if(i<0||k<0||k>=sc.length)return;[sc[i],sc[k]]=[sc[k],sc[i]];saveLib('tplui',{sections:sc},true).then(render);}
+  else if(a==='secdel'){const its=tplList().filter(e=>(e.group||'Other')===arg);
+    if(!confirm('Delete the section "'+arg+'"?'+(its.length?'\n\nIts '+its.length+' template(s) will move to "Other".':'')))return;
+    (async()=>{let sc=tplSections().filter(g=>g!==arg);if(its.length){if(!sc.includes('Other'))sc.push('Other');for(const e of its)await saveLib(e.id,{group:'Other'},true);}await saveLib('tplui',{sections:sc},true);render();})();}
   else if(a==='tplfold'){const o={...tplOpenMap()};if(o[arg])delete o[arg];else o[arg]=true;saveLib('tplui',{open:o},true).then(render);}
   else if(a==='tplnew'){const nm=(prompt('Name for the new template (e.g. Crow Imagery)')||'').trim();if(!nm)return;
     {const id='cv_'+Date.now().toString(36);saveLib(id,{custom:true,name:nm,nick:nm,size:'1080x1350',use:'',group:'Canvases',freq:'Template, not a post'}).then(()=>saveLib('tplui',{open:{...tplOpenMap(),[id]:true}},true)).then(()=>{render();toast('Template added: fill in its details and upload an example.');});}}
@@ -1895,7 +1913,7 @@ function mdAct(el){
     copyTxt($('bkmp').value.trim()+'\n\n'+(cv?'TEMPLATE LOOK: '+cv.name+' (attach your saved example image from Library)\n':'')+(v.badge?'TOP BADGE TEXT: '+v.badge+'\n':'')+((v.pnotes||'').trim()?'\nNOTES FOR THIS CATEGORY:\n'+v.pnotes.trim()+'\n':'')+'\nPOSTS TO MAKE (one PNG each, carousels where there are [brackets]):\n'+q);
   }
 }
-const TYPING='[data-bx],[data-bmp],[data-bbp],[data-ls],[data-lt],[data-lib],[data-ts],[data-ct],[data-bk],[data-bi],[data-stat],[data-ban]',AUTOSAVE='[data-bx],[data-bmp],[data-bbp],[data-ls],[data-lib],[data-ts],[data-ct]';
+const TYPING='[data-secn],[data-bx],[data-bmp],[data-bbp],[data-ls],[data-lt],[data-lib],[data-ts],[data-ct],[data-bk],[data-bi],[data-stat],[data-ban]',AUTOSAVE='[data-bx],[data-bmp],[data-bbp],[data-ls],[data-lib],[data-ts],[data-ct]';
 $('view').addEventListener('input',e=>{
   const t=e.target;if(!t.matches||!t.matches(TYPING))return;
   editing=true;
