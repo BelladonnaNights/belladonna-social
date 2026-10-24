@@ -997,6 +997,7 @@ function usedBy(id){
   const types=libList().filter(x=>!x.id.startsWith('cv_')&&(x.canvas===id||x.id===id)).map(x=>x.name);
   return [...types.map(n=>n+' (post type)'),...cats.map(n=>n+' (bank category)')];
 }
+let bankOrg=false,bdrag=null;
 function tplBankOrder(){
   const L=tplList(),o=(libOv.tplui||{}).bankOrder;if(!Array.isArray(o))return L;
   const ix=id=>{const i=o.indexOf(id);return i<0?1e6:i;};
@@ -1136,6 +1137,20 @@ $('view').addEventListener('dragstart',e=>{const t=e.target.closest&&e.target.cl
 $('view').addEventListener('dragover',e=>{const z=e.target.closest&&e.target.closest('[data-sec]');if(z){e.preventDefault();document.querySelectorAll('.dropz').forEach(x=>x!==z&&x.classList.remove('dropz'));z.classList.add('dropz');}});
 $('view').addEventListener('drop',e=>{const z=e.target.closest&&e.target.closest('[data-sec]');if(!z)return;e.preventDefault();z.classList.remove('dropz');const id=e.dataTransfer.getData('text/plain');if(!id||(libList().find(x=>x.id===id)||{}).group===z.dataset.sec)return;saveLib(id,{group:z.dataset.sec}).then(render);});
 $('view').addEventListener('dragend',()=>document.querySelectorAll('.dropz').forEach(x=>x.classList.remove('dropz')));
+$('view').addEventListener('dragstart',e=>{const c=e.target.closest&&e.target.closest('[data-bcat]');if(c&&bankOrg){bdrag=c.dataset.bcat;e.dataTransfer.setData('text/plain','bcat:'+bdrag);e.dataTransfer.effectAllowed='move';}});
+$('view').addEventListener('dragover',e=>{if(bdrag&&e.target.closest&&e.target.closest('[data-bsec]'))e.preventDefault();});
+$('view').addEventListener('drop',e=>{
+  if(!bdrag)return;const t=e.target.closest&&e.target.closest('[data-bsec]');if(!t)return;e.preventDefault();
+  const c=bdrag;bdrag=null;const k=t.dataset.bsec,before=t.dataset.bcat||null;if(before===c)return;
+  const cats=bankData();if(!cats[c])return;
+  const ordIx=x=>x[1].ord??1e6;
+  const sec=Object.entries(cats).filter(([id,v])=>id!==c&&(v.canvas||'')===k).sort((a,b)=>ordIx(a)-ordIx(b));
+  const list=sec.map(x=>x[0]);const at=before?list.indexOf(before):-1;
+  if(at>=0)list.splice(at,0,c);else list.push(c);
+  cats[c].canvas=k;list.forEach((id,i)=>{cats[id].ord=i*10;});
+  saveBank(cats);
+});
+$('view').addEventListener('dragend',()=>{bdrag=null;});
 $('tabs').addEventListener('click',e=>{const a=e.target.closest('[data-act]');if(a)act(a.dataset.act,a.dataset.arg);});
 document.querySelector('.nav').addEventListener('click',e=>{const a=e.target.closest('[data-act]');if(a&&a.dataset.act!=='tab')act(a.dataset.act,a.dataset.arg);});
 document.addEventListener('keydown',e=>{if(e.key==='Enter'&&(e.target.id==='si-pw'||e.target.id==='si-id'))signIn();});
@@ -1881,19 +1896,20 @@ function vBank(){
   const cats=bankData(),cvs=tplBankOrder();
   const tot=Object.values(cats).reduce((n,c)=>n+(c.items||[]).filter(x=>!x.used).length,0);
   $('view').innerHTML=head('Content Bank','All your post text in one place, by category. Press + on a line to add it to that category\'s "Make now" paragraph, then copy it into ChatGPT with the Muse prompt.')+
-`<div class="bar"><button class="btn btn-p" data-act="bknew">+ New category</button><button class="btn btn-g" data-act="tplnew">+ New template</button><button class="btn btn-g" data-act="bkopenall">Open all</button><button class="btn btn-g" data-act="bkcloseall">Close all</button><span class="meta" style="margin:0">${tot} unused ready to post</span></div>`+
+`<div class="bar"><button class="btn ${bankOrg?'btn-p':'btn-g'}" data-act="bkorg">${bankOrg?'✓ Done organizing':'Organize categories'}</button>${bankOrg?'<button class="btn btn-g" data-act="tplnew">+ New template</button><span class="meta" style="margin:0">Rename anything, drag a category onto another one or onto a template name to move it, use ↑ ↓ to move templates.</span>':`<button class="btn btn-g" data-act="bkopenall">Open all</button><button class="btn btn-g" data-act="bkcloseall">Close all</button><span class="meta" style="margin:0">${tot} unused ready to post</span>`}</div>`+
   (()=>{let last=null;const ord=[...cvs.map(x=>x.id),''],ix=k=>{const i=ord.indexOf(k||'');return i<0?ord.length:i;};
   const withCats=new Set(Object.values(cats).map(v=>ord.includes(v.canvas||'')?(v.canvas||''):'')),done=new Set();
-  const H=k=>{done.add(k);const cvd=cvs.find(x=>x.id===k);return `<div class="monthh" style="font-size:1.1rem;margin:20px 0 8px;display:flex;align-items:center;gap:10px">${cvd&&(libOv[cvd.id]||{}).tplImg?`<img src="${esc(libOv[cvd.id].tplImg)}" alt="" style="width:30px;height:38px;object-fit:contain;background:var(--surface3);border:1px solid var(--border2);border-radius:4px" onerror="this.style.display='none'"/>`:''}${cvd?`<input type="text" data-lib="${cvd.id}" data-f="name" value="${esc(cvd.name)}" style="width:auto;min-width:160px;max-width:280px;font-family:var(--cinzel);letter-spacing:.08em"/><button class="btn btn-g" type="button" data-act="bktup" data-arg="${cvd.id}">↑</button><button class="btn btn-g" type="button" data-act="bktdn" data-arg="${cvd.id}">↓</button>${cvd.id.startsWith('cv_')?`<button class="btn btn-d" type="button" data-act="tpldel" data-arg="${cvd.id}">Remove</button>`:''}`:'<span>No template</span>'}</div>`+(cvd?`<div class="tools" style="margin:0 0 8px"><button class="btn btn-g" data-act="bknewt" data-arg="${k}">+ Add a category to ${esc(cvd.name)}</button>${withCats.has(k)?'':'<span class="meta" style="margin:0">No categories yet</span>'}</div>`:'');};
+  const H=k=>{done.add(k);const cvd=cvs.find(x=>x.id===k),img=cvd&&(libOv[cvd.id]||{}).tplImg;
+    return `<div class="monthh" data-bsec="${esc(k)}" style="font-size:1.1rem;margin:20px 0 8px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">${img?`<img src="${esc(img)}" alt="" style="width:30px;height:38px;object-fit:contain;background:var(--surface3);border:1px solid var(--border2);border-radius:4px" onerror="this.style.display='none'"/>`:''}${cvd?(bankOrg?`<input type="text" data-lib="${cvd.id}" data-f="name" value="${esc(cvd.name)}" style="width:auto;min-width:160px;max-width:280px;font-family:var(--cinzel);letter-spacing:.08em"/><button class="btn btn-g" type="button" data-act="bktup" data-arg="${cvd.id}">↑</button><button class="btn btn-g" type="button" data-act="bktdn" data-arg="${cvd.id}">↓</button>${cvd.id.startsWith('cv_')?`<button class="btn btn-d" type="button" data-act="tpldel" data-arg="${cvd.id}">Remove</button>`:''}`:`<span>${esc(cvd.name)}</span>`):'<span>No template</span>'}${cvd&&!bankOrg?`<button class="btn btn-g" type="button" data-act="bknewt" data-arg="${k}" title="Add a category to ${esc(cvd.name)}" style="padding:2px 12px;font-size:1rem;line-height:1.2">+</button>`:''}${!withCats.has(k)&&cvd?'<span class="meta" style="margin:0">No categories yet</span>':''}</div>`;};
   const emptyBefore=ixk=>cvs.map(x=>x.id).filter(k=>!withCats.has(k)&&!done.has(k)&&ix(k)<ixk).map(H).join('');
-  return Object.entries(cats).sort((a,b)=>ix(a[1].canvas)-ix(b[1].canvas)).map(([c,v])=>{
+  return Object.entries(cats).map((e,i)=>[e,i]).sort((a,b)=>(ix(a[0][1].canvas)-ix(b[0][1].canvas))||((a[0][1].ord??1e6)-(b[0][1].ord??1e6))||(a[1]-b[1])).map(p=>p[0]).map(([c,v])=>{
     const cvk=ord.includes(v.canvas||'')?(v.canvas||''):'',cvd=cvs.find(x=>x.id===cvk);
     const hdr=cvk!==last?(last=cvk,emptyBefore(ix(cvk))+H(cvk)):'';
     const its=v.items||[],un=its.filter(x=>!x.used).length;
     const open=!!((libOv.bank||{}).open||{})[c],qn=(v.queue||'').split('\n').filter(x=>x.trim()).length;
-    return hdr+`<div class="card"><div data-act="bkfold" data-arg="${c}" style="cursor:pointer;display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span style="color:var(--gold2);width:14px">${open?'▾':'▸'}</span><b style="font-weight:600">${esc(v.name)}</b>${v.badge?`<span class="nick">${esc(v.badge)}</span>`:''}<span class="has" style="display:inline;margin-left:auto">${un} unused${qn?' · '+qn+' in Make now':''}</span></div>
-    ${open?`<div style="margin-top:10px"><div class="f2"><div class="f"><label>Category</label><input type="text" data-bk="${c}" data-f="name" value="${esc(v.name)}"/></div><div class="f"><label>Badge on the template</label><input type="text" data-bk="${c}" data-f="badge" value="${esc(v.badge||'')}"/></div></div>
-    <div class="f"><label>Look</label><select data-bk="${c}" data-f="canvas"><option value="">None</option>${cvs.map(x=>`<option value="${x.id}" ${v.canvas===x.id?'selected':''}>${esc(x.name)}</option>`).join('')}</select></div>
+    if(bankOrg)return hdr+`<div class="card" data-bcat="${c}" data-bsec="${esc(cvk)}" draggable="true" style="padding:10px 12px;display:flex;gap:10px;align-items:center"><span style="cursor:grab;color:var(--gold2)" title="Drag to move">⠿</span><input type="text" data-bk="${c}" data-f="name" value="${esc(v.name)}" style="flex:1"/><button class="btn btn-d" data-act="bkcatdel" data-arg="${c}">Delete</button></div>`;
+    return hdr+`<div class="card" data-bcat="${c}" data-bsec="${esc(cvk)}"><div data-act="bkfold" data-arg="${c}" style="cursor:pointer;display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span style="color:var(--gold2);width:14px">${open?'▾':'▸'}</span><b style="font-weight:600">${esc(v.name)}</b>${v.badge?`<span class="nick">${esc(v.badge)}</span>`:''}<span class="has" style="display:inline;margin-left:auto">${un} unused${qn?' · '+qn+' in Make now':''}</span></div>
+    ${open?`<div style="margin-top:10px"><div class="f"><label>Badge on the template</label><input type="text" data-bk="${c}" data-f="badge" value="${esc(v.badge||'')}"/></div>
     <div class="f"><label>Prompt notes (added to "Copy prompt + these" for this category)</label><textarea data-bx="${c}|pnotes" style="min-height:70px" placeholder="Extra instructions this category always needs, e.g. Two sentences per post: sentence one goes on the top of the PNG, sentence two goes on the bottom.">${esc(v.pnotes||'')}</textarea></div>
     <div class="f"><label>Make now (what you want made this time)</label><textarea id="bkq-${c}" data-bx="${c}|queue" style="min-height:90px" placeholder="Press + next to a saved line below, or type here">${esc(v.queue||'')}</textarea>
       <div class="tools" style="margin:6px 0 0"><button class="btn btn-gold" data-md="bkcopyq" data-arg="${c}">Copy prompt + these</button><button class="btn btn-g" data-md="bkcopyqo" data-arg="${c}">Copy just these</button><button class="btn btn-g" data-md="bkcopypn" data-arg="${c}">Copy prompt notes</button><button class="btn btn-g" data-md="bkqclear" data-arg="${c}">Clear</button></div></div>
@@ -1904,7 +1920,7 @@ function vBank(){
     <div class="f"><label>Notes</label><textarea data-bx="${c}|notes" style="min-height:70px" placeholder="Ideas, rules for this category, what works">${esc(v.notes||'')}</textarea></div>
     <div class="f"><label>Used / Examples (copy this into ChatGPT for more ideas)</label><textarea id="bkx-${c}" data-bx="${c}|examples" style="min-height:90px" placeholder="Paste posts you've used or examples you like, as a paragraph or list">${esc(v.examples||'')}</textarea>
       <div class="tools" style="margin:6px 0 0"><button class="btn btn-g" data-md="bkcopyx" data-arg="${c}">Copy</button><button class="btn btn-gold" data-md="bkcopyb" data-arg="${c}">Copy brainstorm prompt</button></div></div>
-    <div class="acts" style="margin-top:0"><button class="btn btn-d" data-act="bkcatdel" data-arg="${c}">Delete category</button></div></div>`:''}</div>`;
+</div>`:''}</div>`;
   }).join('')+cvs.map(x=>x.id).filter(k=>!done.has(k)).map(H).join('');})()+
 `<div class="card" style="border-color:var(--border-gold)"><div class="f" style="margin-bottom:6px"><label>Brainstorming prompt for ChatGPT (editable: goes first when you press "Copy brainstorm prompt" on a category)</label><textarea id="bkbp" data-bbp="1" style="min-height:200px">${esc(brainPrompt())}</textarea></div>
     <div class="tools" style="margin:0"><button class="btn btn-gold" data-md="bkcopybp">Copy prompt</button><button class="btn btn-g" data-md="bkresetbp">Reset to the original</button></div></div>
@@ -1917,6 +1933,7 @@ function bankAct(a,arg){
   if(a==='bkopenall'){const o={};Object.keys(bankData()).forEach(k=>o[k]=true);saveLib('bank',{open:o},true).then(render);return;}
   if(a==='bkcloseall'){saveLib('bank',{open:{}},true).then(render);return;}
   const cats=bankData();
+  if(a==='bkorg'){bankOrg=!bankOrg;render();return;}
   if(a==='bktup'||a==='bktdn'){const ids=tplBankOrder().map(x=>x.id),i=ids.indexOf(arg),k=a==='bktup'?i-1:i+1;if(i<0||k<0||k>=ids.length)return;[ids[i],ids[k]]=[ids[k],ids[i]];saveLib('tplui',{bankOrder:ids},true).then(render);return;}
   if(a==='bknewt'){const id='k'+Date.now().toString(36);cats[id]={name:'New category',canvas:arg,badge:'',items:[]};open[id]=true;saveLib('bank',{cats,open}).then(render);return;}
   if(a==='bknew'){const id='k'+Date.now().toString(36);cats[id]={name:'New category',canvas:'',badge:'',items:[]};open[id]=true;saveLib('bank',{cats,open}).then(render);return;}
