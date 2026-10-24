@@ -638,7 +638,7 @@ function virtualRows(){
     const v=g.venue||'venue',k=g.kind||'night',t=t24(g.time);
     const mk=(code,date,time,type,title)=>{
       const id='g_'+g.id+'_'+code;if(have.has(id))return;
-      if((libOv[type]||{}).silenced)return;
+      if((libOv[type]||{}).silenced||(libOv[type]||{}).deleted)return;
       out.push({id,date,time,type,title,platform:TYPES[type].plat,caption:'',imageUrl:'',notes:(g.host&&g.host!=='Unassigned')?'Host: '+g.host:'',created:false,posted:false,auto:true});
     };
     mk('tonight',g.date,'15:00','tonight','Tonight story: '+v+', '+k+(t?' at '+fmtTime(t):''));
@@ -985,13 +985,13 @@ function freqText(e){
   if(!r.kind||r.kind==='none')return e.freq||'Manual';
   return describeRule(r)+((r.time&&r.kind!=='hq')?' at '+fmtTime(r.time):'');
 }
-function cadRow(e,dim){
+function cadRow(e,dim,restore){
   const img=(libOv[e.id]||{}).tplImg||((e.canvas&&(libOv[e.canvas]||{}).tplImg)||'');
   return `<div class="card" style="padding:10px 12px;margin-bottom:6px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;${dim?'opacity:.55':''}">
       ${img?`<img src="${esc(img)}" alt="" loading="lazy" title="Your example template" style="width:40px;height:50px;object-fit:contain;background:var(--surface3);border:1px solid var(--border2);border-radius:4px;flex-shrink:0" onerror="this.style.display='none'"/>`:''}
       <div style="flex:1;min-width:180px"><div><b style="font-weight:600">${esc(e.name)}</b>${e.nick?` <span class="nick">(${esc(e.nick)})</span>`:''}</div>
       <div class="meta" style="margin:0">${esc(e.use||'')}${e.use?' · ':''}<span style="color:var(--gold2)">${esc(freqText(e))}</span></div></div>
-      <button class="btn btn-g" data-act="libedit" data-arg="${e.id}">Edit</button></div>`;
+      ${restore?`<button class="btn btn-p" data-act="librestore" data-arg="${e.id}">Restore</button>`:`<button class="btn btn-g" data-act="libedit" data-arg="${e.id}">Edit</button>`}</div>`;
 }
 function cadTop(){
   return `<div class="sub" style="margin:0 0 8px">Everything you post on a rhythm, grouped. Each line has a Frequency (like “every Monday” or “7, 3 days before and the day of each big night”), and Clio creates the posts for the next 60 days from it. Change a frequency and the new posts follow it. Posts already on your calendar are never duplicated or moved. Silenced ones are turned off and sit at the bottom.</div>
@@ -1040,11 +1040,12 @@ function cadCalHtml(){
 function cadenceHtml(){
   const all=libList().filter(e=>!e.id.startsWith('cv_')),L=all.filter(e=>!e.silenced),sil=all.filter(e=>e.silenced),groups=orderGroups([...new Set(L.map(e=>e.group||'Other'))]);
   const modes=`<div class="bar"><button class="chip ${cadModeNow()==='list'?'on':''}" data-act="cadmode" data-arg="list">List</button><button class="chip ${cadModeNow()==='cal'?'on':''}" data-act="cadmode" data-arg="cal">Calendar view</button></div>`;
+  const hid=libList(true).filter(e=>e.deleted&&!e.id.startsWith('cv_'));
   if(cadModeNow()==='cal')return modes+cadTop()+cadCalHtml();
   return modes+cadTop()+
   groups.map(g=>`<div class="monthh" style="font-size:1.1rem;margin:14px 0 6px">${esc(g)}</div>`+L.filter(e=>(e.group||'Other')===g).map(e=>cadRow(e,false)).join('')).join('')+
   (sil.length?`<div class="monthh" style="font-size:1.1rem;margin:22px 0 6px">Silenced (turned off)</div>`+sil.map(e=>cadRow(e,true)).join(''):'')+
-  (libList(true).some(e=>e.deleted)?`<div class="meta" style="margin-top:10px">Hidden: ${libList(true).filter(e=>e.deleted).map(e=>`${esc(e.name)} <button class="chip" data-act="librestore" data-arg="${e.id}">Restore</button>`).join(' ')}</div>`:'');
+  (hid.length?`<div class="monthh" style="font-size:1.1rem;margin:22px 0 6px">Hidden</div>`+hid.map(e=>cadRow(e,true,true)).join(''):'');
 }
 function vCadence(){
   $('view').innerHTML=head('Cadence','What you post and when. Clio creates the posts from these frequencies.')+cadenceHtml();
@@ -1711,11 +1712,20 @@ async function libSaveEdit(){
   let id=ledId;
   if(!id){id='c_'+Date.now().toString(36);patch.custom=true;}
   await saveLib(id,patch);$('led').classList.remove('show');render();
+  if(k==='silenced')await offerClear(id);
 }
 async function libHide(){
   const e=libList(true).find(x=>x.id===ledId);if(!e)return;
   if(!confirm((e.custom?'Delete':'Hide')+' "'+e.name+'"?'))return;
-  await saveLib(ledId,{deleted:true});$('led').classList.remove('show');render();
+  const hid=ledId;await saveLib(hid,{deleted:true});$('led').classList.remove('show');render();
+  await offerClear(hid);
+}
+async function offerClear(id){
+  const e=libList(true).find(x=>x.id===id),L=posts.filter(p=>p.type===id&&p.gen&&!p.posted&&p.date>=todayStr());
+  if(!e||!L.length)return;
+  if(!confirm('Also delete the '+L.length+' upcoming post'+(L.length>1?'s':'')+' Clio already created for "'+e.name+'"? Posts you made yourself are not touched.'))return;
+  for(const p of L)await removePost(p.id);
+  toast(L.length+' removed from the calendar');
 }
 
 /* ── CONTENT BANK: all your post text, by category ── */
