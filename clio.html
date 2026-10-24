@@ -49,6 +49,7 @@ input[type=checkbox]{accent-color:var(--gold);}
 body.menu-open #navmenu{display:block}
 #navmenu .tab{display:block;width:100%;text-align:left;padding:13px 4px;border-bottom:1px solid var(--border)}
 #navmenu .tab.on{border-bottom-color:var(--gold)}
+.curtab{font-family:var(--cinzel);font-size:.7rem;letter-spacing:.14em;text-transform:uppercase;color:var(--gold);font-weight:600;white-space:nowrap;flex-shrink:0}
 .mode{font-family:var(--cinzel);font-size:9px;letter-spacing:.08em;text-transform:uppercase;padding:3px 10px;border-radius:999px;border:1px solid var(--border2);color:var(--text3);white-space:nowrap;flex-shrink:0;}
 .mode.cloud{color:var(--live);border-color:var(--live);}
 .mode.local{color:var(--gold);border-color:var(--border-gold);}
@@ -157,6 +158,7 @@ select:focus,input:focus,textarea:focus{outline:none;border-color:var(--gold);}
 <nav class="nav">
   <div class="logo-group"><div class="logo">Belladonna</div><div class="logo-sub">Clio</div></div>
   <div class="tabs" id="tabs"></div>
+  <span class="curtab" id="curtab"></span>
   <span class="mode" id="mode">…</span>
   <button class="btn btn-g" id="th" data-act="theme">☀ Light</button>
   <button class="btn btn-g" id="so" data-act="signout" style="display:none">Sign out</button>
@@ -692,6 +694,7 @@ function render(){
   const tabBtns=TABS.map(([k,l])=>`<button class="tab ${tab===k?'on':''}" data-act="tab" data-arg="${k}">${l}</button>`).join('');
   $('tabs').innerHTML=tabBtns;
   $('navmenu').innerHTML=tabBtns+`<button class="tab" data-act="theme">${document.documentElement.getAttribute('data-theme')==='light'?'☾ Dark mode':'☀ Light mode'}</button>`+((mode==='cloud'&&user)?'<button class="tab" data-act="signout">Sign out</button>':'');
+  $('curtab').textContent=(TABS.find(t=>t[0]===tab)||[0,tab==='events'?'All events':''])[1];
   fitNav();
   if(!posts.length)banner(`Clio's calendar is empty. <button class="btn btn-p" data-act="seed">Load my 2026–2027 calendars (${buildSeed().length} rows)</button>`);
   else if($('banner').querySelector('.banner:not(.err)'))banner('');
@@ -1797,15 +1800,14 @@ function vBank(){
   const cats=bankData(),cvs=libList().filter(x=>x.id.startsWith('cv_'));
   const tot=Object.values(cats).reduce((n,c)=>n+(c.items||[]).filter(x=>!x.used).length,0);
   $('view').innerHTML=head('Content Bank','All your post text in one place, by category. Press + on a line to add it to that category\'s "Make now" paragraph, then copy it into ChatGPT with the Muse prompt.')+
-  `<div class="card" style="border-color:var(--border-gold)"><div class="f" style="margin-bottom:6px"><label>Brainstorming prompt for ChatGPT (editable: goes first when you press "Copy brainstorm prompt" on a category)</label><textarea id="bkbp" data-bbp="1" style="min-height:200px">${esc(brainPrompt())}</textarea></div>
-    <div class="tools" style="margin:0"><button class="btn btn-gold" data-md="bkcopybp">Copy prompt</button><button class="btn btn-g" data-md="bkresetbp">Reset to the original</button></div></div>
-  <div class="card" style="border-color:var(--border-gold)"><div class="f" style="margin-bottom:6px"><label>Design prompt for ChatGPT, makes the PNGs from your template (editable: goes first when you press "Copy prompt + these")</label><textarea id="bkmp" data-bmp="1" style="min-height:240px">${esc(bankPrompt())}</textarea></div>
-    <div class="tools" style="margin:0"><button class="btn btn-gold" data-md="bkcopyp">Copy prompt</button><button class="btn btn-g" data-md="bkresetp">Reset to the original</button></div></div>
-  <div class="bar"><button class="btn btn-p" data-act="bknew">+ New category</button><button class="btn btn-g" data-act="bkopenall">Open all</button><button class="btn btn-g" data-act="bkcloseall">Close all</button><span class="meta" style="margin:0">${tot} unused ready to post</span></div>`+
-  Object.entries(cats).map(([c,v])=>{
+`<div class="bar"><button class="btn btn-p" data-act="bknew">+ New category</button><button class="btn btn-g" data-act="bkopenall">Open all</button><button class="btn btn-g" data-act="bkcloseall">Close all</button><span class="meta" style="margin:0">${tot} unused ready to post</span></div>`+
+  (()=>{let last=null;const ord=[...cvs.map(x=>x.id),''],ix=k=>{const i=ord.indexOf(k||'');return i<0?ord.length:i;};
+  return Object.entries(cats).sort((a,b)=>ix(a[1].canvas)-ix(b[1].canvas)).map(([c,v])=>{
+    const cvk=ord.includes(v.canvas||'')?(v.canvas||''):'',cvd=cvs.find(x=>x.id===cvk);
+    const hdr=cvk!==last?(last=cvk,`<div class="monthh" style="font-size:1.1rem;margin:20px 0 8px;display:flex;align-items:center;gap:10px">${cvd&&(libOv[cvd.id]||{}).tplImg?`<img src="${esc(libOv[cvd.id].tplImg)}" alt="" style="width:30px;height:38px;object-fit:contain;background:var(--surface3);border:1px solid var(--border2);border-radius:4px" onerror="this.style.display='none'"/>`:''}<span>${esc(cvd?cvd.name:'No template')}</span></div>`):'';
     const its=v.items||[],un=its.filter(x=>!x.used).length;
     const open=!!((libOv.bank||{}).open||{})[c],qn=(v.queue||'').split('\n').filter(x=>x.trim()).length;
-    return `<div class="card"><div data-act="bkfold" data-arg="${c}" style="cursor:pointer;display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span style="color:var(--gold2);width:14px">${open?'▾':'▸'}</span><b style="font-weight:600">${esc(v.name)}</b>${v.badge?`<span class="nick">${esc(v.badge)}</span>`:''}<span class="has" style="display:inline;margin-left:auto">${un} unused${qn?' · '+qn+' in Make now':''}</span></div>
+    return hdr+`<div class="card"><div data-act="bkfold" data-arg="${c}" style="cursor:pointer;display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span style="color:var(--gold2);width:14px">${open?'▾':'▸'}</span><b style="font-weight:600">${esc(v.name)}</b>${v.badge?`<span class="nick">${esc(v.badge)}</span>`:''}<span class="has" style="display:inline;margin-left:auto">${un} unused${qn?' · '+qn+' in Make now':''}</span></div>
     ${open?`<div style="margin-top:10px"><div class="f2"><div class="f"><label>Category</label><input type="text" data-bk="${c}" data-f="name" value="${esc(v.name)}"/></div><div class="f"><label>Badge on the template</label><input type="text" data-bk="${c}" data-f="badge" value="${esc(v.badge||'')}"/></div></div>
     <div class="f"><label>Look</label><select data-bk="${c}" data-f="canvas"><option value="">None</option>${cvs.map(x=>`<option value="${x.id}" ${v.canvas===x.id?'selected':''}>${esc(x.name)}</option>`).join('')}</select></div>
     <div class="f"><label>Make now (what you want made this time)</label><textarea id="bkq-${c}" data-bx="${c}|queue" style="min-height:90px" placeholder="Press + next to a saved line below, or type here">${esc(v.queue||'')}</textarea>
@@ -1818,7 +1820,11 @@ function vBank(){
     <div class="f"><label>Used / Examples (copy this into ChatGPT for more ideas)</label><textarea id="bkx-${c}" data-bx="${c}|examples" style="min-height:90px" placeholder="Paste posts you've used or examples you like, as a paragraph or list">${esc(v.examples||'')}</textarea>
       <div class="tools" style="margin:6px 0 0"><button class="btn btn-g" data-md="bkcopyx" data-arg="${c}">Copy</button><button class="btn btn-gold" data-md="bkcopyb" data-arg="${c}">Copy brainstorm prompt</button></div></div>
     <div class="acts" style="margin-top:0"><button class="btn btn-d" data-act="bkcatdel" data-arg="${c}">Delete category</button></div></div>`:''}</div>`;
-  }).join('');
+  }).join('');})()+
+`<div class="card" style="border-color:var(--border-gold)"><div class="f" style="margin-bottom:6px"><label>Brainstorming prompt for ChatGPT (editable: goes first when you press "Copy brainstorm prompt" on a category)</label><textarea id="bkbp" data-bbp="1" style="min-height:200px">${esc(brainPrompt())}</textarea></div>
+    <div class="tools" style="margin:0"><button class="btn btn-gold" data-md="bkcopybp">Copy prompt</button><button class="btn btn-g" data-md="bkresetbp">Reset to the original</button></div></div>
+  <div class="card" style="border-color:var(--border-gold)"><div class="f" style="margin-bottom:6px"><label>Design prompt for ChatGPT, makes the PNGs from your template (editable: goes first when you press "Copy prompt + these")</label><textarea id="bkmp" data-bmp="1" style="min-height:240px">${esc(bankPrompt())}</textarea></div>
+    <div class="tools" style="margin:0"><button class="btn btn-gold" data-md="bkcopyp">Copy prompt</button><button class="btn btn-g" data-md="bkresetp">Reset to the original</button></div></div>`;
 }
 function bankAct(a,arg){
   const open={...((libOv.bank||{}).open||{})};
