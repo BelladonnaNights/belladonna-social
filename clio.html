@@ -997,6 +997,11 @@ function usedBy(id){
   const types=libList().filter(x=>!x.id.startsWith('cv_')&&(x.canvas===id||x.id===id)).map(x=>x.name);
   return [...types.map(n=>n+' (post type)'),...cats.map(n=>n+' (bank category)')];
 }
+function tplBankOrder(){
+  const L=tplList(),o=(libOv.tplui||{}).bankOrder;if(!Array.isArray(o))return L;
+  const ix=id=>{const i=o.indexOf(id);return i<0?1e6:i;};
+  return L.map((x,i)=>[x,i]).sort((a,b)=>(ix(a[0].id)-ix(b[0].id))||(a[1]-b[1])).map(p=>p[0]);
+}
 function tplOpenMap(){return (libOv.tplui||{}).open||{};}
 function libCard(t,slot){
   const o=libOv[t.id]||{},isCv=t.id.startsWith('cv_'),isT=isTpl(t),ub=isT?usedBy(t.id):[];
@@ -1873,13 +1878,13 @@ function fillBank(cur){
   sel.value=cur||'';
 }
 function vBank(){
-  const cats=bankData(),cvs=tplList();
+  const cats=bankData(),cvs=tplBankOrder();
   const tot=Object.values(cats).reduce((n,c)=>n+(c.items||[]).filter(x=>!x.used).length,0);
   $('view').innerHTML=head('Content Bank','All your post text in one place, by category. Press + on a line to add it to that category\'s "Make now" paragraph, then copy it into ChatGPT with the Muse prompt.')+
-`<div class="bar"><button class="btn btn-p" data-act="bknew">+ New category</button><button class="btn btn-g" data-act="bkopenall">Open all</button><button class="btn btn-g" data-act="bkcloseall">Close all</button><span class="meta" style="margin:0">${tot} unused ready to post</span></div>`+
+`<div class="bar"><button class="btn btn-p" data-act="bknew">+ New category</button><button class="btn btn-g" data-act="tplnew">+ New template</button><button class="btn btn-g" data-act="bkopenall">Open all</button><button class="btn btn-g" data-act="bkcloseall">Close all</button><span class="meta" style="margin:0">${tot} unused ready to post</span></div>`+
   (()=>{let last=null;const ord=[...cvs.map(x=>x.id),''],ix=k=>{const i=ord.indexOf(k||'');return i<0?ord.length:i;};
   const withCats=new Set(Object.values(cats).map(v=>ord.includes(v.canvas||'')?(v.canvas||''):'')),done=new Set();
-  const H=k=>{done.add(k);const cvd=cvs.find(x=>x.id===k);return `<div class="monthh" style="font-size:1.1rem;margin:20px 0 8px;display:flex;align-items:center;gap:10px">${cvd&&(libOv[cvd.id]||{}).tplImg?`<img src="${esc(libOv[cvd.id].tplImg)}" alt="" style="width:30px;height:38px;object-fit:contain;background:var(--surface3);border:1px solid var(--border2);border-radius:4px" onerror="this.style.display='none'"/>`:''}<span>${esc(cvd?cvd.name:'No template')}</span></div>`+(cvd?`<div class="tools" style="margin:0 0 8px"><button class="btn btn-g" data-act="bknewt" data-arg="${k}">+ Add a category to ${esc(cvd.name)}</button>${withCats.has(k)?'':'<span class="meta" style="margin:0">No categories yet</span>'}</div>`:'');};
+  const H=k=>{done.add(k);const cvd=cvs.find(x=>x.id===k);return `<div class="monthh" style="font-size:1.1rem;margin:20px 0 8px;display:flex;align-items:center;gap:10px">${cvd&&(libOv[cvd.id]||{}).tplImg?`<img src="${esc(libOv[cvd.id].tplImg)}" alt="" style="width:30px;height:38px;object-fit:contain;background:var(--surface3);border:1px solid var(--border2);border-radius:4px" onerror="this.style.display='none'"/>`:''}${cvd?`<input type="text" data-lib="${cvd.id}" data-f="name" value="${esc(cvd.name)}" style="width:auto;min-width:160px;max-width:280px;font-family:var(--cinzel);letter-spacing:.08em"/><button class="btn btn-g" type="button" data-act="bktup" data-arg="${cvd.id}">↑</button><button class="btn btn-g" type="button" data-act="bktdn" data-arg="${cvd.id}">↓</button>${cvd.id.startsWith('cv_')?`<button class="btn btn-d" type="button" data-act="tpldel" data-arg="${cvd.id}">Remove</button>`:''}`:'<span>No template</span>'}</div>`+(cvd?`<div class="tools" style="margin:0 0 8px"><button class="btn btn-g" data-act="bknewt" data-arg="${k}">+ Add a category to ${esc(cvd.name)}</button>${withCats.has(k)?'':'<span class="meta" style="margin:0">No categories yet</span>'}</div>`:'');};
   const emptyBefore=ixk=>cvs.map(x=>x.id).filter(k=>!withCats.has(k)&&!done.has(k)&&ix(k)<ixk).map(H).join('');
   return Object.entries(cats).sort((a,b)=>ix(a[1].canvas)-ix(b[1].canvas)).map(([c,v])=>{
     const cvk=ord.includes(v.canvas||'')?(v.canvas||''):'',cvd=cvs.find(x=>x.id===cvk);
@@ -1912,6 +1917,7 @@ function bankAct(a,arg){
   if(a==='bkopenall'){const o={};Object.keys(bankData()).forEach(k=>o[k]=true);saveLib('bank',{open:o},true).then(render);return;}
   if(a==='bkcloseall'){saveLib('bank',{open:{}},true).then(render);return;}
   const cats=bankData();
+  if(a==='bktup'||a==='bktdn'){const ids=tplBankOrder().map(x=>x.id),i=ids.indexOf(arg),k=a==='bktup'?i-1:i+1;if(i<0||k<0||k>=ids.length)return;[ids[i],ids[k]]=[ids[k],ids[i]];saveLib('tplui',{bankOrder:ids},true).then(render);return;}
   if(a==='bknewt'){const id='k'+Date.now().toString(36);cats[id]={name:'New category',canvas:arg,badge:'',items:[]};open[id]=true;saveLib('bank',{cats,open}).then(render);return;}
   if(a==='bknew'){const id='k'+Date.now().toString(36);cats[id]={name:'New category',canvas:'',badge:'',items:[]};open[id]=true;saveLib('bank',{cats,open}).then(render);return;}
   else if(a==='bkadd'){const el=$('bkadd-'+arg);const L=(el.value||'').split('\n').map(x=>x.trim()).filter(Boolean);if(!L.length){toast('Type or paste something first');return;}
