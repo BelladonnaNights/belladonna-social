@@ -83,6 +83,11 @@ select:focus,input:focus,textarea:focus{outline:none;border-color:var(--gold);}
 .dayh .today{background:var(--gold);color:var(--btn-text)}
 .dayh .od{background:var(--rose-dim);color:var(--rose)}
 .monthh{font-family:var(--display);font-size:1.5rem;letter-spacing:.06em;color:var(--gold);margin:24px 0 8px;padding-bottom:4px;border-bottom:1px solid var(--border2);}
+.grp{margin:4px 0 8px;border:1px solid var(--border-gold);border-radius:var(--rl);background:var(--surface2)}
+.grph{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:8px 12px;border-bottom:1px solid var(--border)}
+.grph b{font-weight:600;color:var(--gold2)}
+.grpb{border-left:3px solid var(--gold);margin:6px 8px 8px 14px;padding-left:8px}
+.grpb .row{margin-bottom:3px}
 .row{display:flex;align-items:center;gap:10px;padding:8px 10px;background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--border);border-radius:var(--rl);margin-bottom:4px;cursor:pointer;transition:border-color .2s;}
 .row:hover{border-color:var(--border-gold)}
 .row.done{opacity:.6;border-left-color:var(--live)}
@@ -173,7 +178,8 @@ select:focus,input:focus,textarea:focus{outline:none;border-color:var(--gold);}
       <div class="f"><label>Template</label><select id="f-type"></select></div>
       <div class="f"><label>Where</label><input type="text" id="f-plat" placeholder="IG + FB"/></div>
     </div>
-    <div class="f"><label>What it is</label><input type="text" id="f-title"/></div>
+    <div class="f"><label>Carousel post name (posts with the same name on the same day are grouped as slides of one post)</label><input type="text" id="f-grp" list="grp-list" placeholder="Leave empty for a single post, e.g. Songs that trigger the bar"/><datalist id="grp-list"></datalist></div>
+    <div class="f"><label>What it is (for a carousel: this slide)</label><input type="text" id="f-title"/></div>
     <div class="f"><label>Caption (goes to Buffer)</label><textarea id="f-cap"></textarea>
       <div class="tools" style="margin:6px 0 0"><button class="btn btn-g" type="button" id="b-cap" onclick="capPrompt()">Copy caption prompt (paste into ChatGPT)</button></div></div>
     <div class="f"><label>Hashtags (Instagram only, kept separate from the caption)</label><textarea id="f-hash" style="min-height:60px" placeholder="#belladonnanights #karaoke"></textarea>
@@ -191,6 +197,7 @@ select:focus,input:focus,textarea:focus{outline:none;border-color:var(--gold);}
     <div class="tools">
       <button class="btn btn-gold" onclick="muse()">✦ The Muse: build ChatGPT prompt</button>
       <button class="btn btn-gold" onclick="openGfx()">▣ Make graphic</button>
+      <button class="btn btn-gold" id="f-slide" onclick="addSlide()">▤ Add another slide</button>
       <button class="btn btn-gold" id="f-enc" onclick="encore()">↻ Encore: duplicate</button>
     </div>
     <div class="f" id="f-muse-wrap" style="display:none"><label>Prompt (copied to clipboard, edit the [brackets])</label><textarea id="f-muse" style="min-height:200px"></textarea></div>
@@ -503,7 +510,7 @@ function buildSeed(){
 /* ── STATE ── */
 let db=null,fs=null,auth=null,authMod=null,user=null,authChecked=false,unsubs=[],mode='local',posts=[],vposts=[],gigs=[],libOv={};
 let tab=(location.hash||'#dashboard').slice(1);
-let evIdx=0,calView='todo',typeF='all',monthF='all',studioF='caption',editingId=null,selDay=null;
+let evIdx=0,calView='todo',typeF='all',monthF='all',studioF='todo',editingId=null,selDay=null;
 let calMode=(()=>{try{return localStorage.getItem('bn_clio_calmode')||'list';}catch(e){return 'list';}})();
 let calMonth=(()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');})();
 function applyTheme(t){
@@ -693,14 +700,25 @@ function render(){
 function head(t,s){return `<div class="title">${t}</div><div class="sub">${s}</div>`;}
 
 /* ── ROWS ── */
-function rowHtml(p){
+function rowHtml(p,sl){
   const T=TYPES[p.type]||TYPES.other,mile=isMile(p),hi=['monthly','big','cover'].includes(p.type)?' hi':'';
   const checks=mile?'<div class="ck" style="visibility:hidden"></div>':
     `<div class="ck"><input type="checkbox" data-k="created" ${p.created?'checked':''}/>Made</div><div class="ck"><input type="checkbox" data-k="posted" ${p.posted?'checked':''}/>Posted</div>`;
   const has=(p.caption?'✎ ':'')+(p.imageUrl?'🖼':'');
-  return `<div class="row ${mile?'milestone':''} ${p.posted?'done':''} ${overdue(p,todayStr())?'od':''}" data-id="${esc(p.id)}">${checks}<div class="time">${fmtTime(p.time)||'—'}</div><span class="badge${hi}">${T.l}</span><div class="rt">${p.gen?'<span class="has" style="display:inline" title="Created from your cadence rules">✦ </span>':''}${esc(p.title)}${p.notes?`<small>${esc(p.notes)}</small>`:''}</div><div class="has">${has}</div>${p.auto?'':`<button class="btn btn-d" style="padding:3px 9px" data-act="delrow" data-arg="${esc(p.id)}" title="Delete this post">✕</button>`}</div>`;
+  return `<div class="row ${mile?'milestone':''} ${p.posted?'done':''} ${overdue(p,todayStr())?'od':''}" data-id="${esc(p.id)}">${checks}<div class="time">${fmtTime(p.time)||'—'}</div><span class="badge${hi}">${T.l}</span><div class="rt">${p.gen?'<span class="has" style="display:inline" title="Created from your cadence rules">✦ </span>':''}${sl?`<span class="nick" style="margin-right:6px">${sl}</span>`:''}${esc(p.title)}${p.notes?`<small>${esc(p.notes)}</small>`:''}</div><div class="has">${has}</div>${p.auto?'':`<button class="btn btn-d" style="padding:3px 9px" data-act="delrow" data-arg="${esc(p.id)}" title="Delete this post">✕</button>`}</div>`;
+}
+function grpMembers(p){return posts.filter(x=>x.grp&&x.grp===p.grp&&x.date===p.date).sort((a,b)=>((a.slide||99)-(b.slide||99))||sortFn(a,b));}
+function groupHtml(ms){
+  const made=ms.filter(x=>x.created||x.posted).length,posted=ms.filter(x=>x.posted).length;
+  return `<div class="grp"><div class="grph"><span style="color:var(--gold2)">▤</span><b>${esc(ms[0].grp)}</b><span class="has" style="display:inline">1 post · ${ms.length} slide${ms.length>1?'s':''} · ${made} made · ${posted} posted</span><span style="flex:1"></span><button class="chip" data-act="grpadd" data-arg="${esc(ms[0].id)}">+ Slide</button></div><div class="grpb">${ms.map((x,i)=>rowHtml(x,'Slide '+(i+1)+' of '+ms.length)).join('')}</div></div>`;
+}
+function monthlyHtml(p){
+  const nm=id=>(LIB_SEED.find(x=>x.id===id)||{}).name;
+  return `<div class="grp"><div class="grph" style="padding:0;border:0"></div><div style="padding:4px 4px 0">${rowHtml(p)}</div><div class="grpb" style="margin-top:0">${[['mcover','Slide 1 of 3'],['monthly','Slide 2 of 3'],['sched','Slide 3 of 3']].map(([id,l])=>`<div class="meta" style="margin:2px 0"><span class="nick" style="margin-right:6px">${l}</span>${esc(nm(id)||id)}</div>`).join('')}</div></div>`;
 }
 function groupedList(list,monthHeads,desc){
+  const seen=new Set();
+  list=list.map(p=>{if(!p.grp)return p;const k=p.date+'|'+p.grp;if(seen.has(k))return null;seen.add(k);return {...p,_grp:grpMembers(p).filter(m=>list.some(x=>x.id===m.id))};}).filter(Boolean);
   if(!list.length)return '<div class="empty">Nothing here.</div>';
   const t=todayStr();let html='',curM='',curD='';
   list.forEach(p=>{
@@ -712,7 +730,7 @@ function groupedList(list,monthHeads,desc){
       const tag=p.date===t?'<span class="tag today">Today</span>':(p.date<t&&list.some(x=>x.date===p.date&&overdue(x,t))?'<span class="tag od">Overdue</span>':'');
       html+=`<div class="day"><div class="dayh">${dayName(p.date)} ${tag}</div>`;
     }
-    html+=rowHtml(p);
+    html+=p._grp?groupHtml(p._grp):(p.type==='monthly'&&/3 slides/i.test(p.title)?monthlyHtml(p):rowHtml(p));
   });
   return html+'</div>';
 }
@@ -775,7 +793,7 @@ function vDashboard(){
   }
   const t=todayStr(),real=vposts.filter(p=>!isMile(p)),od=real.filter(p=>overdue(p,t)).length;
   $('view').innerHTML=head('Dashboard','Upcoming events and everything each one needs.')+box+
-    (od?`<div class="banner err" style="margin-top:12px">${od} scheduled post${od>1?'s are':' is'} overdue. <button class="btn btn-g" data-act="view" data-arg="overdue">Open in Calendar</button></div>`:'');
+    (od?`<div class="banner err" style="margin-top:12px">${od} scheduled post${od>1?'s are':' is'} overdue. <button class="btn btn-g" data-act="view" data-arg="overdue">Open in Studio</button></div>`:'');
 }
 function vEvents(){
   const evs=upcomingEvents();
@@ -797,16 +815,16 @@ function overviewStats(){
 function isFeedIG(p){return !isMile(p)&&/IG/.test(p.platform||'')&&!/Story/.test(p.platform||'');}
 function gridTile(p){
   return `<div class="gt ${p.posted?'live':''}" data-id="${esc(p.id)}" title="${esc(p.title)}">${p.imageUrl?`<img src="${esc(p.imageUrl)}" alt="" loading="lazy" onerror="this.style.display='none'"/>`:''}
-    <div class="gtl"><span class="badge hi">${esc(TYPES[p.type]?.l||p.type)}</span><span>${esc(p.title)}</span></div>
+    <div class="gtl"><span class="badge hi">${esc(TYPES[p.type]?.l||p.type)}${p.grp?' ▤'+grpMembers(p).length:''}</span><span>${esc(p.grp||p.title)}</span></div>
     <div class="gtd">${new Date(p.date+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})}${p.imageUrl?'':' · no image yet'}</div></div>`;
 }
-function vGrid(){
+function vGrid(F){
   const t=todayStr();
-  const nextN=vposts.filter(p=>isFeedIG(p)&&!p.posted&&p.date>=t).sort(sortFn).slice(0,9);
-  const live=vposts.filter(p=>isFeedIG(p)&&p.posted).sort((a,b)=>sortFn(b,a)).slice(0,9);
+  const firstOnly=L=>{const seen=new Set();return L.filter(p=>{if(!p.grp)return true;const k=p.date+'|'+p.grp;if(seen.has(k))return false;seen.add(k);return true;});};
+  const nextN=firstOnly(vposts.filter(p=>isFeedIG(p)&&!p.posted&&p.date>=t).sort(sortFn)).slice(0,9);
+  const live=firstOnly(vposts.filter(p=>isFeedIG(p)&&p.posted).sort((a,b)=>sortFn(b,a))).slice(0,9);
   const newestFirst=nextN.slice().reverse();
-  $('view').innerHTML=head('Calendar','How your next nine feed posts will look on Instagram. Newest sits top-left, like the real grid.')+overviewStats()+
-    `<div class="bar">${modeChips()}</div>`+
+  $('view').innerHTML=head('Studio','How your next nine feed posts will look on Instagram. Newest sits top-left, like the real grid.')+studioBar(F||studioSets())+
     `<div class="sec">Your next ${nextN.length} posts, as they will appear</div>`+
     (nextN.length?`<div class="ggrid">${newestFirst.map(gridTile).join('')}</div>`:'<div class="empty">No upcoming Instagram feed posts.</div>')+
     (live.length?`<div class="sec">Already live (your last ${live.length} posted)</div><div class="ggrid" style="opacity:.75">${live.map(gridTile).join('')}</div>`:'');
@@ -832,33 +850,12 @@ function vMonth(){
   }).join('');
   const sel=selDay&&selDay.startsWith(calMonth)?(by[selDay]||[]):null;
   $('view').innerHTML=head('Calendar','Tap a day to see its posts. Gold = to do, green = posted, red = overdue, ★ = big night.')+overviewStats()+
-    `<div class="bar">${modeChips()}<select class="mini" id="tf"><option value="all">All templates</option>${Object.entries(TYPES).map(([k,v])=>`<option value="${k}" ${typeF===k?'selected':''}>${v.l}</option>`).join('')}</select></div>`+
+    `<div class="bar"><select class="mini" id="tf"><option value="all">All templates</option>${Object.entries(TYPES).map(([k,v])=>`<option value="${k}" ${typeF===k?'selected':''}>${v.l}</option>`).join('')}</select></div>`+
     `<div class="mnav"><button class="btn btn-g" data-act="mprev">‹</button><div class="mt">${monthTitle}</div><button class="btn btn-g" data-act="mtoday">Today</button><button class="btn btn-g" data-act="mnext">›</button></div>`+
     `<div class="mgrid">${DN.map(d=>`<div class="mh">${d}</div>`).join('')}${grid}</div>`+
     (sel?`<div class="sec">${dayName(selDay)}</div>${sel.length?sel.map(rowHtml).join(''):'<div class="empty">Nothing on this day.</div>'}<div style="margin-top:8px"><button class="btn btn-g" data-act="newday" data-arg="${selDay}">+ Add post on this day</button></div>`:'');
 }
-function vCalendar(){
-  if(calMode==='month'){vMonth();return;}
-  if(calMode==='grid'){vGrid();return;}
-  const t=todayStr();
-  const months=[...new Set(vposts.map(p=>p.date.slice(0,7)))].sort();
-  const views=[['todo','To do'],['overdue','Overdue'],['all','Everything'],['history','History']];
-  let list=vposts.slice();
-  if(typeF!=='all')list=list.filter(p=>p.type===typeF);
-  if(monthF!=='all')list=list.filter(p=>p.date.startsWith(monthF));
-  const end=addDays(t,14);
-  if(calView==='todo')list=list.filter(p=>overdue(p,t)||(p.date>=t&&p.date<=end&&!p.posted));
-  if(calView==='overdue')list=list.filter(p=>overdue(p,t));
-  if(calView==='history')list=list.filter(p=>p.posted);
-  list.sort(sortFn);
-  if(calView==='history')list.reverse();
-  $('view').innerHTML=head('Calendar',calView==='history'?'Everything that has gone out.':'Check “Made” when the graphic exists, “Posted” when it is live.')+overviewStats()+
-    
-    `<div class="bar">${modeChips()}${views.map(([k,l])=>`<button class="chip ${calView===k?'on':''}" data-act="view" data-arg="${k}">${l}</button>`).join('')}
-      <select class="mini" id="tf"><option value="all">All templates</option>${Object.entries(TYPES).map(([k,v])=>`<option value="${k}" ${typeF===k?'selected':''}>${v.l}</option>`).join('')}</select>
-      <select class="mini" id="mf"><option value="all">All months</option>${months.map(m=>`<option value="${m}" ${monthF===m?'selected':''}>${monthName(m)}</option>`).join('')}</select></div>`+
-    (calView==='todo'?groupedList(list,false):groupedList(list,calView!=='history'));
-}
+function vCalendar(){vMonth();}
 
 /* ── CAMPAIGNS: each month is a campaign ── */
 async function setCampaign(m,field,val){
@@ -899,7 +896,7 @@ function campCard(m){
     <span class="lbl">Progress</span>
     <div class="nick">Made ${made}/${n}</div><div class="prog"><i style="width:${n?made/n*100:0}%"></i></div>
     <div class="nick">Posted ${posted}/${n}</div><div class="prog posted"><i style="width:${n?posted/n*100:0}%"></i></div>
-    <div style="margin-top:8px"><button class="btn btn-g" data-act="month" data-arg="${m}">Open in Calendar</button></div></div>`;
+    <div style="margin-top:8px"><button class="btn btn-g" data-act="month" data-arg="${m}">Open in Studio</button></div></div>`;
 }
 function vCampaigns(){
   const months=[...new Set(vposts.map(p=>p.date.slice(0,7)))].sort();
@@ -912,17 +909,30 @@ function vCampaigns(){
 let campFilter='up';
 
 /* ── STUDIO: where posts get finished ── */
+function studioSets(){
+  const t=todayStr(),end=addDays(t,14);
+  const af=L=>L.filter(p=>(typeF==='all'||p.type===typeF)&&(monthF==='all'||p.date.startsWith(monthF)));
+  const up=af(vposts.filter(p=>!isMile(p)&&p.type!=='tonight'&&p.type!=='host'&&!p.posted&&p.date>=t)).sort(sortFn);
+  const base=af(vposts.slice()).sort(sortFn);
+  return {todo:base.filter(p=>overdue(p,t)||(p.date>=t&&p.date<=end&&!p.posted)),overdue:base.filter(p=>overdue(p,t)),
+    caption:up.filter(p=>!p.caption.trim()),image:up.filter(p=>!p.imageUrl.trim()),ready:up.filter(p=>p.caption.trim()&&p.imageUrl.trim()),
+    all:base,history:base.filter(p=>p.posted).reverse()};
+}
+function studioBar(F){
+  const months=[...new Set(vposts.map(p=>p.date.slice(0,7)))].sort();
+  const chips=[['todo','To do'],['overdue','Overdue'],['caption','Needs caption'],['image','Needs image'],['ready','Ready for Buffer'],['all','Everything'],['history','History']];
+  return `<div class="bar">${chips.map(([k,l])=>`<button class="chip ${studioF===k?'on':''}" data-act="studio" data-arg="${k}">${l} (${F[k].length})</button>`).join('')}<button class="chip ${studioF==='grid'?'on':''}" data-act="studio" data-arg="grid">Instagram grid</button></div>
+    <div class="bar"><select class="mini" id="tf"><option value="all">All templates</option>${Object.entries(TYPES).map(([k,v])=>`<option value="${k}" ${typeF===k?'selected':''}>${v.l}</option>`).join('')}</select>
+      <select class="mini" id="mf"><option value="all">All months</option>${months.map(m=>`<option value="${m}" ${monthF===m?'selected':''}>${monthName(m)}</option>`).join('')}</select><div class="sp"></div>
+      <button class="btn btn-gold" data-act="export">Export for Buffer (Instagram + Facebook files)</button></div>`;
+}
 function vStudio(){
-  const t=todayStr();
-  const up=vposts.filter(p=>!isMile(p)&&p.type!=='tonight'&&p.type!=='host'&&!p.posted&&p.date>=t).sort(sortFn);
-  const f={caption:up.filter(p=>!p.caption.trim()),image:up.filter(p=>!p.imageUrl.trim()),ready:up.filter(p=>p.caption.trim()&&p.imageUrl.trim()),all:up};
-  const chips=[['caption','Needs caption'],['image','Needs image'],['ready','Ready for Buffer'],['all','All upcoming']];
-  const list=f[studioF].slice(0,150);
-  $('view').innerHTML=head('Studio','Write captions, attach image links, build prompts. Tap a post to open it.')+
-    `<div class="bar">${chips.map(([k,l])=>`<button class="chip ${studioF===k?'on':''}" data-act="studio" data-arg="${k}">${l} (${f[k].length})</button>`).join('')}<div class="sp"></div>
-      <button class="btn btn-gold" data-act="export">Export for Buffer (Instagram + Facebook files)</button></div>`+
-    (list.length?groupedList(list,false):'<div class="empty">Nothing in this list.</div>')+
-    (f[studioF].length>150?'<div class="empty">Showing the first 150. Finish these and the rest will appear.</div>':'');
+  const F=studioSets();
+  if(studioF==='grid'){vGrid(F);return;}
+  const list=(F[studioF]||F.todo).slice(0,150),n=(F[studioF]||F.todo).length;
+  $('view').innerHTML=head('Studio','Your whole post list in one place: write captions, attach images, tick Made and Posted, and export to Buffer. Tap a post to open it.')+studioBar(F)+
+    (list.length?groupedList(list,['all','overdue'].includes(studioF)):'<div class="empty">Nothing in this list.</div>')+
+    (n>150?'<div class="empty">Showing the first 150. Finish these and the rest will appear.</div>':'');
 }
 
 /* ── ECHO ── */
@@ -1046,10 +1056,10 @@ $('view').addEventListener('change',e=>{
 function act(a,arg){
   if(a==='tab')setTab(arg);
   else if(a==='burger')document.body.classList.toggle('menu-open');
-  else if(a==='view'){calView=arg;calMode='list';if(tab!=='calendar')tab='calendar';render();}
+  else if(a==='view'){studioF=arg;setTab('studio');}
   else if(a==='seed')seedMissing();
   else if(a==='export')exportBuffer();
-  else if(a==='month'){monthF=arg;calView='all';calMode='list';setTab('calendar');}
+  else if(a==='month'){monthF=arg;studioF='all';setTab('studio');}
   else if(a==='studio'){studioF=arg;render();}
   else if(a==='new')openEdit();
   else if(a==='signin')signIn();
@@ -1070,6 +1080,7 @@ function act(a,arg){
   else if(a==='gennow')runGen(true);
   else if(a==='gentoggle'){saveLib('settings',{autoGen:(libOv.settings||{}).autoGen===false}).then(render);}
   else if(a==='libedit')openLibEdit(arg);
+  else if(a==='grpadd')slideFrom(arg);
   else if(a==='librestore'){saveLib(arg,{deleted:false}).then(render);}
   else if(a==='bantoggle'){saveLib('settings',{showBanners:!showBanners()}).then(render);}
   else if(a==='bandel')setBanner(arg,'');
@@ -1097,6 +1108,8 @@ function fillForm(p){
   $('f-created').checked=!!p.created;$('f-posted').checked=!!p.posted;
   $('f-muse-wrap').style.display='none';
   fillBank(p.bankRef||'');
+  $('f-grp').value=p.grp||'';
+  $('grp-list').innerHTML=[...new Set(posts.map(x=>x.grp).filter(Boolean))].map(g=>`<option value="${esc(g)}">`).join('');
   renderTags();renderWin();
 }
 function openEdit(id,presetDate){
@@ -1109,16 +1122,37 @@ function openEdit(id,presetDate){
   $('ov').classList.add('show');
 }
 function closeEdit(){$('ov').classList.remove('show');}
-async function saveEdit(){
+async function savePost(){
   const title=$('f-title').value.trim(),date=$('f-date').value;
-  if(!title||!date){toast('Needs a date and a title');return;}
+  if(!title||!date){toast('Needs a date and a title');return null;}
   const old=editingId?posts.find(x=>x.id===editingId):null;
   let created=$('f-created').checked;const posted=$('f-posted').checked;
   if(posted)created=true;
-  await persist({...(old||{}),id:editingId||('p_'+Date.now()),date,time:$('f-time').value,type:$('f-type').value,
-    platform:$('f-plat').value.trim(),title,bankRef:$('f-bank').value||'',caption:$('f-cap').value,hashtags:$('f-hash').value.trim(),imageUrl:$('f-img').value.trim(),notes:$('f-notes').value.trim(),created,posted});
+  const grp=$('f-grp').value.trim(),id=editingId||('p_'+Date.now());
+  let slide=old&&old.slide;
+  if(!grp)slide=null;
+  else if(!slide||(old&&old.grp!==grp)){slide=posts.filter(x=>x.grp===grp&&x.date===date&&x.id!==id).length+1;}
+  await persist({...(old||{}),id,date,time:$('f-time').value,type:$('f-type').value,
+    platform:$('f-plat').value.trim(),title,grp,slide,bankRef:$('f-bank').value||'',caption:$('f-cap').value,hashtags:$('f-hash').value.trim(),imageUrl:$('f-img').value.trim(),notes:$('f-notes').value.trim(),created,posted});
   const br=$('f-bank').value;if(br)markBank(br);
-  closeEdit();toast('Saved');
+  return id;
+}
+async function saveEdit(){if(await savePost()){closeEdit();toast('Saved');}}
+async function addSlide(){
+  if(!$('f-grp').value.trim()){toast('Give the post a name first, in "Carousel post name"');return;}
+  const keep={date:$('f-date').value,time:$('f-time').value,type:$('f-type').value,platform:$('f-plat').value,grp:$('f-grp').value.trim()};
+  if(!await savePost())return;
+  editingId=null;
+  fillForm({...keep,title:'',caption:'',hashtags:'',imageUrl:'',notes:'',created:false,posted:false});
+  $('mt').textContent='Add a slide to "'+keep.grp+'"';
+  $('f-del').style.display='none';$('f-enc').style.display='none';
+  toast('Slide saved. Add the next one');
+}
+function slideFrom(id){
+  const p=posts.find(x=>x.id===id);if(!p)return;
+  editingId=null;
+  fillForm({date:p.date,time:p.time,type:p.type,platform:p.platform,grp:p.grp,title:'',caption:'',hashtags:'',imageUrl:'',notes:'',created:false,posted:false});
+  $('mt').textContent='Add a slide to "'+p.grp+'"';$('f-del').style.display='none';$('f-enc').style.display='none';$('ov').classList.add('show');
 }
 async function delPost(){if(editingId&&confirm('Delete this post?')){await removePost(editingId);closeEdit();}}
 
@@ -1971,7 +2005,7 @@ function exportBuffer(){
   toast(`Instagram ${ig.length} · Facebook ${fb.length}`+(noCap?` · ${noCap} skipped (no caption)`:'')+(igNoImg?` · ${igNoImg} Instagram posts need an image`:''));
 }
 
-window.closeEdit=closeEdit;window.saveEdit=saveEdit;window.delPost=delPost;window.encore=encore;window.muse=muse;window.libSaveEdit=libSaveEdit;window.ledRule=ledRule;window.libHide=libHide;window.banUpload=banUpload;window.addTags=addTags;window.setWin=setWin;window.tw=null;Object.defineProperty(window,'tw',{get:()=>tw,set:v=>{tw=v;}});Object.defineProperty(window,'twKey',{get:()=>twKey});window.twPick=twPick;window.twAdd=twAdd;window.twDelTask=twDelTask;window.twMove=twMove;window.twNewSet=twNewSet;window.twDelSet=twDelSet;window.twSave=twSave;window.libUpload=libUpload;window.aiCaption=aiCaption;window.capPrompt=capPrompt;window.openGfx=openGfx;window.gfxPick=gfxPick;window.gfxSaveBg=gfxSaveBg;window.gfxUse=gfxUse;window.uploadImg=uploadImg;window.imgPrev=imgPrev;
+window.closeEdit=closeEdit;window.saveEdit=saveEdit;window.addSlide=addSlide;window.delPost=delPost;window.encore=encore;window.muse=muse;window.libSaveEdit=libSaveEdit;window.ledRule=ledRule;window.libHide=libHide;window.banUpload=banUpload;window.addTags=addTags;window.setWin=setWin;window.tw=null;Object.defineProperty(window,'tw',{get:()=>tw,set:v=>{tw=v;}});Object.defineProperty(window,'twKey',{get:()=>twKey});window.twPick=twPick;window.twAdd=twAdd;window.twDelTask=twDelTask;window.twMove=twMove;window.twNewSet=twNewSet;window.twDelSet=twDelSet;window.twSave=twSave;window.libUpload=libUpload;window.aiCaption=aiCaption;window.capPrompt=capPrompt;window.openGfx=openGfx;window.gfxPick=gfxPick;window.gfxSaveBg=gfxSaveBg;window.gfxUse=gfxUse;window.uploadImg=uploadImg;window.imgPrev=imgPrev;
 window.addEventListener('hashchange',()=>{const h=location.hash.slice(1);if((TABS.some(t=>t[0]===h)||h==='events')&&h!==tab){editing=false;tab=h;render();}});
 applyTheme(document.documentElement.getAttribute('data-theme')||'dark');
 init();
