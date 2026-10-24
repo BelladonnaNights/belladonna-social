@@ -822,15 +822,11 @@ function gridTile(p){
     <div class="gtd">${new Date(p.date+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})}${p.imageUrl?'':' · no image yet'}</div></div>`;
 }
 function vGrid(F){
-  const t=todayStr();
-  const firstOnly=L=>{const seen=new Set();return L.filter(p=>{if(!p.grp)return true;const k=p.date+'|'+p.grp;if(seen.has(k))return false;seen.add(k);return true;});};
-  const nextN=firstOnly(vposts.filter(p=>isFeedIG(p)&&!p.posted&&p.date>=t).sort(sortFn)).slice(0,9);
-  const live=firstOnly(vposts.filter(p=>isFeedIG(p)&&p.posted).sort((a,b)=>sortFn(b,a))).slice(0,9);
-  const newestFirst=nextN.slice().reverse();
-  $('view').innerHTML=head('Studio','How your next nine feed posts will look on Instagram. Newest sits top-left, like the real grid.')+studioBar(F||studioSets())+
-    `<div class="sec">Your next ${nextN.length} posts, as they will appear</div>`+
-    (nextN.length?`<div class="ggrid">${newestFirst.map(gridTile).join('')}</div>`:'<div class="empty">No upcoming Instagram feed posts.</div>')+
-    (live.length?`<div class="sec">Already live (your last ${live.length} posted)</div><div class="ggrid" style="opacity:.75">${live.map(gridTile).join('')}</div>`:'');
+  const tpls=libList().filter(x=>x.id.startsWith('cv_')||(libOv[x.id]||{}).tplImg);
+  const tile=x=>{const u=(libOv[x.id]||{}).tplImg;return `<div class="gt" title="${esc(x.name)}">${u?`<img src="${esc(u)}" alt="" loading="lazy" onerror="this.style.display='none'"/>`:''}<div class="gtl" style="${u?'justify-content:flex-end;background:linear-gradient(transparent 60%,rgba(0,0,0,.75));color:#fff':''}"><span>${esc(x.name)}</span>${u?'':'<span class="meta" style="margin:0">no example yet</span>'}</div></div>`;};
+  $('view').innerHTML=head('Studio','All your templates side by side, so you can see how they look together on the feed.')+studioBar(F||studioSets())+
+    `<div class="sec">Your ${tpls.length} templates</div>`+
+    (tpls.length?`<div class="ggrid" style="max-width:none">${tpls.map(tile).join('')}</div>`:'<div class="empty">No templates yet.</div>');
 }
 
 /* ── CALENDAR (History lives here) ── */
