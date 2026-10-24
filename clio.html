@@ -1001,12 +1001,14 @@ function freqText(e){
   if(!r.kind||r.kind==='none')return e.freq||'Manual';
   return describeRule(r)+((r.time&&r.kind!=='hq')?' at '+fmtTime(r.time):'');
 }
+function effTpl(e){return e.canvas||(isTpl(e)?e.id:'');}
 function cadRow(e,dim,restore){
-  const img=(libOv[e.id]||{}).tplImg||((e.canvas&&(libOv[e.canvas]||{}).tplImg)||'');
+  const tid=effTpl(e),tn=tid?((tplList().find(x=>x.id===tid)||{}).name||''):'';
+  const img=tid?((libOv[tid]||{}).tplImg||''):'';
   return `<div class="card" style="padding:10px 12px;margin-bottom:6px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;${dim?'opacity:.55':''}">
       ${img?`<img src="${esc(img)}" alt="" loading="lazy" title="Your example template" style="width:40px;height:50px;object-fit:contain;background:var(--surface3);border:1px solid var(--border2);border-radius:4px;flex-shrink:0" onerror="this.style.display='none'"/>`:''}
       <div style="flex:1;min-width:180px"><div><b style="font-weight:600">${esc(e.name)}</b>${e.nick?` <span class="nick">(${esc(e.nick)})</span>`:''}</div>
-      <div class="meta" style="margin:0">${esc(e.use||'')}${e.use?' · ':''}<span style="color:var(--gold2)">${esc(freqText(e))}</span></div></div>
+      <div class="meta" style="margin:0">${esc(e.use||'')}${e.use?' · ':''}<span style="color:var(--gold2)">${esc(freqText(e))}</span></div><div class="meta" style="margin:2px 0 0">Template: ${tn?`<b>${esc(tn)}</b>`:`<span style="color:var(--red,#c0392b)">none yet, press Edit to pick one</span>`}</div></div>
       ${restore?`<button class="btn btn-p" data-act="librestore" data-arg="${e.id}">Restore</button>`:`<button class="btn btn-g" data-act="libedit" data-arg="${e.id}">Edit</button>`}</div>`;
 }
 function cadTop(){
@@ -1712,7 +1714,7 @@ function openLibEdit(id){
   $('led').innerHTML=`<div class="box"><h3>${id?'Edit post type':'Add a post type'}</h3>
   <div class="f2"><div class="f"><label>Name</label><input type="text" id="le-name" value="${esc(e.name)}"/></div><div class="f"><label>Nickname (shows on badges)</label><input type="text" id="le-nick" value="${esc(e.nick)}"/></div></div>
   <div class="f"><label>Group (pick one or type a new one)</label><input type="text" id="le-group" list="le-groups" value="${esc(e.group||'')}"/><datalist id="le-groups">${groups.map(g=>`<option value="${esc(g)}">`).join('')}</datalist></div>
-  <div class="f2"><div class="f"><label>Canvas (the template look it uses)</label><select id="le-canvas"><option value="">None</option>${tplList().map(x=>`<option value="${x.id}" ${e.canvas===x.id?'selected':''}>${esc(x.name)}</option>`).join('')}</select></div><div class="f"><label>Badge name (top plaque)</label><input type="text" id="le-badge" value="${esc(e.badge||'')}" placeholder="ROOK SAYS"/></div></div>
+  <div class="f2"><div class="f"><label>Template (every post type should have one)</label><select id="le-canvas"><option value="">None</option>${tplList().map(x=>`<option value="${x.id}" ${effTpl(e)===x.id?'selected':''}>${esc(x.name)}</option>`).join('')}</select></div><div class="f"><label>Badge name (top plaque)</label><input type="text" id="le-badge" value="${esc(e.badge||'')}" placeholder="ROOK SAYS"/></div></div>
   <div class="f" id="le-rulebox"><label>Frequency</label>
     <select id="le-rule" onchange="ledRule()"><option value="none">Manual (I add them myself)</option><option value="weekday">Every week on a day</option><option value="nth_week">Certain weeks of the month</option><option value="monthly_day">Every month on a day</option><option value="month_end">Last day of every month</option><option value="before_event">Before each big night</option>${(e.id&&ruleOf(e.id).kind==='hq')?'<option value="hq">Automatic from HQ</option>':''}<option value="silenced">Silenced (turned off)</option></select>
     <div class="f2" style="margin-top:6px"><div class="f" id="le-dayw"><label>Day of month</label><input type="text" inputmode="numeric" id="le-day" value="${(ruleOf(e.id||'')||{}).day||25}"/></div>
@@ -1739,7 +1741,7 @@ function ledRule(){
 }
 async function libSaveEdit(){
   const name=$('le-name').value.trim();if(!name){toast('Give it a name');return;}
-  const patch={name,nick:$('le-nick').value.trim(),group:$('le-group').value.trim()||'Other',freq:'',use:$('le-use').value.trim(),size:$('le-size').value.trim(),canvas:$('le-canvas').value,badge:$('le-badge').value.trim()};
+  const patch={name,nick:$('le-nick').value.trim(),group:$('le-group').value.trim()||'Other',freq:'',use:$('le-use').value.trim(),size:$('le-size').value.trim(),canvas:($('le-canvas').value===ledId?'':$('le-canvas').value),badge:$('le-badge').value.trim()};
   const k=$('le-rule').value;
   patch.freq=(k==='none'||k==='silenced')?$('le-freq').value.trim():'';
   patch.silenced=(k==='silenced');
