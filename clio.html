@@ -273,7 +273,7 @@ const LIB_META={
   mcover:{group:'Monthly',freq:'The 25th of every month',use:'Slide 1 of 3: "[MONTH] at Belladonna", tap to swipe'},
   monthly:{group:'Monthly',freq:'The 25th of every month',use:'Slide 2 of 3: month name, month theme, four weekly themes, big night'},
   sched:{group:'Monthly',freq:'The 25th of every month',use:'Slide 3 of 3: week 1 theme with every venue and night'},
-  weekly:{group:'Weekly',freq:'Every Monday',use:'Monday post: week theme plus each night'},
+  weekly:{group:'Weekly',freq:'Every Monday',use:'Monday post: week theme plus each night. Pin it to the top of the page for the week.'},
   cover:{group:'Event posts',freq:'Every big night, 14 days out',use:'Facebook Event image'},
   count:{group:'Event posts',freq:'7 days before, 3 days before, and the day of',use:'Countdown posts and stories'},
   tonight:{group:'Nightly stories',freq:'Every event night, automatic from HQ',use:'3:00 pm story'},
@@ -294,7 +294,7 @@ function libList(withDeleted){
     const e={...t,...m,custom:false};
     LIB_FIELDS.forEach(f=>{if(o[f]!==undefined&&o[f]!==null)e[f]=o[f];});
     if(o.group==='Monthly & weekly')e.group=m.group||e.group;
-    e.silenced=!!o.silenced;e.deleted=!!o.deleted;out.push(e);
+    e.silenced=!!o.silenced;e.deleted=(o.deleted===undefined&&t.id==='pin')?true:!!o.deleted;out.push(e);
   });
   Object.entries(libOv).forEach(([id,o])=>{
     if(o&&o.custom){const e={id,custom:true,name:o.name||'Untitled',nick:o.nick||'',size:o.size||'',use:o.use||'',group:o.group||'Other',freq:o.freq||'',canvas:o.canvas||'',badge:o.badge||'',silenced:!!o.silenced,deleted:!!o.deleted};out.push(e);}
@@ -2118,6 +2118,10 @@ async function twSave(){
 let bufBusy=false;
 const LEGACY_TITLES={rook:'Wednesday Rook / Snark post',crowd:'Friday: post a live crowd photo or reel',note:'Sunday Tavern Scroll note'};
 async function migrateTitles(){
+  if(!(libOv.migrations||{}).pinGone){
+    for(const p of posts.filter(x=>x.type==='pin'&&!x.posted))await rawDel(p.id);
+    await saveLib('migrations',{pinGone:true},true);
+  }
   for(const p of posts.filter(x=>LEGACY_TITLES[x.type]===x.title&&!x.posted)){
     const nm=(libList(true).find(e=>e.id===p.type)||{}).name;
     if(nm)quietSave({...p,title:nm});
