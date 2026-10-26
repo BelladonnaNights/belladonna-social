@@ -1911,9 +1911,12 @@ function vBank(){
     if(bankOrg)return hdr+`<div class="card" data-bcat="${c}" data-bsec="${esc(cvk)}" draggable="true" style="padding:10px 12px;display:flex;gap:10px;align-items:center"><span style="cursor:grab;color:var(--gold2)" title="Drag to move">⠿</span><input type="text" data-bk="${c}" data-f="name" value="${esc(v.name)}" style="flex:1"/><button class="btn btn-d" data-act="bkcatdel" data-arg="${c}">Delete</button></div>`;
     return hdr+`<div class="card" data-bcat="${c}" data-bsec="${esc(cvk)}"><div data-act="bkfold" data-arg="${c}" style="cursor:pointer;display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span style="color:var(--gold2);width:14px">${open?'▾':'▸'}</span><b style="font-weight:600">${esc(v.name)}</b>${v.badge?`<span class="nick">${esc(v.badge)}</span>`:''}<span class="has" style="display:inline;margin-left:auto">${un} unused${qn?' · '+qn+' in Make now':''}</span></div>
     ${open?`<div style="margin-top:10px"><div class="f"><label>Badge on the template</label><input type="text" data-bk="${c}" data-f="badge" value="${esc(v.badge||'')}"/></div>
-    <div class="f"><label>Prompt notes (added to "Copy prompt + these" for this category)</label><textarea data-bx="${c}|pnotes" style="min-height:70px" placeholder="Extra instructions this category always needs, e.g. Two sentences per post: sentence one goes on the top of the PNG, sentence two goes on the bottom.">${esc(v.pnotes||'')}</textarea></div>
+    <div class="f"><label>Prompt notes (added to "Copy prompt + these" for this category)</label><textarea data-bx="${c}|pnotes" style="min-height:70px" placeholder="Extra instructions this category always needs, e.g. Two sentences per post: sentence one goes on the top of the PNG, sentence two goes on the bottom.">${esc(v.pnotes||'')}</textarea>
+      <div class="tools" style="margin:6px 0 0"><button class="btn btn-gold" data-md="bkcopypn" data-arg="${c}">Copy prompt notes</button></div>
+      <label style="margin-top:10px">Live details from HQ for ${esc(bankWeekLabel(bankWeek))} (added automatically to the prompt notes when you copy)</label>
+      <pre style="white-space:pre-wrap;font-family:var(--font);font-size:12px;line-height:1.5;color:var(--text2);background:var(--surface3);border:1px solid var(--border);border-radius:var(--radius);padding:8px 10px;margin:0">${esc(liveDetails(bankWeek))}</pre></div>
     <div class="f"><label>Make now (what you want made this time)</label><textarea id="bkq-${c}" data-bx="${c}|queue" style="min-height:90px" placeholder="Press + next to a saved line below, or type here">${esc(v.queue||'')}</textarea>
-      <div class="tools" style="margin:6px 0 0"><button class="btn btn-gold" data-md="bkcopyq" data-arg="${c}">Copy prompt + these</button><button class="btn btn-g" data-md="bkcopyqo" data-arg="${c}">Copy just these</button><button class="btn btn-g" data-md="bkcopypn" data-arg="${c}">Copy prompt notes</button><button class="btn btn-g" data-md="bkqclear" data-arg="${c}">Clear</button></div></div>
+      <div class="tools" style="margin:6px 0 0"><button class="btn btn-gold" data-md="bkcopyq" data-arg="${c}">Copy prompt + these</button><button class="btn btn-g" data-md="bkcopyqo" data-arg="${c}">Copy just these</button><button class="btn btn-g" data-md="bkqclear" data-arg="${c}">Clear</button></div></div>
     <div class="meta">${un} unused ready to post</div>
     ${its.map(x=>`<div style="display:flex;gap:8px;align-items:center;margin-bottom:5px"><input type="checkbox" data-act="bkused" data-arg="${c}|${x.id}" ${x.used?'checked':''} style="width:17px;height:17px" title="Mark used"/><input type="text" data-bi="${c}|${x.id}" value="${esc(x.t)}" style="${x.used?'opacity:.45;text-decoration:line-through':''}"/><button class="btn btn-g" data-md="bkq" data-arg="${c}|${x.id}" style="padding:4px 12px" title="Add to Make now">+</button><button class="btn btn-d" data-act="bkdel" data-arg="${c}|${x.id}" style="padding:4px 10px">×</button></div>`).join('')}
     <div class="f" style="margin-top:8px"><label>Add (one per line)</label><textarea id="bkadd-${c}" style="min-height:60px" placeholder="Paste or type posts, one on each line"></textarea>
@@ -1990,7 +1993,7 @@ function mdAct(el){
   const a=el.dataset.md,arg=el.dataset.arg;
   if(a==='bkq'){const h=bankFind(arg);if(!h)return;const ta=$('bkq-'+h.c);const cur=ta.value.replace(/\s+$/,'');ta.value=(cur?cur+'\n':'')+h.item.t;bankField(h.c,'queue',ta.value);toast('Added to Make now');}
   else if(a==='bkqclear'){const ta=$('bkq-'+arg);ta.value='';bankField(arg,'queue','');}
-  else if(a==='bkcopypn'){const el=document.querySelector('[data-bx="'+arg+'|pnotes"]'),t=((el?el.value:(bankData()[arg]||{}).pnotes)||'').trim();if(!t){toast('No prompt notes yet for this category');return;}copyTxt(t);}
+  else if(a==='bkcopypn'){const el=document.querySelector('[data-bx="'+arg+'|pnotes"]'),t=((el?el.value:(bankData()[arg]||{}).pnotes)||'').trim();copyTxt((t?t+'\n\n':'')+liveDetails(bankWeek));}
   else if(a==='bkcopyqo')copyTxt($('bkq-'+arg).value.trim());
   else if(a==='bkcopyx')copyTxt($('bkx-'+arg).value.trim());
   else if(a==='bkcopyp')copyTxt($('bkmp').value.trim());
@@ -2006,7 +2009,7 @@ function mdAct(el){
   else if(a==='bkcopyq'){
     const q=($('bkq-'+arg).value||'').trim();if(!q){toast('Add some posts to Make now first');return;}
     const v=bankData()[arg]||{},cv=libList(true).find(x=>x.id===v.canvas);
-    copyTxt($('bkmp').value.trim()+'\n\n'+(cv?'TEMPLATE LOOK: '+cv.name+' (attach your saved example image from Library)\n':'')+(v.badge?'TOP BADGE TEXT: '+v.badge+'\n':'')+((v.pnotes||'').trim()?'\nNOTES FOR THIS CATEGORY:\n'+v.pnotes.trim()+'\n':'')+'\nPOSTS TO MAKE (one PNG each, carousels where there are [brackets]):\n'+q+'\n\n'+liveDetails(bankWeek));
+    copyTxt($('bkmp').value.trim()+'\n\n'+(cv?'TEMPLATE LOOK: '+cv.name+' (attach your saved example image from Library)\n':'')+(v.badge?'TOP BADGE TEXT: '+v.badge+'\n':'')+'\nNOTES FOR THIS CATEGORY:\n'+((v.pnotes||'').trim()?v.pnotes.trim()+'\n\n':'')+liveDetails(bankWeek)+'\n\nPOSTS TO MAKE (one PNG each, carousels where there are [brackets]):\n'+q);
   }
 }
 const TYPING='[data-secn],[data-bx],[data-bmp],[data-bbp],[data-ls],[data-lt],[data-lib],[data-ts],[data-ct],[data-bk],[data-bi],[data-stat],[data-ban]',AUTOSAVE='[data-bx],[data-bmp],[data-bbp],[data-ls],[data-lib],[data-ts],[data-ct]';
