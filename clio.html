@@ -1158,6 +1158,7 @@ $('banner').addEventListener('click',e=>{const a=e.target.closest('[data-act]');
 $('view').addEventListener('change',e=>{
   if(e.target.id==='tf'){typeF=e.target.value;render();}
   else if(e.target.id==='mf'){monthF=e.target.value;render();}
+  else if(e.target.id==='bkwk'){bankWeek=+e.target.value;render();}
   else if(e.target.dataset.ct){setCampaign(e.target.dataset.ct,e.target.dataset.f,e.target.value);}
   else if(e.target.dataset.ban){const u=e.target.value.trim();if(!u||/^https?:\/\//.test(u))setBanner(e.target.dataset.ban,u);else toast('That does not look like an image link');}
   else if(e.target.dataset.stat){const p=posts.find(x=>x.id===e.target.dataset.stat);if(p){const v=parseInt(String(e.target.value).replace(/[^\d]/g,''))||0;e.target.value=v||'';quietSave({...p,stats:{...(p.stats||{}),[e.target.dataset.f]:v}});toast('Saved');}}
@@ -1896,7 +1897,7 @@ function vBank(){
   const cats=bankData(),cvs=tplBankOrder();
   const tot=Object.values(cats).reduce((n,c)=>n+(c.items||[]).filter(x=>!x.used).length,0);
   $('view').innerHTML=head('Content Bank','All your post text in one place, by category. Press + on a line to add it to that category\'s "Make now" paragraph, then copy it into ChatGPT with the Muse prompt.')+
-`<div class="bar"><button class="btn ${bankOrg?'btn-p':'btn-g'}" data-act="bkorg">${bankOrg?'✓ Done organizing':'Organize categories'}</button>${bankOrg?'<button class="btn btn-g" data-act="tplnew">+ New template</button><span class="meta" style="margin:0">Rename anything, drag a category onto another one or onto a template name to move it, use ↑ ↓ to move templates.</span>':`<button class="btn btn-g" data-act="bkopenall">Open all</button><button class="btn btn-g" data-act="bkcloseall">Close all</button><span class="meta" style="margin:0">${tot} unused ready to post</span>`}</div>`+
+`<div class="bar"><button class="btn ${bankOrg?'btn-p':'btn-g'}" data-act="bkorg">${bankOrg?'✓ Done organizing':'Organize categories'}</button>${bankOrg?'<button class="btn btn-g" data-act="tplnew">+ New template</button><span class="meta" style="margin:0">Rename anything, drag a category onto another one or onto a template name to move it, use ↑ ↓ to move templates.</span>':`<button class="btn btn-g" data-act="bkopenall">Open all</button><button class="btn btn-g" data-act="bkcloseall">Close all</button><span class="meta" style="margin:0">${tot} unused ready to post</span>`}<div class="sp"></div><span class="meta" style="margin:0">Graphic details for:</span><select class="mini" id="bkwk">${[[-1,'Last week'],[0,'This week'],[1,'Next week'],[2,'Week after next']].map(([o,l])=>`<option value="${o}" ${bankWeek===o?'selected':''}>${l} (${bankWeekLabel(o)})</option>`).join('')}</select></div>`+
   (()=>{let last=null;const ord=[...cvs.map(x=>x.id),''],ix=k=>{const i=ord.indexOf(k||'');return i<0?ord.length:i;};
   const withCats=new Set(Object.values(cats).map(v=>ord.includes(v.canvas||'')?(v.canvas||''):'')),done=new Set();
   const H=k=>{done.add(k);const cvd=cvs.find(x=>x.id===k),img=cvd&&(libOv[cvd.id]||{}).tplImg;
@@ -1926,6 +1927,36 @@ function vBank(){
     <div class="tools" style="margin:0"><button class="btn btn-gold" data-md="bkcopybp">Copy prompt</button><button class="btn btn-g" data-md="bkresetbp">Reset to the original</button></div></div>
   <div class="card" style="border-color:var(--border-gold)"><div class="f" style="margin-bottom:6px"><label>Design prompt for ChatGPT, makes the PNGs from your template (editable: goes first when you press "Copy prompt + these")</label><textarea id="bkmp" data-bmp="1" style="min-height:240px">${esc(bankPrompt())}</textarea></div>
     <div class="tools" style="margin:0"><button class="btn btn-gold" data-md="bkcopyp">Copy prompt</button><button class="btn btn-g" data-md="bkresetp">Reset to the original</button></div></div>`;
+}
+/* ── LIVE DETAILS: facts pulled from HQ and appended to the graphic prompt ── */
+let bankWeek=0;
+function bankMonday(off){const t=todayStr(),back=(new Date(t+'T12:00:00').getDay()+6)%7;return addDays(t,-back+7*(off||0));}
+function bankWeekLabel(off){const a=bankMonday(off),b=addDays(a,6),f=d=>new Date(d+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'});return f(a)+' to '+f(b);}
+function liveDetails(off){
+  const a=bankMonday(off),b=addDays(a,6),m=a.slice(0,7);
+  const L=[];
+  const nights=gigs.filter(g=>isPublicGig(g)&&g.date>=a&&g.date<=b).sort((x,y)=>(x.date+(t24(x.time)||'99'))<(y.date+(t24(y.time)||'99'))?-1:1);
+  L.push('LIVE DETAILS FROM HQ (use these exact facts on the graphic wherever the post needs them. Do not invent or change any day, venue, game or time):');
+  L.push('Week: '+bankWeekLabel(off)+' (Monday to Sunday)');
+  if(gigs.length){
+    const venues=[...new Set(nights.map(g=>g.venue))];
+    L.push('Nights this week: '+nights.length+(nights.length?' across '+venues.length+' venue'+(venues.length===1?'':'s'):''));
+    if(nights.length){
+      L.push('Schedule:');
+      nights.forEach(g=>{const tm=t24(g.time);L.push('- '+DN[new Date(g.date+'T12:00:00').getDay()].toUpperCase()+' '+new Date(g.date+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})+': '+String(g.venue||'').toUpperCase()+(g.city?' ('+g.city+')':'')+', '+(g.kind||'')+(tm?', starts '+fmtTime(tm):', time not set'));});
+      const days=[...new Set(nights.map(g=>DN[new Date(g.date+'T12:00:00').getDay()]))];
+      L.push('Days with a night: '+days.join(', ')+' ('+days.length+' day'+(days.length===1?'':'s')+')');
+    }
+  }else L.push('(HQ schedule has not loaded, so no nights are listed. Open Clio while signed in and try again.)');
+  const ci=campInfo(m),i=mondaysOf(m).indexOf(a);
+  if(ci.theme)L.push('Month theme: '+ci.theme);
+  if(i>=0&&i<4&&ci.weeks[i])L.push('Costume theme this week (week '+(i+1)+' of 4): '+ci.weeks[i]);
+  const big=posts.filter(p=>p.type==='big'&&p.date>=todayStr()).sort(sortFn)[0];
+  if(big){const g=gigs.find(x=>'hqbig_'+x.id===big.id),tm=big.time?', '+fmtTime(big.time):'';L.push('Next big night: '+evTitle(big)+' on '+dayName(big.date).replace(/, \d{4}$/,'')+tm+(g&&g.venue?' at '+g.venue:'')+' ('+daysAway(big.date).toLowerCase()+')');}
+  const w=winLines(m,false);
+  if(w.length)L.push('Best Dressed winners so far this month:\n'+w.map(x=>'- '+x).join('\n'));
+  L.push('Footer: belladonnanights.com');
+  return L.join('\n');
 }
 function bankAct(a,arg){
   const open={...((libOv.bank||{}).open||{})};
@@ -1975,7 +2006,7 @@ function mdAct(el){
   else if(a==='bkcopyq'){
     const q=($('bkq-'+arg).value||'').trim();if(!q){toast('Add some posts to Make now first');return;}
     const v=bankData()[arg]||{},cv=libList(true).find(x=>x.id===v.canvas);
-    copyTxt($('bkmp').value.trim()+'\n\n'+(cv?'TEMPLATE LOOK: '+cv.name+' (attach your saved example image from Library)\n':'')+(v.badge?'TOP BADGE TEXT: '+v.badge+'\n':'')+((v.pnotes||'').trim()?'\nNOTES FOR THIS CATEGORY:\n'+v.pnotes.trim()+'\n':'')+'\nPOSTS TO MAKE (one PNG each, carousels where there are [brackets]):\n'+q);
+    copyTxt($('bkmp').value.trim()+'\n\n'+(cv?'TEMPLATE LOOK: '+cv.name+' (attach your saved example image from Library)\n':'')+(v.badge?'TOP BADGE TEXT: '+v.badge+'\n':'')+((v.pnotes||'').trim()?'\nNOTES FOR THIS CATEGORY:\n'+v.pnotes.trim()+'\n':'')+'\nPOSTS TO MAKE (one PNG each, carousels where there are [brackets]):\n'+q+'\n\n'+liveDetails(bankWeek));
   }
 }
 const TYPING='[data-secn],[data-bx],[data-bmp],[data-bbp],[data-ls],[data-lt],[data-lib],[data-ts],[data-ct],[data-bk],[data-bi],[data-stat],[data-ban]',AUTOSAVE='[data-bx],[data-bmp],[data-bbp],[data-ls],[data-lib],[data-ts],[data-ct]';
