@@ -514,7 +514,7 @@ function buildSeed(){
 }
 
 /* ── STATE ── */
-let db=null,fs=null,auth=null,authMod=null,user=null,authChecked=false,unsubs=[],mode='local',posts=[],vposts=[],gigs=[],libOv={};
+let db=null,fs=null,auth=null,authMod=null,user=null,authChecked=false,unsubs=[],mode='local',posts=[],vposts=[],gigs=[],hqGigs=[],libOv={},rtMod=null,rtdb=null,rt={};
 let tab=(location.hash||'#dashboard').slice(1);
 let evIdx=0,calView='todo',typeF='all',monthF='all',studioF='todo',editingId=null,selDay=null;
 let calMode=(()=>{try{return localStorage.getItem('bn_clio_calmode')||'list';}catch(e){return 'list';}})();
@@ -551,6 +551,7 @@ async function init(){
       authMod=await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js');
       const appInst=fa.initializeApp(FIREBASE_CONFIG);
       db=fs.getFirestore(appInst);auth=authMod.getAuth(appInst);
+      try{rtMod=await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js');rtdb=rtMod.getDatabase(appInst);}catch(e){console.warn('Realtime DB failed to load:',e.message);}
       mode='cloud';
       authMod.onAuthStateChanged(auth,u=>{
         authChecked=true;user=u;unsubs.forEach(f=>f());unsubs=[];
@@ -558,9 +559,10 @@ async function init(){
           const bad=err=>banner('Firestore says: '+esc(err.message)+'. Clio needs an account with role admin to read and save.',true);
           unsubs.push(fs.onSnapshot(fs.collection(db,COL_POSTS),snap=>{posts=snap.docs.map(d=>({id:d.id,...d.data()}));postsLoaded=true;render();bigSoon();},bad));
           unsubs.push(fs.onSnapshot(fs.collection(db,COL_LIB),snap=>{libOv={};snap.docs.forEach(d=>libOv[d.id]=d.data());render();},bad));
-          unsubs.push(fs.onSnapshot(fs.collection(db,'gig_schedule'),snap=>{gigs=snap.docs.map(d=>({id:d.id,...d.data()}));gigsLoaded=true;render();bigSoon();},err=>console.warn('gig_schedule:',err.message)));
+          unsubs.push(fs.onSnapshot(fs.collection(db,'gig_schedule'),snap=>{hqGigs=snap.docs.map(d=>({id:d.id,...d.data()}));rebuildGigs();gigsLoaded=true;render();bigSoon();},err=>console.warn('gig_schedule:',err.message)));
+          if(rtdb){[['tv','trivia/planner/venues'],['tg','trivia/planner/gigs'],['kv','trivia/planner/karaokeVenues'],['kg','trivia/planner/karaokeGigs'],['ev','trivia/planner/eventVenues'],['eg','trivia/planner/eventGigs'],['bv','bingo/landing/venues'],['bs','bingo/landing/schedule'],['mv','venues']].forEach(([k,path])=>{try{unsubs.push(rtMod.onValue(rtMod.ref(rtdb,path),sn=>{rt[k]=sn.val()||{};rtSoon();},err=>console.warn(path+': '+err.message)));}catch(e){console.warn(path,e.message);}});}
           setTimeout(()=>syncBuffer(false),5000);setTimeout(()=>{if(mode==='cloud'&&posts.length)migrateTitles();},3500);setTimeout(()=>{if(mode==='cloud'&&posts.length)runGen(false);},4500);
-        }else{posts=[];libOv={};gigs=[];gigsLoaded=false;postsLoaded=false;}
+        }else{posts=[];libOv={};gigs=[];hqGigs=[];rt={};gigsLoaded=false;postsLoaded=false;}
         render();
       });
     }catch(e){mode='local';banner('Firebase failed to load ('+esc(e.message)+'). Running in this-browser-only mode.',true);}
@@ -623,6 +625,57 @@ async function seedMissing(){
   }
   toast(add.length+' posts added');
 }
+
+/* ── REGULAR NIGHTS: HQ's dashboard also shows weekly nights that live on the Planner / Bingo venue records, not in gig_schedule. Clio expands them the same way. ── */
+const RT_DAYS={sun:0,mon:1,tue:2,wed:3,thu:4,fri:5,sat:6};
+const rtNorm=n=>String(n||'').toLowerCase().trim();
+const rtKey=n=>String(n||'').toLowerCase().replace(/^the\s+/,'').replace(/[^a-z0-9]/g,'');
+function rtKind(k){const x=String(k||'').toLowerCase();return x==='trivia'?'Trivia':x==='karaoke'?'Karaoke':x==='bingo'?'Bingo':(x==='events'||x==='private events')?'Events':'';}
+function rtRuns(v,dk){
+  if(!v)return false;
+  if(v.endsOn&&dk>=v.endsOn)return false;
+  const cad=v.cadence||'weekly',st=v.status||'active',d=new Date(dk+'T12:00:00');
+  if(cad==='single')return !!v.cadenceAnchor&&v.cadenceAnchor===dk&&(st==='active'||st==='seasonal'||st==='one-time');
+  if(!(st==='active'||st==='seasonal'))return false;
+  if(RT_DAYS[String(v.day||'').slice(0,3).toLowerCase()]!==d.getDay())return false;
+  const a=v.cadenceAnchor?new Date(v.cadenceAnchor+'T12:00:00'):null;
+  if(cad==='biweekly'&&a){const diff=Math.round((d-a)/86400000);return Math.abs(Math.floor(diff/7))%2===0;}
+  if(cad==='monthly'&&a)return Math.ceil(d.getDate()/7)===Math.ceil(a.getDate()/7);
+  return true;
+}
+function rtMasterTime(kind,name,dow){
+  const m=Object.values(rt.mv||{}).find(x=>x&&x.name&&rtKey(x.name)===rtKey(name));if(!m||!m.slots)return '';
+  const day=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][dow];
+  const sl=Object.values(m.slots).find(x=>x&&x.time&&x.day===day&&(rtKind(x.kind)||x.kind)===kind&&(!x.status||x.status==='active'||x.status==='seasonal'||x.status==='one-time'));
+  return sl?sl.time:'';
+}
+function externalGigs(from,to){
+  const out=[],seen=new Set(),hqBy={};
+  hqGigs.forEach(g=>{if(g.date)(hqBy[g.date]=hqBy[g.date]||new Set()).add(rtNorm(g.venue)+'|'+(rtKind(g.kind)||g.kind));});
+  const add=(g)=>{const k=g.date+'|'+rtNorm(g.venue)+'|'+g.kind;if(seen.has(k))return;seen.add(k);out.push(g);};
+  const sets=[['Trivia',rt.tv,rt.tg],['Karaoke',rt.kv,rt.kg],['Events',rt.ev,rt.eg]];
+  for(let ds=from;ds<=to;ds=addDays(ds,1)){
+    const dow=new Date(ds+'T12:00:00').getDay(),hq=hqBy[ds]||new Set();
+    sets.forEach(([kk,pv,pg])=>{
+      Object.entries(pv||{}).forEach(([id,v])=>{
+        if(!v||!v.name||hq.has(rtNorm(v.name)+'|'+kk))return;
+        const ov=pg&&pg[id]?pg[id][ds]:null;
+        if(ov&&ov.deletedByHQ)return;
+        if(!ov&&!rtRuns(v,ds))return;
+        const kind=kk==='Events'?((ov&&ov.eventKind)||v.eventKind||'Events'):kk;
+        add({id:'ext_'+kk+'_'+id+'_'+ds,date:ds,time:(ov&&ov.time)||rtMasterTime(kk,v.name,dow)||v.time||'',venue:v.name,kind,host:(ov&&ov.host)||v.host||'Unassigned',status:(ov&&ov.status==='cancelled')?'cancelled':'scheduled',ext:true});
+      });
+    });
+    Object.values(rt.bs||{}).filter(e=>e&&e.date===ds).forEach(e=>{
+      const bv=(rt.bv||{})[e.venueId]||{},name=bv.name;if(!name||hq.has(rtNorm(name)+'|Bingo'))return;
+      add({id:'ext_Bingo_'+(e.id||e.venueId)+'_'+ds,date:ds,time:e.time||rtMasterTime('Bingo',name,dow)||bv.time||'',venue:name,kind:'Bingo',host:e.host||bv.host||'Unassigned',status:'scheduled',ext:true});
+    });
+  }
+  return out;
+}
+function rebuildGigs(){const t=todayStr();gigs=hqGigs.concat(externalGigs(addDays(t,-7),addDays(t,75)));}
+let rtTimer=null;
+function rtSoon(){clearTimeout(rtTimer);rtTimer=setTimeout(()=>{rebuildGigs();render();bigSoon();},400);}
 
 /* ── HQ NIGHTS: HQ's gig_schedule is the source (the Planner mirrors it), so Clio reads it directly ── */
 function t24(t){
