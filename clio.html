@@ -529,8 +529,8 @@ function applyTheme(t){
   try{localStorage.setItem('bn_clio_theme',t);}catch(e){}
   const b=document.getElementById('th');if(b)b.textContent=t==='dark'?'☀ Light':'☾ Dark';
 }
-const TABS=[['dashboard','Dashboard'],['calendar','Calendar'],['campaigns','Campaigns'],['studio','Studio'],['events','Events'],['echo','Echo'],['templates','Templates'],['inventory','Inventory'],['listings','Listings']];
-if(['library','bank','cadence'].includes(tab))tab='templates';
+const TABS=[['dashboard','Dashboard'],['calendar','Calendar'],['campaigns','Campaigns'],['studio','Studio'],['events','Events'],['echo','Echo'],['templates','Templates'],['listings','Listings']];
+if(['library','bank','cadence','inventory'].includes(tab))tab='templates';
 if(!TABS.some(t=>t[0]===tab)&&tab!=='events')tab='dashboard';
 
 const $=id=>document.getElementById(id);
@@ -723,7 +723,7 @@ function nightLines(from,to,perDate){
 }
 
 /* ── SHELL ── */
-function setTab(t){document.body.classList.remove('menu-open');editing=false;tab=t;location.hash=t;render();window.scrollTo(0,0);}
+function setTab(t){if(t==='inventory'){tplGrp='all';libOv.settings={...(libOv.settings||{}),tplViewV2:'inventory'};saveLib('settings',{tplViewV2:'inventory'},true);t='templates';}document.body.classList.remove('menu-open');editing=false;tab=t;location.hash=t;render();window.scrollTo(0,0);}
 function vSignIn(){
   $('view').innerHTML=head('Belladonna Clio','Sign in with your admin account.')+(authChecked?`<div class="card" style="max-width:380px"><span class="lbl">Email or username</span><input type="text" id="si-id" autocomplete="username"/><span class="lbl">Password</span><input type="password" id="si-pw" autocomplete="current-password"/><div style="margin-top:12px"><button class="btn btn-p" data-act="signin">Sign in</button></div></div>`:'<div class="empty">Checking sign-in…</div>');
 }
@@ -1274,7 +1274,7 @@ $('view').addEventListener('change',e=>{
   else if(e.target.dataset.api){const u=normApi(e.target.value);if(u||!e.target.value.trim()){setApi(u);}else toast('That does not look like an address');}
   else if(e.target.dataset.secn!==undefined){const old=e.target.dataset.secn,nm=e.target.value.trim();if(!nm||nm===old){render();return;}
     const sc=tplSections();if(sc.includes(nm)){toast('That section name is taken');render();return;}
-    (async()=>{for(const t of tplList().filter(x=>(x.group||'Other')===old))await saveLib(t.id,{group:nm},true);await saveLib('tplui',{sections:sc.map(g=>g===old?nm:g)},true);render();})();}
+    (async()=>{for(const t of tplList().filter(x=>(x.group||'Other')===old))await saveLib(t.id,{group:nm},true);await saveLib('tplui',{sections:sc.map(g=>g===old?nm:g)},true);if(tplGrp===old)tplGrp=nm;render();})();}
   else if(e.target.dataset.lib){if(e.target.tagName==='SELECT'){e.target.blur();editing=false;pendingRender=false;}saveLib(e.target.dataset.lib,{[e.target.dataset.f]:e.target.value.trim()}).then(render);}
   else if(0)saveLib(e.target.dataset.lib,{[e.target.dataset.f]:e.target.value.trim()}).then(render);
   else if(e.target.dataset.bx){const[c,f]=e.target.dataset.bx.split('|');bankField(c,f,e.target.value);}
@@ -1314,7 +1314,7 @@ function act(a,arg){
   else if(a==='secup'||a==='secdn'){const sc=tplSections(),i=sc.indexOf(arg),k=a==='secup'?i-1:i+1;if(i<0||k<0||k>=sc.length)return;[sc[i],sc[k]]=[sc[k],sc[i]];saveLib('tplui',{sections:sc},true).then(render);}
   else if(a==='secdel'){const its=tplList().filter(e=>(e.group||'Other')===arg);
     if(!confirm('Delete the section "'+arg+'"?'+(its.length?'\n\nIts '+its.length+' template(s) will move to "Other".':'')))return;
-    (async()=>{let sc=tplSections().filter(g=>g!==arg);if(its.length){if(!sc.includes('Other'))sc.push('Other');for(const e of its)await saveLib(e.id,{group:'Other'},true);}await saveLib('tplui',{sections:sc},true);render();})();}
+    (async()=>{let sc=tplSections().filter(g=>g!==arg);if(its.length){if(!sc.includes('Other'))sc.push('Other');for(const e of its)await saveLib(e.id,{group:'Other'},true);}await saveLib('tplui',{sections:sc},true);if(tplGrp===arg)tplGrp='all';render();})();}
   else if(a==='tplfold'){const o={...tplOpenMap()};if(o[arg])delete o[arg];else o[arg]=true;saveLib('tplui',{open:o},true).then(render);}
   else if(a==='tplnew'){const nm=(prompt('Name for the new template (e.g. Crow Imagery)')||'').trim();if(!nm)return;
     {const id='cv_'+Date.now().toString(36);saveLib(id,{custom:true,name:nm,nick:nm,size:'1080x1350',use:'',group:'Canvases',freq:'Template, not a post'}).then(()=>saveLib('tplui',{open:{...tplOpenMap(),[id]:true}},true)).then(()=>{render();toast('Template added: fill in its details and upload an example.');});}}
@@ -1343,7 +1343,8 @@ function act(a,arg){
   else if(a==='tsvenues'){tsAdd([...new Set(gigs.filter(isPublicGig).map(g=>g.venue).filter(Boolean))],'venue');}
   else if(a==='bufsync')syncBuffer(false);
   else if(/^iv(new|del|adj|add|make)$/.test(a))ivAct(a,arg);
-  else if(a==='tvw'){saveLib('settings',{tplView:arg},true).then(render);}
+  else if(a==='tvw'){tplGrp='all';saveLib('settings',{tplViewV2:arg},true).then(render);}
+  else if(a==='tgf'){tplGrp=arg;render();}
   else if(a==='tdue'){tplDue=!tplDue;render();}
   else if(a==='tgrp'){const o={...((libOv.tplui||{}).gopen||{})};o[arg]=!gopenNow(arg);saveLib('tplui',{gopen:o},true).then(render);}
   else if(a==='tset'){saveLib('tplui',{setOpen:!(libOv.tplui||{}).setOpen},true).then(render);}
@@ -2354,7 +2355,7 @@ function capPrompt(){
 
 /* ═══ TEMPLATES HUB: Library + Content Bank + Cadence in one place. One card per template look. ═══ */
 let tplDue=false;
-function tplViewNow(){return (libOv.settings||{}).tplView||'use';}
+function tplViewNow(){return (libOv.settings||{}).tplViewV2||'template';}
 function tplAll(){
   const L=tplList(),ids=new Set(L.map(x=>x.id));
   const types=libList().filter(e=>!e.id.startsWith('cv_')&&!effTpl(e));
@@ -2457,16 +2458,35 @@ function tplGroupBlock(k,label,list){
   const open=tplDue||gopenNow(k);
   return `<div class="monthh" data-act="tgrp" data-arg="${k}" style="font-size:1.1rem;margin:18px 0 8px;cursor:pointer;display:flex;gap:8px;align-items:baseline"><span style="font-size:.9rem">${open?'▾':'▸'}</span>${esc(label)}<span class="meta" style="margin:0;font-size:.8rem">${list.length}</span></div>${open?list.map(tplCard).join(''):''}`;
 }
-function tplUseHtml(list){
-  const g={};list.forEach(t=>{const tier=tplTier(t),key=tier==='off'?'off':(tplMake(t)==='batch'?'batch':tier);(g[key]=g[key]||[]).push(t);});
-  return [...TPL_TIERS,['batch','Batch-made, as needed'],['off','Turned off']].filter(([k])=>g[k]).map(([k,l])=>tplGroupBlock(k,l,g[k])).join('')||'<div class="empty">Nothing here.</div>';
+let tplGrp='all';
+function tplPillRow(items,sel,act){
+  return `<div class="bar">${items.map(([k,l,n,att])=>`<button class="chip ${sel===k?'on':''}" data-act="${act}" data-arg="${esc(k)}" ${att||''}>${esc(l)}${n!==undefined?' ('+n+')':''}</button>`).join('')}</div>`;
 }
-function tplByTemplateHtml(list){
-  const ids=new Set(list.map(x=>x.id)),secs=tplSections();
-  return secs.map((g,ix)=>{const its=list.filter(e=>e.id!=='_none'&&(e.group||'Other')===g);
-    if(tplDue&&!its.length)return '';
-    return `<div data-sec="${esc(g)}" style="margin-bottom:6px"><div class="sec" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><input type="text" data-secn="${esc(g)}" value="${esc(g)}" style="width:auto;min-width:140px;max-width:260px;font-family:var(--cinzel);letter-spacing:.12em;text-transform:uppercase"/><span class="meta" style="margin:0">${its.length} template${its.length===1?'':'s'}</span><button class="btn btn-g" type="button" data-act="secup" data-arg="${esc(g)}" ${ix?'':'disabled'}>↑</button><button class="btn btn-g" type="button" data-act="secdn" data-arg="${esc(g)}" ${ix<secs.length-1?'':'disabled'}>↓</button><button class="btn btn-d" type="button" data-act="secdel" data-arg="${esc(g)}">Delete section</button></div>${its.length?its.map(tplCard).join(''):'<div class="meta" style="margin:0">Empty. Drag a template here.</div>'}</div>`;}).join('')+
-    (ids.has('_none')?`<div class="sec">No template</div>${tplCard(list.find(x=>x.id==='_none'))}`:'');
+function tplUseParts(list){
+  const g={};list.forEach(t=>{const tier=tplTier(t),key=tier==='off'?'off':(tplMake(t)==='batch'?'batch':tier);(g[key]=g[key]||[]).push(t);});
+  const groups=[...TPL_TIERS,['batch','Batch-made, as needed'],['off','Turned off']].filter(([k])=>g[k]).map(([k,l])=>[k,l,g[k]]);
+  if(tplGrp!=='all'&&!groups.some(x=>x[0]===tplGrp))tplGrp='all';
+  const pills=tplPillRow([['all','All',list.length],...groups.map(([k,l,L])=>[k,l,L.length])],tplGrp,'tgf');
+  const cards=tplGrp==='all'?(groups.map(([k,l,L])=>`<div class="sec">${esc(l)}</div>${L.map(tplCard).join('')}`).join('')||'<div class="empty">Nothing here.</div>'):groups.find(x=>x[0]===tplGrp)[2].map(tplCard).join('');
+  return [pills,'',cards];
+}
+function tplTemplateParts(list){
+  const secs=tplSections(),has=list.some(x=>x.id==='_none');
+  const cnt=g=>list.filter(e=>e.id!=='_none'&&(e.group||'Other')===g).length;
+  if(tplGrp!=='all'&&tplGrp!=='_none'&&!secs.includes(tplGrp))tplGrp='all';
+  if(tplGrp==='_none'&&!has)tplGrp='all';
+  const pills=tplPillRow([['all','All',list.length],...secs.map(g=>[g,g,cnt(g),`data-sec="${esc(g)}"`]),...(has?[['_none','No template',1]]:[]),...(tplDue?[]:[])],tplGrp,'tgf').replace(/<\/div>$/,`<button class="chip" data-act="secnew">+ Section</button></div>`);
+  let mgmt='',cards='';
+  if(tplGrp==='all'){
+    cards=secs.map(g=>{const its=list.filter(e=>e.id!=='_none'&&(e.group||'Other')===g);if(tplDue&&!its.length)return '';
+      return `<div data-sec="${esc(g)}" style="margin-bottom:6px"><div class="sec">${esc(g)}</div>${its.length?its.map(tplCard).join(''):'<div class="meta" style="margin:0">Empty. Drag a template onto this section\'s pill above.</div>'}</div>`;}).join('')+(has?`<div class="sec">No template</div>${tplCard(list.find(x=>x.id==='_none'))}`:'');
+  }else if(tplGrp==='_none'){cards=tplCard(list.find(x=>x.id==='_none'));}
+  else{
+    const ix=secs.indexOf(tplGrp),its=list.filter(e=>e.id!=='_none'&&(e.group||'Other')===tplGrp);
+    mgmt=`<div class="bar"><span class="meta" style="margin:0">Section name</span><input type="text" data-secn="${esc(tplGrp)}" value="${esc(tplGrp)}" style="width:auto;min-width:140px;max-width:240px"/><button class="btn btn-g" type="button" data-act="secup" data-arg="${esc(tplGrp)}" ${ix?'':'disabled'}>↑</button><button class="btn btn-g" type="button" data-act="secdn" data-arg="${esc(tplGrp)}" ${ix<secs.length-1?'':'disabled'}>↓</button><button class="btn btn-d" type="button" data-act="secdel" data-arg="${esc(tplGrp)}">Delete section</button></div>`;
+    cards=`<div data-sec="${esc(tplGrp)}">${its.length?its.map(tplCard).join(''):'<div class="meta">Empty. Drag a template onto this section\'s pill above.</div>'}</div>`;
+  }
+  return [pills,mgmt,cards];
 }
 function tplScheduleHtml(){
   const all=libList(true).filter(e=>!e.id.startsWith('cv_')&&!(MONTHLY_SET_IDS.includes(e.id)&&e.id!=='monthly'));
@@ -2493,16 +2513,17 @@ function tplSettingsHtml(){
   </div>`;
 }
 function vTemplates(){
-  const view=tplViewNow(),all=tplAll(),list=(tplDue&&view!=='schedule')?all.filter(tplIsDue):all;
+  const view=tplViewNow(),all=tplAll(),filt=(view==='template'||view==='use'),list=(tplDue&&filt)?all.filter(tplIsDue):all;
   const chip=(k,l)=>`<button class="chip ${view===k?'on':''}" data-act="tvw" data-arg="${k}">${l}</button>`;
-  const body=view==='schedule'?tplScheduleHtml():(view==='template'?tplByTemplateHtml(list):tplUseHtml(list));
-  const empty=(tplDue&&view!=='schedule'&&!list.length)?'<div class="empty">Nothing is due in the next 7 days.</div>':'';
-  $('view').innerHTML=head('Templates','Every look, its words and how often you post it, in one place. Switch the grouping to find things your way.')+
-    `<div class="bar">${chip('use','By use')}${chip('template','By template')}${chip('schedule','By schedule')}<div class="sp"></div>${view==='schedule'?'':`<button class="chip ${tplDue?'on':''}" data-act="tdue">Due soon</button>`}${view==='template'?'<button class="btn btn-g" data-act="secnew">+ Add a section</button>':''}<button class="btn btn-p" data-act="tplnew">+ New template</button></div>
-    <div class="bar"><span class="meta" style="margin:0">Details for graphics:</span><span class="meta" style="margin:0">Night</span><input type="date" id="bkday" value="${bankDay}" style="width:auto;padding:5px 10px"/><span class="meta" style="margin:0">Week</span><select class="mini" id="bkwk">${[[-1,'Last week'],[0,'This week'],[1,'Next week'],[2,'Week after next']].map(([o,l])=>`<option value="${o}" ${bankWeek===o?'selected':''}>${l} (${bankWeekLabel(o)})</option>`).join('')}</select></div>`+
-    body+empty+tplSettingsHtml();
+  const top=`<div class="bar">${chip('template','By template')}${chip('use','By use')}${chip('schedule','By schedule')}${chip('inventory','Inventory')}<div class="sp"></div>${filt?`<button class="chip ${tplDue?'on':''}" data-act="tdue">Due soon</button>`:''}<button class="btn btn-p" data-act="tplnew">+ New template</button></div>`;
+  const hd=head('Templates','Every look, its words and how often you post it, in one place. Switch the grouping to find things your way.');
+  if(view==='inventory'){$('view').innerHTML=hd+top.replace(/<button class="btn btn-p"[^>]*>\+ New template<\/button>/,'')+invHtml();return;}
+  const details=`<div class="bar"><span class="meta" style="margin:0">Details for graphics:</span><span class="meta" style="margin:0">Night</span><input type="date" id="bkday" value="${bankDay}" style="width:auto;padding:5px 10px"/><span class="meta" style="margin:0">Week</span><select class="mini" id="bkwk">${[[-1,'Last week'],[0,'This week'],[1,'Next week'],[2,'Week after next']].map(([o,l])=>`<option value="${o}" ${bankWeek===o?'selected':''}>${l} (${bankWeekLabel(o)})</option>`).join('')}</select></div>`;
+  if(view==='schedule'){$('view').innerHTML=hd+top+details+tplScheduleHtml()+tplSettingsHtml();return;}
+  const [pills,mgmt,cards]=view==='use'?tplUseParts(list):tplTemplateParts(list);
+  const empty=(tplDue&&!list.length)?'<div class="empty">Nothing is due in the next 7 days.</div>':'';
+  $('view').innerHTML=hd+top+pills+mgmt+details+cards+empty+tplSettingsHtml();
 }
-
 /* ═══ INVENTORY: how many ready-to-post posts you have per kind. Goes down when you tick Sched on a matching post. ═══ */
 function invItems(){return (libOv.inventory||{}).items||{};}
 async function invSave(items){await saveLib('inventory',{items},true);}
@@ -2519,7 +2540,8 @@ function invAdjust(p,delta){
   toast(v.name+': '+v.count+' left'+((delta<0&&low&&v.count<=low)?'. Running low, time to make more':''));
 }
 function invLow(){return Object.entries(invItems()).filter(([,v])=>(+v.low||0)>0&&(+v.count||0)<=(+v.low||0));}
-function vInventory(){
+function vInventory(){$('view').innerHTML=head('Inventory','Stock of finished posts.')+invHtml();}
+function invHtml(){
   const items=Object.entries(invItems()),cats=Object.entries(bankData()),types=libList().filter(e=>!e.id.startsWith('cv_')),low=invLow();
   const row=([id,v])=>{
     const n=+v.count||0,isLow=(+v.low||0)>0&&n<=(+v.low||0);
@@ -2534,7 +2556,7 @@ function vInventory(){
         <div class="f"><label>Or on any post of this type</label><select data-iv="${id}" data-f="type"><option value="">(none)</option>${types.map(e=>`<option value="${e.id}" ${v.type===e.id?'selected':''}>${esc(e.name)}</option>`).join('')}</select></div></div>
       <div class="acts" style="margin-top:0">${(v.cat&&bankData()[v.cat])?`<button class="btn btn-gold" data-act="ivmake" data-arg="${id}">Make more</button>`:''}<button class="btn btn-d" data-act="ivdel" data-arg="${id}">Delete</button></div></div>`;
   };
-  $('view').innerHTML=head('Inventory','How many finished posts you have in stock. The number drops by one each time you tick Sched on a matching post, and goes back up if you untick it.')+
+  return `<div class="sub" style="margin-top:0">How many finished posts you have in stock. The number drops by one each time you tick Sched on a matching post, and goes back up if you untick it.</div>`+
     (low.length?`<div class="banner err">Running low: ${low.map(([,v])=>esc(v.name)+' ('+(+v.count||0)+')').join(', ')}</div>`:'')+
     `<div class="bar"><button class="btn btn-p" data-act="ivnew">+ Add inventory</button></div>`+
     (items.length?items.map(row).join(''):'<div class="empty">Nothing tracked yet. Add one, like "Bar Truths", type how many you made, and link it to its bank category so it counts down on its own.</div>')+
@@ -2548,7 +2570,7 @@ function ivAct(a,arg){
   else if(a==='ivadd'){const el=$('iva-'+arg),n=parseInt(String(el&&el.value).replace(/[^\d-]/g,''));if(!n||!items[arg]){toast('Type how many you made');return;}items[arg].count=Math.max(0,(+items[arg].count||0)+n);toast(items[arg].name+': '+items[arg].count+' in stock');}
   else if(a==='ivmake'){const v=items[arg],c=v&&bankData()[v.cat];if(!c)return;
     const o={...((libOv.bank||{}).open||{})};o[v.cat]=true;const t={...((libOv.tplui||{}).open||{})};t[c.canvas||'_none']=true;
-    saveLib('bank',{open:o},true).then(()=>saveLib('tplui',{open:t},true)).then(()=>setTab('templates'));return;}
+    saveLib('bank',{open:o},true).then(()=>saveLib('tplui',{open:t},true)).then(()=>saveLib('settings',{tplViewV2:'template'},true)).then(()=>{tplGrp='all';setTab('templates');});return;}
   invSave(items).then(render);
 }
 function ivChange(t){
@@ -2582,7 +2604,7 @@ function exportBuffer(){
 }
 
 window.closeEdit=closeEdit;window.saveEdit=saveEdit;window.addSlide=addSlide;window.delPost=delPost;window.encore=encore;window.muse=muse;window.libSaveEdit=libSaveEdit;window.ledRule=ledRule;window.libHide=libHide;window.banUpload=banUpload;window.addTags=addTags;window.setWin=setWin;window.tw=null;Object.defineProperty(window,'tw',{get:()=>tw,set:v=>{tw=v;}});Object.defineProperty(window,'twKey',{get:()=>twKey});window.twPick=twPick;window.twAdd=twAdd;window.twDelTask=twDelTask;window.twMove=twMove;window.twNewSet=twNewSet;window.twDelSet=twDelSet;window.twSave=twSave;window.libUpload=libUpload;window.aiCaption=aiCaption;window.capPrompt=capPrompt;window.openGfx=openGfx;window.gfxPick=gfxPick;window.gfxSaveBg=gfxSaveBg;window.gfxUse=gfxUse;window.uploadImg=uploadImg;window.imgPrev=imgPrev;
-window.addEventListener('hashchange',()=>{let h=location.hash.slice(1);if(['library','bank','cadence'].includes(h)){location.hash='templates';return;}if((TABS.some(t=>t[0]===h)||h==='events')&&h!==tab){editing=false;tab=h;render();}});
+window.addEventListener('hashchange',()=>{let h=location.hash.slice(1);if(['library','bank','cadence','inventory'].includes(h)){location.hash='templates';return;}if((TABS.some(t=>t[0]===h)||h==='events')&&h!==tab){editing=false;tab=h;render();}});
 applyTheme(document.documentElement.getAttribute('data-theme')||'dark');
 init();
 </script>
