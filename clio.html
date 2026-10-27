@@ -267,7 +267,7 @@ const LIB_SEED=[
   {id:'host',name:'Host Story',nick:'Host',size:'1080x1920',use:"Host's costume story frame"},
   {id:'cover',name:'Big Night Event Cover',nick:'Cover',size:'1920x1005',use:'Facebook Event image, 14 days out'},
   {id:'count',name:'Countdown',nick:'Count',size:'1080x1350 + 1080x1920',use:'7-day, 3-day and day-of posts'},
-  {id:'trivia',name:'Trivia Winners',nick:'Trivia',size:'1080x1350',use:'Next-morning post naming the trivia winners'},
+  {id:'trivia',name:'Trivia Winners',nick:'Winners',size:'1080x1350',use:'Next-morning post naming the trivia winners'},
   {id:'best',name:'Best Dressed',nick:'Best',size:'1080x1350',use:'Next-morning winner photo frame'},
   {id:'recap',name:'Monthly Recap',nick:'Recap',size:'1080x1350',use:'Winners and best photos, month end'},
   {id:'pin',name:'Weekly Nights Pin',nick:'Pin',size:'1080x1350 + 1080x1920',use:'Pinned post, highlight, recurring Facebook Event covers'},
@@ -731,7 +731,7 @@ function nightLines(from,to,perDate){
 }
 
 /* ── SHELL ── */
-function setTab(t){if(t==='inventory'){tplGrp='all';libOv.settings={...(libOv.settings||{}),tplViewV2:'use'};saveLib('settings',{tplViewV2:'use'},true);t='templates';}document.body.classList.remove('menu-open');editing=false;tab=t;location.hash=t;render();window.scrollTo(0,0);}
+function setTab(t){if(t==='inventory'){tplGrp='all';libOv.settings={...(libOv.settings||{}),tplViewV2:'use'};saveLib('settings',{tplViewV2:'use'},true);t='templates';}document.body.classList.remove('menu-open');editing=false;if(!['bank','templates','cadence'].includes(t))bankReturnAll();tab=t;location.hash=t;render();window.scrollTo(0,0);}
 function vSignIn(){
   $('view').innerHTML=head('Belladonna Clio','Sign in with your admin account.')+(authChecked?`<div class="card" style="max-width:380px"><span class="lbl">Email or username</span><input type="text" id="si-id" autocomplete="username"/><span class="lbl">Password</span><input type="password" id="si-pw" autocomplete="current-password"/><div style="margin-top:12px"><button class="btn btn-p" data-act="signin">Sign in</button></div></div>`:'<div class="empty">Checking sign-in…</div>');
 }
@@ -761,6 +761,7 @@ function render(){
   if(editing){pendingRender=true;return;}
   const so=$('so');if(so)so.style.display=(mode==='cloud'&&user)?'':'none';
   if(mode==='cloud'&&!user){$('tabs').innerHTML='';banner('');vSignIn();return;}
+  if(!bankRestored&&libOv.bank){bankRestored=true;bankReturnAll();}
   syncTypes();
   vposts=posts.concat(virtualRows());
   const tabBtns=TABS.map(([k,l])=>`<button class="tab ${tab===k?'on':''}" data-act="tab" data-arg="${k}">${l}</button>`).join('');
@@ -2122,6 +2123,12 @@ async function offerClear(id){
 }
 
 /* ── CONTENT BANK: all your post text, by category ── */
+const CONFESS_NOTES=`Put the label "Belladonna Confessions:" at the start of the main text, in gold and smaller than the confession, on its own line above it. The confession goes under it, large and in cream, exactly as written.
+- "I've..." statements: one centered block of text.
+- Fill-in-the-blank lines (anything with __________): keep the blank as a long gold underline in the same spot in the sentence. Do NOT fill it in or guess an answer.
+- Multiple choice (a question followed by A) B) C)): the question on its own line under the label, larger than the options. Then each option on its own line, in order, each with a gold letter. Options all the same size. Do not mark an answer and do not add or remove options.
+- Spell every word exactly as written, including apostrophes and capitals (BINGO stays in capitals). Add nothing else: no hashtags, emojis or extra text.
+- If a confession is long, shrink the text to fit with equal margins. Never cut words off.`;
 const BANK_SEED=[
   ['quotes','Quotes & Bar Truths','cv_snark','BAR TRUTH'],['memes',"Memes & Tag Friends",'cv_snark',"TAG 'EM"],['confess','Belladonna Confessions','cv_snark','CONFESSIONS'],['rookasks','Rook Asks (polls & quizzes)','cv_snark','ROOK ASKS'],
   ['rooksays','Rook Posts & Occupations','cv_atmos','ROOK SAYS'],['crow','Crow Imagery','cv_atmos','CROW'],['crowdv','Crowd & Vibe','cv_atmos','CROWD & VIBE'],['vibe','The Vibe (movie-style memes)','cv_atmos','THE VIBE'],['event','Simple Gig / Special Event','cv_atmos','SPECIAL EVENT'],
@@ -2164,6 +2171,7 @@ function bankData(){
   if(b&&b.cats)cats=JSON.parse(JSON.stringify(b.cats));
   else{cats={};BANK_SEED.forEach(([id,name,canvas,badge])=>cats[id]={name,canvas,badge,items:[]});}
   if(cats.vibe&&/^The Vibe/.test(cats.vibe.name))cats.vibe.name='Meme';
+  if(cats.confess&&cats.confess.pnotes===undefined)cats.confess.pnotes=CONFESS_NOTES;
   Object.values(cats).forEach(c=>{c.items=c.items||[];const ex=c.items.filter(x=>x.ex);if(ex.length){c.examples=[c.examples||'',...ex.map(x=>x.t)].filter(Boolean).join('\n');c.items=c.items.filter(x=>!x.ex);}});
   return cats;
 }
@@ -2201,12 +2209,12 @@ function vBank(){
   return Object.entries(cats).map((e,i)=>[e,i]).sort((a,b)=>(ix(a[0][1].canvas)-ix(b[0][1].canvas))||((a[0][1].ord??1e6)-(b[0][1].ord??1e6))||(a[1]-b[1])).map(p=>p[0]).map(([c,v])=>{
     const cvk=ord.includes(v.canvas||'')?(v.canvas||''):'',cvd=cvs.find(x=>x.id===cvk);
     const hdr=cvk!==last?(last=cvk,emptyBefore(ix(cvk))+H(cvk)):'';
-    const its=v.items||[],un=its.filter(x=>!x.used).length;
+    const its=v.items||[],un=its.filter(x=>!x.used).length,simple=catSimple(v);
     const open=!!((libOv.bank||{}).open||{})[c],qn=(v.queue||'').split('\n').filter(x=>x.trim()).length;
     if(bankOrg)return hdr+`<div class="card" data-bcat="${c}" data-bsec="${esc(cvk)}" draggable="true" style="padding:10px 12px;display:flex;gap:10px;align-items:center"><span style="cursor:grab;color:var(--gold2)" title="Drag to move">⠿</span><input type="text" data-bk="${c}" data-f="name" value="${esc(v.name)}" style="flex:1"/><button class="btn btn-d" data-act="bkcatdel" data-arg="${c}">Delete</button></div>`;
     return hdr+`<div class="card" data-bcat="${c}" data-bsec="${esc(cvk)}"><div data-act="bkfold" data-arg="${c}" style="cursor:pointer;display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span style="color:var(--gold2);width:14px">${open?'▾':'▸'}</span><b style="font-weight:600">${esc(v.name)}</b>${v.badge?`<span class="nick">${esc(v.badge)}</span>`:''}${v.silenced?'<span class="nick" style="color:var(--rose)">Paused / Retired</span>':''}<span class="has" style="display:inline;margin-left:auto">${un} unused ideas${(()=>{const iv=Object.values(invItems()).find(x=>x.cat===c);return iv?' · '+(+iv.count||0)+' in inventory':'';})()}${qn?' · '+qn+' in Make now':''}</span></div>
-    ${open?`<div style="margin-top:10px"><div class="f"><label>Badge on the template</label><input type="text" data-bk="${c}" data-f="badge" value="${esc(v.badge||'')}"/></div>
-    <div class="f"><label>Prompt notes (added to "Copy prompt + these" for this category)</label><textarea data-bx="${c}|pnotes" style="min-height:70px" placeholder="Extra instructions this category always needs, e.g. Two sentences per post: sentence one goes on the top of the PNG, sentence two goes on the bottom.">${esc(v.pnotes||'')}</textarea>
+    ${open?`<div style="margin-top:10px">${simple?'':`<div class="f"><label>Badge on the template</label><input type="text" data-bk="${c}" data-f="badge" value="${esc(v.badge||'')}"/></div>
+`}    <div class="f"><label>Prompt notes (added to "Copy prompt + these" for this category)</label><textarea data-bx="${c}|pnotes" style="min-height:70px" placeholder="Extra instructions this category always needs, e.g. Two sentences per post: sentence one goes on the top of the PNG, sentence two goes on the bottom.">${esc(v.pnotes||'')}</textarea>
       <div class="tools" style="margin:6px 0 0"><button class="btn btn-gold" data-md="bkcopypn" data-arg="${c}">Copy prompt notes</button></div>
       <div data-act="livefold" data-arg="${c}" style="cursor:pointer;color:var(--gold2);font-size:13px;margin-top:10px"><span style="display:inline-block;width:14px">${((libOv.tplui||{}).liveOpen||{})[c]?'▾':'▸'}</span>Live details from HQ (added automatically to the prompt notes when you copy)</div>
       ${mode==='night'?`<div class="bar" style="margin:6px 0 0">${bankRangeHtml()}</div>`:''}
@@ -2216,15 +2224,15 @@ function vBank(){
       <pre style="white-space:pre-wrap;font-family:var(--font);font-size:12px;line-height:1.5;color:var(--text2);background:var(--surface3);border:1px solid var(--border);border-radius:var(--radius);padding:8px 10px;margin:0">${esc(catLive(c)||'(none)')}</pre></div>`:''}</div>
     ${catInvHtml(c)}
     <div class="f"><label>Make now (what you want made this time)</label><textarea id="bkq-${c}" data-bx="${c}|queue" style="min-height:90px" placeholder="Press + next to a saved line below, or type here">${esc(v.queue||'')}</textarea>
-      <div class="tools" style="margin:6px 0 0"><button class="btn btn-gold" data-md="bkcopyq" data-arg="${c}">Copy prompt + these</button><button class="btn btn-g" data-md="bkcopyqo" data-arg="${c}">Copy just these</button><button class="btn btn-g" data-md="bkqclear" data-arg="${c}">Clear</button></div></div>
+      <div class="tools" style="margin:6px 0 0"><button class="btn btn-gold" data-md="bkcopyq" data-arg="${c}">Copy prompt + these</button><button class="btn btn-g" data-md="bkcopyqo" data-arg="${c}">Copy just these</button><button class="btn btn-g" data-md="bkqback" data-arg="${c}">Put back in bank</button><button class="btn btn-g" data-md="bkqclear" data-arg="${c}">Clear</button></div></div>
     <div class="meta">${un} unused ideas ready to post · <a href="#" data-act="libedit" data-arg="bk:${c}" style="color:var(--gold)">Set how often to post this</a></div>
     ${its.map(x=>`<div style="display:flex;gap:8px;align-items:center;margin-bottom:5px"><input type="checkbox" data-act="bkused" data-arg="${c}|${x.id}" ${x.used?'checked':''} style="width:17px;height:17px" title="Mark used"/><input type="text" data-bi="${c}|${x.id}" value="${esc(x.t)}" style="${x.used?'opacity:.45;text-decoration:line-through':''}"/><button class="btn btn-g" data-md="bkq" data-arg="${c}|${x.id}" style="padding:4px 12px" title="Add to Make now">+</button><button class="btn btn-d" data-act="bkdel" data-arg="${c}|${x.id}" style="padding:4px 10px">×</button></div>`).join('')}
-    <div class="f" style="margin-top:8px"><label>Add (one per line)</label><textarea id="bkadd-${c}" style="min-height:60px" placeholder="Paste or type posts, one on each line"></textarea>
+    ${simple?'':`<div class="f" style="margin-top:8px"><label>Add (one per line)</label><textarea id="bkadd-${c}" style="min-height:60px" placeholder="Paste or type posts, one on each line"></textarea>
       <div class="tools" style="margin:6px 0 0"><button class="btn btn-g" data-act="bkadd" data-arg="${c}">Add to bank</button></div></div>
-    <div class="f"><label>Notes</label><textarea data-bx="${c}|notes" style="min-height:70px" placeholder="Ideas, rules for this category, what works">${esc(v.notes||'')}</textarea></div>
-    <div class="f"><label>Used / Examples (copy this into ChatGPT for more ideas)</label><textarea id="bkx-${c}" data-bx="${c}|examples" style="min-height:90px" placeholder="Paste posts you've used or examples you like, as a paragraph or list">${esc(v.examples||'')}</textarea>
+`}    <div class="f"><label>Notes</label><textarea data-bx="${c}|notes" style="min-height:70px" placeholder="Ideas, rules for this category, what works">${esc(v.notes||'')}</textarea></div>
+    ${simple?'':`<div class="f"><label>Used / Examples (copy this into ChatGPT for more ideas)</label><textarea id="bkx-${c}" data-bx="${c}|examples" style="min-height:90px" placeholder="Paste posts you've used or examples you like, as a paragraph or list">${esc(v.examples||'')}</textarea>
       <div class="tools" style="margin:6px 0 0"><button class="btn btn-g" data-md="bkcopyx" data-arg="${c}">Copy</button><button class="btn btn-gold" data-md="bkcopyb" data-arg="${c}">Copy brainstorm prompt</button></div></div>
-</div>`:''}</div>`;
+`}</div>`:''}</div>`;
   }).join('')+cvs.map(x=>x.id).filter(k=>!done.has(k)).map(H).join('');})()+
 venueCitiesHtml()+`<div class="card" style="border-color:var(--border-gold)"><div class="f" style="margin-bottom:6px"><label>Brainstorming prompt for ChatGPT (editable: goes first when you press "Copy brainstorm prompt" on a category)</label><textarea id="bkbp" data-bbp="1" style="min-height:200px">${esc(brainPrompt())}</textarea></div>
     <div class="tools" style="margin:0"><button class="btn btn-gold" data-md="bkcopybp">Copy prompt</button><button class="btn btn-g" data-md="bkresetbp">Reset to the original</button></div></div>
@@ -2330,13 +2338,34 @@ function copyTxt(t){
   if(!t)return;
   (navigator.clipboard?navigator.clipboard.writeText(t).then(()=>toast('Copied'),()=>toast('Could not copy. Select it and copy by hand')):Promise.resolve(toast('Could not copy. Select it and copy by hand')));
 }
+/* Make now: a line moved out of the bank waits in "pending". Copying makes it final. Anything not copied goes back. */
+function bankReturn(c,all,noRender){
+  const cats=bankData(),v=cats[c];if(!v)return false;
+  const pend=v.pending||[];if(!pend.length&&!all)return false;
+  const ta=$('bkq-'+c),lines=((ta?ta.value:v.queue)||'').split('\n');
+  pend.forEach(it=>{const k=lines.findIndex(l=>l.trim()===String(it.t).trim());if(k>=0)lines.splice(k,1);});
+  pend.slice().reverse().forEach(it=>{const x={...it};const at=x._i||0;delete x._i;v.items.splice(Math.min(at,v.items.length),0,x);});
+  v.pending=[];v.queue=all?'':lines.join('\n');
+  if(noRender)saveLib('bank',{cats},true);else saveBank(cats);
+  return true;
+}
+function bankReturnAll(){Object.keys(bankData()).forEach(c=>bankReturn(c,false,true));}
+function bankCommit(c){const cats=bankData();if(cats[c]&&(cats[c].pending||[]).length){cats[c].pending=[];saveLib('bank',{cats},true);}}
+let bankRestored=false;
 let mdT=0;
 function mdAct(el){
   const a=el.dataset.md,arg=el.dataset.arg;
-  if(a==='bkq'){const h=bankFind(arg);if(!h)return;const ta=$('bkq-'+h.c);const cur=ta.value.replace(/\s+$/,'');ta.value=(cur?cur+'\n':'')+h.item.t;bankField(h.c,'queue',ta.value);toast('Added to Make now');}
-  else if(a==='bkqclear'){const ta=$('bkq-'+arg);ta.value='';bankField(arg,'queue','');}
+  if(a==='bkq'){
+    const[c,i]=arg.split('|'),cats=bankData(),v=cats[c];if(!v)return;
+    const k=(v.items||[]).findIndex(x=>x.id===i);if(k<0)return;
+    const it=v.items.splice(k,1)[0],ta=$('bkq-'+c),cur=((ta?ta.value:v.queue)||'').replace(/\s+$/,'');
+    v.queue=(cur?cur+'\n':'')+it.t;v.pending=[...(v.pending||[]),{...it,_i:k}];
+    saveBank(cats);toast('Moved to Make now. Copy it to keep it out of the bank.');
+  }
+  else if(a==='bkqback'){toast(bankReturn(arg,false)?'Put back in the bank':'Nothing to put back');}
+  else if(a==='bkqclear'){bankReturn(arg,true);toast('Cleared. Lines from the bank went back.');}
   else if(a==='bkcopypn'){const el=document.querySelector('[data-bx="'+arg+'|pnotes"]'),t=((el?el.value:(bankData()[arg]||{}).pnotes)||'').trim();copyTxt((t?t+'\n\n':'')+catLive(arg));}
-  else if(a==='bkcopyqo')copyTxt($('bkq-'+arg).value.trim());
+  else if(a==='bkcopyqo'){const q=$('bkq-'+arg).value.trim();copyTxt(q);if(q)bankCommit(arg);}
   else if(a==='bkcopyx')copyTxt($('bkx-'+arg).value.trim());
   else if(a==='bkcopyp')copyTxt($('bkmp').value.trim());
   else if(a==='bkcopybp')copyTxt($('bkbp').value.trim());
@@ -2352,6 +2381,7 @@ function mdAct(el){
     const q=($('bkq-'+arg).value||'').trim();if(!q){toast('Add some posts to Make now first');return;}
     const v=bankData()[arg]||{},cv=libList(true).find(x=>x.id===v.canvas);
     copyTxt($('bkmp').value.trim()+'\n\n'+(cv?'TEMPLATE LOOK: '+cv.name+' (attach your saved example image from Library)\n':'')+(v.badge?'TOP BADGE TEXT: '+v.badge+'\n':'')+'\nNOTES FOR THIS CATEGORY:\n'+((v.pnotes||'').trim()?v.pnotes.trim()+'\n\n':'')+catLive(arg)+'\n\nPOSTS TO MAKE (one PNG each, carousels where there are [brackets]):\n'+q);
+    bankCommit(arg);
   }
 }
 const TYPING='[data-secn],[data-bx],[data-bmp],[data-bbp],[data-ls],[data-lt],[data-lib],[data-ts],[data-ct],[data-bk],[data-bkalt],[data-bi],[data-stat],[data-ban],[data-vc],[data-iv],[data-how]',AUTOSAVE='[data-bx],[data-bmp],[data-bbp],[data-ls],[data-lib],[data-ts],[data-ct]';
@@ -2627,7 +2657,7 @@ function bankCatHtml(c,v){
       <pre style="white-space:pre-wrap;font-family:var(--font);font-size:12px;line-height:1.5;color:var(--text2);background:var(--surface3);border:1px solid var(--border);border-radius:var(--radius);padding:8px 10px;margin:0">${esc(catLive(c)||'(none)')}</pre></div>`:''}</div>
     ${catInvHtml(c)}
     <div class="f"><label>Make now (what you want made this time)</label><textarea id="bkq-${c}" data-bx="${c}|queue" style="min-height:90px" placeholder="Press + next to a saved line below, or type here">${esc(v.queue||'')}</textarea>
-      <div class="tools" style="margin:6px 0 0"><button class="btn btn-gold" data-md="bkcopyq" data-arg="${c}">Copy prompt + these</button><button class="btn btn-g" data-md="bkcopyqo" data-arg="${c}">Copy just these</button><button class="btn btn-g" data-md="bkqclear" data-arg="${c}">Clear</button></div></div>
+      <div class="tools" style="margin:6px 0 0"><button class="btn btn-gold" data-md="bkcopyq" data-arg="${c}">Copy prompt + these</button><button class="btn btn-g" data-md="bkcopyqo" data-arg="${c}">Copy just these</button><button class="btn btn-g" data-md="bkqback" data-arg="${c}">Put back in bank</button><button class="btn btn-g" data-md="bkqclear" data-arg="${c}">Clear</button></div></div>
     <div class="meta">${un} unused ideas ready to post · <a href="#" data-act="libedit" data-arg="bk:${c}" style="color:var(--gold)">Set how often to post this</a></div>
     ${its.map(x=>`<div style="display:flex;gap:8px;align-items:center;margin-bottom:5px"><input type="checkbox" data-act="bkused" data-arg="${c}|${x.id}" ${x.used?'checked':''} style="width:17px;height:17px" title="Mark used"/><input type="text" data-bi="${c}|${x.id}" value="${esc(x.t)}" style="${x.used?'opacity:.45;text-decoration:line-through':''}"/><button class="btn btn-g" data-md="bkq" data-arg="${c}|${x.id}" style="padding:4px 12px" title="Add to Make now">+</button><button class="btn btn-d" data-act="bkdel" data-arg="${c}|${x.id}" style="padding:4px 10px">×</button></div>`).join('')}
     ${simple?'':`<div class="f" style="margin-top:8px"><label>Add (one per line)</label><textarea id="bkadd-${c}" style="min-height:60px" placeholder="Paste or type posts, one on each line"></textarea>
