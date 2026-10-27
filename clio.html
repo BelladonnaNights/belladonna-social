@@ -727,7 +727,7 @@ function nightLines(from,to,perDate){
 }
 
 /* ── SHELL ── */
-function setTab(t){if(t==='inventory'){tplGrp='all';libOv.settings={...(libOv.settings||{}),tplViewV2:'inventory'};saveLib('settings',{tplViewV2:'inventory'},true);t='templates';}document.body.classList.remove('menu-open');editing=false;tab=t;location.hash=t;render();window.scrollTo(0,0);}
+function setTab(t){if(t==='inventory'){tplGrp='all';libOv.settings={...(libOv.settings||{}),tplViewV2:'use'};saveLib('settings',{tplViewV2:'use'},true);t='templates';}document.body.classList.remove('menu-open');editing=false;tab=t;location.hash=t;render();window.scrollTo(0,0);}
 function vSignIn(){
   $('view').innerHTML=head('Belladonna Clio','Sign in with your admin account.')+(authChecked?`<div class="card" style="max-width:380px"><span class="lbl">Email or username</span><input type="text" id="si-id" autocomplete="username"/><span class="lbl">Password</span><input type="password" id="si-pw" autocomplete="current-password"/><div style="margin-top:12px"><button class="btn btn-p" data-act="signin">Sign in</button></div></div>`:'<div class="empty">Checking sign-in…</div>');
 }
@@ -1463,7 +1463,7 @@ function act(a,arg){
   else if(a==='tsgames'){const ks=[...new Set(gigs.filter(isPublicGig).map(g=>g.kind).filter(Boolean))];tsAdd(ks.length?ks:['Karaoke','Music Bingo','Trivia','Sing-Along'],'game');}
   else if(a==='tsvenues'){tsAdd([...new Set(gigs.filter(isPublicGig).map(g=>g.venue).filter(Boolean))],'venue');}
   else if(a==='bufsync')syncBuffer(false);
-  else if(/^iv(new|del|adj|add|make|fold)$/.test(a))ivAct(a,arg);
+  else if(/^iv(new|del|adj|add|make|fold|track)$/.test(a))ivAct(a,arg);
   else if(a==='tvw'){tplGrp='all';saveLib('settings',{tplViewV2:arg},true).then(render);}
   else if(a==='tgf'){tplGrp=arg;render();}
   else if(a==='tdue'){tplDue=!tplDue;render();}
@@ -2207,6 +2207,7 @@ function vBank(){
       <select class="mini" data-bk="${c}" data-f="detail" style="margin-bottom:6px"><option value="week" ${(v.detail||'week')==='week'?'selected':''}>Whole week: nights, themes, big night (Weekly / Monthly graphics)</option><option value="night" ${v.detail==='night'?'selected':''}>One night: game, venue, time, city (Tonight stories)</option><option value="none" ${v.detail==='none'?'selected':''}>None</option></select>
       ${v.detail==='night'&&missingCities().length?`<div class="meta" style="color:var(--rose);margin:0 0 6px">No city set for: ${missingCities().map(esc).join(', ')}. Add them under Venue cities at the bottom of this page.</div>`:''}
       <pre style="white-space:pre-wrap;font-family:var(--font);font-size:12px;line-height:1.5;color:var(--text2);background:var(--surface3);border:1px solid var(--border);border-radius:var(--radius);padding:8px 10px;margin:0">${esc(catLive(c)||'(none)')}</pre></div>`:''}</div>
+    ${catInvHtml(c)}
     <div class="f"><label>Make now (what you want made this time)</label><textarea id="bkq-${c}" data-bx="${c}|queue" style="min-height:90px" placeholder="Press + next to a saved line below, or type here">${esc(v.queue||'')}</textarea>
       <div class="tools" style="margin:6px 0 0"><button class="btn btn-gold" data-md="bkcopyq" data-arg="${c}">Copy prompt + these</button><button class="btn btn-g" data-md="bkcopyqo" data-arg="${c}">Copy just these</button><button class="btn btn-g" data-md="bkqclear" data-arg="${c}">Clear</button></div></div>
     <div class="meta">${un} unused ideas ready to post · <a href="#" data-act="libedit" data-arg="bk:${c}" style="color:var(--gold)">Set how often to post this</a></div>
@@ -2530,7 +2531,7 @@ function capPrompt(){
 
 /* ═══ TEMPLATES HUB: Library + Content Bank + Cadence in one place. One card per template look. ═══ */
 let tplDue=false;
-function tplViewNow(){const v=(libOv.settings||{}).tplViewV2||'template';return v==='schedule'?'template':v;}
+function tplViewNow(){const v=(libOv.settings||{}).tplViewV2||'template';return (v==='schedule'||v==='inventory')?(v==='inventory'?'use':'template'):v;}
 function tplAll(){
   const L=tplList(),ids=new Set(L.map(x=>x.id));
   const types=libList().filter(e=>!e.id.startsWith('cv_')&&!effTpl(e));
@@ -2604,6 +2605,7 @@ function bankCatHtml(c,v){
       <select class="mini" data-bk="${c}" data-f="detail" style="margin-bottom:6px"><option value="week" ${(v.detail||'week')==='week'?'selected':''}>Whole week: nights, themes, big night (Weekly / Monthly graphics)</option><option value="night" ${v.detail==='night'?'selected':''}>One night: game, venue, time, city (Tonight stories)</option><option value="none" ${v.detail==='none'?'selected':''}>None</option></select>
       ${v.detail==='night'&&missingCities().length?`<div class="meta" style="color:var(--rose);margin:0 0 6px">No city set for: ${missingCities().map(esc).join(', ')}. Add them under Venue cities at the bottom of this page.</div>`:''}
       <pre style="white-space:pre-wrap;font-family:var(--font);font-size:12px;line-height:1.5;color:var(--text2);background:var(--surface3);border:1px solid var(--border);border-radius:var(--radius);padding:8px 10px;margin:0">${esc(catLive(c)||'(none)')}</pre></div>`:''}</div>
+    ${catInvHtml(c)}
     <div class="f"><label>Make now (what you want made this time)</label><textarea id="bkq-${c}" data-bx="${c}|queue" style="min-height:90px" placeholder="Press + next to a saved line below, or type here">${esc(v.queue||'')}</textarea>
       <div class="tools" style="margin:6px 0 0"><button class="btn btn-gold" data-md="bkcopyq" data-arg="${c}">Copy prompt + these</button><button class="btn btn-g" data-md="bkcopyqo" data-arg="${c}">Copy just these</button><button class="btn btn-g" data-md="bkqclear" data-arg="${c}">Clear</button></div></div>
     <div class="meta">${un} unused ideas ready to post · <a href="#" data-act="libedit" data-arg="bk:${c}" style="color:var(--gold)">Set how often to post this</a></div>
@@ -2656,6 +2658,7 @@ function tplUseParts(list){
   const cats=bankData();
   const cards=secs.map(([k,l])=>{const L=rows.filter(x=>x.tier===k).sort((a,b)=>a.wd-b.wd);
     return L.length?`<div class="sec">${esc(l)}</div>`+L.map(x=>{const c=x.e.cat;return `<div class="meta" style="margin:0 0 -2px;color:var(--gold2)">${esc(freqText(x.e))}</div>`+bankCatHtml(c,cats[c]);}).join(''):'';}).join('')
+    +(()=>{const o=Object.entries(invItems()).filter(([,v])=>!v.cat||!cats[v.cat]);return o.length?`<div class="sec">Inventory not linked to a category</div>`+o.map(([id,v])=>`<div class="card" style="padding:8px 12px;margin-bottom:6px;display:flex;gap:8px;align-items:center"><b style="flex:1">${esc(v.name||'Untitled')}</b><b style="color:var(--gold2)">${+v.count||0}</b><button class="btn btn-g" data-act="ivadj" data-arg="${id}|-1">−1</button><button class="btn btn-g" data-act="ivadj" data-arg="${id}|1">+1</button><button class="btn btn-d" data-act="ivdel" data-arg="${id}" style="padding:4px 10px">×</button></div>`).join(''):'';})()
     +`<div class="tools" style="margin:10px 0 0"><button class="btn btn-g" data-act="bknewt" data-arg="">+ Add a category</button></div>`;
   return ['','',cards];
 }
@@ -2705,7 +2708,7 @@ function vTemplates(){
   tplGrp='all';tplDue=false;
   const view=tplViewNow(),all0=tplAll(),filt=(view==='template'||view==='use'),all=tplQ.trim()?all0.filter(t=>qHas(tplQ,t.name,t.nick,t.use,t.group,tplCats(t).map(([c,v])=>v.name+' '+(v.badge||'')).join(' '),tplTypes(t).map(x=>x.name).join(' '))):all0,list=(tplDue&&filt)?all.filter(tplIsDue):all;
   const chip=(k,l)=>`<button class="chip ${view===k?'on':''}" data-act="tvw" data-arg="${k}">${l}</button>`;
-  const top=`<div class="bar">${chip('template','By template')}${chip('use','By use')}${chip('inventory','Inventory')}<div class="sp"></div><button class="btn btn-p" data-act="tplnew">+ New template</button></div>`;
+  const top=`<div class="bar">${chip('template','By template')}${chip('use','By use')}<div class="sp"></div><button class="btn btn-p" data-act="tplnew">+ New template</button></div>`;
   const hd=head('Templates','Every look, its words and how often you post it, in one place. Switch the grouping to find things your way.');
   if(view==='inventory'){$('view').innerHTML=hd+top.replace(/<button class="btn btn-p"[^>]*>\+ New template<\/button>/,'')+invHtml();return;}
   const details=`<div class="bar"><span class="meta" style="margin:0">Details for graphics:</span><span class="meta" style="margin:0">Night</span><input type="date" id="bkday" value="${bankDay}" style="width:auto;padding:5px 10px"/><span class="meta" style="margin:0">Week</span><select class="mini" id="bkwk">${[[-1,'Last week'],[0,'This week'],[1,'Next week'],[2,'Week after next']].map(([o,l])=>`<option value="${o}" ${bankWeek===o?'selected':''}>${l} (${bankWeekLabel(o)})</option>`).join('')}</select></div>`;
@@ -2753,7 +2756,18 @@ function invHtml(){
     (items.length?items.map(row).join(''):'<div class="empty">Nothing tracked yet. Add one, like "Bar Truths", type how many you made, and link it to its bank category so it counts down on its own.</div>')+
     `<div class="meta" style="margin-top:8px">Linking: a post counts against an item when its Content Bank text came from the linked category (pick it in the post window), or, if no category is linked, when the post is the linked type.</div>`;
 }
+function catInvHtml(c){
+  const hit=Object.entries(invItems()).find(([,v])=>v.cat===c);
+  if(!hit)return `<div class="f"><label>Inventory</label><div class="meta" style="margin:0 0 6px">Not tracked. Track it to count finished posts and get a low-stock warning.</div><button class="btn btn-g" data-act="ivtrack" data-arg="${c}">Track inventory for this category</button></div>`;
+  const [id,v]=hit,n=+v.count||0,low=(+v.low||0)>0&&n<=(+v.low||0);
+  return `<div class="f"><label>Inventory (finished posts ready to go; counts down when you tick Sched on a post from this category)</label>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><b style="font-size:1.4rem;color:${low?'var(--rose)':'var(--gold2)'}">${n}</b><span class="has" style="display:inline">in inventory${low?' · running low':''}</span>
+    <button class="btn btn-g" data-act="ivadj" data-arg="${id}|-1">−1</button><button class="btn btn-g" data-act="ivadj" data-arg="${id}|1">+1</button>
+    <input type="text" inputmode="numeric" id="iva-${id}" placeholder="Made" style="width:80px"/><button class="btn btn-p" data-act="ivadd" data-arg="${id}">Add to inventory</button></div>
+    <div style="display:flex;gap:8px;align-items:center;margin-top:6px"><span class="meta" style="margin:0">Warn me at or below</span><input type="text" inputmode="numeric" data-iv="${id}" data-f="low" value="${esc(v.low||'')}" style="width:70px"/><button class="btn btn-d" data-act="ivdel" data-arg="${id}" style="padding:4px 10px">Stop tracking</button></div></div>`;
+}
 function ivAct(a,arg){
+  if(a==='ivtrack'){const cat=bankData()[arg];if(!cat)return;const it=JSON.parse(JSON.stringify(invItems()));it['i'+Date.now().toString(36)]={name:cat.name,count:0,low:5,cat:arg,type:''};invSave(it).then(render);return;}
   if(a==='ivfold'){const o={...((libOv.tplui||{}).invOpen||{})};if(o[arg])delete o[arg];else o[arg]=true;saveLib('tplui',{invOpen:o},true).then(render);return;}
   const items=JSON.parse(JSON.stringify(invItems()));
   if(a==='ivnew'){const nid='i'+Date.now().toString(36);items[nid]={name:'New item',count:0,low:5,cat:'',type:''};saveLib('tplui',{invOpen:{...((libOv.tplui||{}).invOpen||{}),[nid]:true}},true);}
