@@ -248,6 +248,7 @@ const TYPES = {
   big:{l:'Big Night',c:'#72243E',bg:'#fdf0f5',plat:'',milestone:true},
   tonight:{l:'Tonight',c:'#3B6D11',bg:'#f2f9e8',plat:'IG Story'},
   host:{l:'Host',c:'#633806',bg:'#fdf5ea',plat:'IG Story'},
+  trivia:{l:'Trivia Winners',c:'#085041',bg:'#e8f8f2',plat:'IG + FB'},
   best:{l:'Best',c:'#72243E',bg:'#fdf0f5',plat:'IG + FB'},
   rook:{l:'Rook',c:'#3C3489',bg:'#f2f0fe',plat:'IG + FB'},
   crowd:{l:'Crowd',c:'#3B6D11',bg:'#f2f9e8',plat:'IG + FB'},
@@ -266,6 +267,7 @@ const LIB_SEED=[
   {id:'host',name:'Host Story',nick:'Host',size:'1080x1920',use:"Host's costume story frame"},
   {id:'cover',name:'Big Night Event Cover',nick:'Cover',size:'1920x1005',use:'Facebook Event image, 14 days out'},
   {id:'count',name:'Countdown',nick:'Count',size:'1080x1350 + 1080x1920',use:'7-day, 3-day and day-of posts'},
+  {id:'trivia',name:'Trivia Winners',nick:'Trivia',size:'1080x1350',use:'Next-morning post naming the trivia winners'},
   {id:'best',name:'Best Dressed',nick:'Best',size:'1080x1350',use:'Next-morning winner photo frame'},
   {id:'recap',name:'Monthly Recap',nick:'Recap',size:'1080x1350',use:'Winners and best photos, month end'},
   {id:'pin',name:'Weekly Nights Pin',nick:'Pin',size:'1080x1350 + 1080x1920',use:'Pinned post, highlight, recurring Facebook Event covers'},
@@ -287,6 +289,7 @@ const LIB_META={
   count:{group:'Event posts',freq:'7 days before, 3 days before, and the day of',use:'Countdown posts and stories'},
   tonight:{group:'Nightly stories',freq:'Every event night, automatic from HQ',use:'3:00 pm story'},
   host:{group:'Nightly stories',freq:'Every event night, automatic from HQ',use:"Host's costume story frame"},
+  trivia:{group:'After the night',freq:'The morning after every trivia night, automatic from HQ',use:'Trivia winners post',canvas:'cv_scroll',badge:'TRIVIA WINNERS'},
   best:{group:'After the night',freq:'The morning after every night, automatic from HQ',use:'Next-morning winner photo'},
   recap:{group:'After the night',freq:'End of every month',use:'Winners and best photos'},
   pin:{group:'Always on',freq:'Evergreen, update when the nights change',use:'Pinned post, highlight, and recurring Facebook Event covers'},
@@ -310,7 +313,7 @@ function libList(withDeleted){
   });
   return withDeleted?out:out.filter(e=>!e.deleted);
 }
-const NOT_TPL=['rook','crowd','note'];
+const NOT_TPL=['rook','crowd','note','trivia'];
 function isTpl(x){return x.id.startsWith('cv_')||(!x.custom&&!NOT_TPL.includes(x.id));}
 function tplList(){return libList().filter(isTpl);}
 let typeSig='';
@@ -713,6 +716,7 @@ function virtualRows(){
     };
     mk('tonight',g.date,'15:00','tonight','Tonight story: '+v+', '+k+(t?' at '+fmtTime(t):''));
     mk('host',g.date,t||'18:00','host','Host story: '+v+', '+k);
+    if(/trivia/i.test(k))mk('tw',addDays(g.date,1),'10:00','trivia','Trivia Winners: '+v+' ('+DN[new Date(g.date+'T12:00:00').getDay()]+')');
     mk('best',addDays(g.date,1),'10:00','best','Best Dressed photo: '+v+', '+k+' ('+DN[new Date(g.date+'T12:00:00').getDay()]+')');
   });
   return out;
@@ -1916,7 +1920,7 @@ const RULE_DEFAULTS={
   rook:{kind:'weekday',weekday:3,time:'12:00'},
   crowd:{kind:'weekday',weekday:5,time:'17:00'},
   note:{kind:'weekday',weekday:0,time:'12:00'},
-  tonight:{kind:'hq'},host:{kind:'hq'},best:{kind:'hq'}
+  tonight:{kind:'hq'},host:{kind:'hq'},best:{kind:'hq'},trivia:{kind:'hq'}
 };
 const WD=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 const _nw=(wd,weeks,time)=>({kind:'nth_week',weekday:wd,weeks,time:time||'12:00'});
