@@ -1378,7 +1378,7 @@ $('view').addEventListener('change',e=>{
   if(e.target.id==='tf'){typeF=e.target.value;render();}
   else if(e.target.id==='mf'){monthF=e.target.value;render();}
   else if(e.target.id==='bkwk'){bankWeek=+e.target.value;render();}
-  else if(e.target.id==='bkday'){bankDay=e.target.value||todayStr();render();}
+  else if(e.target.dataset.bkr){if(e.target.dataset.bkr==='from'){bankFrom=e.target.value;if(bankTo<bankFrom)bankTo=bankFrom;}else bankTo=e.target.value;e.target.blur();render();}
   else if(e.target.dataset.iv){ivChange(e.target);}
   else if(e.target.dataset.how){const[id,kind]=e.target.dataset.how.split('|'),f=kind==='batch'?'howtoBatch':kind==='brain'?'howtoBrain':'howto',v=e.target.value.trim();
     if(id.startsWith('bk:')){const cats=bankData(),c=id.slice(3);if(cats[c]){cats[c][f]=v;saveLib('bank',{cats},true);}}else saveLib(id,{[f]:v},true);toast('Saved');}
@@ -2207,6 +2207,7 @@ function vBank(){
       <div data-act="livefold" data-arg="${c}" style="cursor:pointer;color:var(--gold2);font-size:13px;margin-top:10px"><span style="display:inline-block;width:14px">${((libOv.tplui||{}).liveOpen||{})[c]?'▾':'▸'}</span>Live details from HQ (added automatically to the prompt notes when you copy)</div>
       ${((libOv.tplui||{}).liveOpen||{})[c]?`<div style="margin-top:6px">
       <select class="mini" data-bk="${c}" data-f="detail" style="margin-bottom:6px"><option value="week" ${(v.detail||'week')==='week'?'selected':''}>Whole week: nights, themes, big night (Weekly / Monthly graphics)</option><option value="night" ${v.detail==='night'?'selected':''}>One night: game, venue, time, city (Tonight stories)</option><option value="none" ${v.detail==='none'?'selected':''}>None</option></select>
+      ${v.detail==='night'?`<div class="bar" style="margin:0 0 6px">${bankRangeHtml()}</div>`:''}
       ${v.detail==='night'&&missingCities().length?`<div class="meta" style="color:var(--rose);margin:0 0 6px">No city set for: ${missingCities().map(esc).join(', ')}. Add them under Venue cities at the bottom of this page.</div>`:''}
       <pre style="white-space:pre-wrap;font-family:var(--font);font-size:12px;line-height:1.5;color:var(--text2);background:var(--surface3);border:1px solid var(--border);border-radius:var(--radius);padding:8px 10px;margin:0">${esc(catLive(c)||'(none)')}</pre></div>`:''}</div>
     ${catInvHtml(c)}
@@ -2257,25 +2258,33 @@ function liveDetails(off){
   return L.join('\n');
 }
 /* ── per-category live details: week block, one-night block (Tonight story), or none ── */
-let bankDay=todayStr();
+let bankDay=todayStr(),bankFrom=todayStr(),bankTo=addDays(todayStr(),6);
+function bankDates(){const out=[];for(let i=-1;i<=42;i++)out.push(addDays(todayStr(),i));return out;}
+function bankRangeHtml(){
+  const f=d=>new Date(d+'T12:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}),cnt=d=>gigs.filter(g=>isPublicGig(g)&&g.date===d).length;
+  const opt=(d,sel)=>`<option value="${d}" ${sel===d?'selected':''}>${f(d)} (${cnt(d)} night${cnt(d)===1?'':'s'})</option>`;
+  const ds=bankDates();
+  return `<span class="meta" style="margin:0">Stories from</span><select class="mini" data-bkr="from">${ds.map(d=>opt(d,bankFrom)).join('')}</select><span class="meta" style="margin:0">through</span><select class="mini" data-bkr="to">${ds.filter(d=>d>=bankFrom).map(d=>opt(d,bankTo)).join('')}</select>`;
+}
 function cityMap(){return (libOv.venueCities||{}).map||{};}
 function cityFor(g){return (cityMap()[rtKey(g.venue)]||g.city||'').trim();}
-function nightDetails(day){
-  const L=gigs.filter(g=>isPublicGig(g)&&g.date===day).sort((x,y)=>(t24(x.time)||'99')<(t24(y.time)||'99')?-1:1);
-  const out=['LIVE DETAILS FROM HQ for '+new Date(day+'T12:00:00').toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'})+' (use these exact facts. Do not invent or change any game, venue, time or city):'];
+function nightDetails(){
+  const from=bankFrom,to=bankTo<bankFrom?bankFrom:bankTo,fd=d=>new Date(d+'T12:00:00').toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'});
+  const L=gigs.filter(g=>isPublicGig(g)&&g.date>=from&&g.date<=to).sort((x,y)=>(x.date+(t24(x.time)||'99'))<(y.date+(t24(y.time)||'99'))?-1:1);
+  const out=['LIVE DETAILS FROM HQ for '+fd(from)+(to!==from?' through '+fd(to):'')+' (use these exact facts. Do not invent or change any day, game, venue, time or city):'];
   if(!gigs.length)return out.concat('(HQ schedule has not loaded, so no nights are listed. Open Clio while signed in and try again.)').join('\n');
-  if(!L.length)return out.concat('(No nights scheduled on this day.)').join('\n');
-  out.push('Make ONE story per line below:');
-  L.forEach((g,i)=>{const tm=t24(g.time),c=cityFor(g);
-    out.push((i+1)+'. GAME: '+String(g.kind||'').toUpperCase()+' | VENUE: '+String(g.venue||'').toUpperCase()+' | TIME: '+(tm?fmtTime(tm).toUpperCase():'(not set, leave it off)')+(c?' | CITY: '+c.toUpperCase():' | CITY: (not set, show only the time)'));});
+  if(!L.length)return out.concat('(No nights scheduled in this range.)').join('\n');
+  out.push('Make ONE story per line below ('+L.length+' total, in this order):');
+  L.forEach((g,i)=>{const tm=t24(g.time),c=cityFor(g),d=new Date(g.date+'T12:00:00');
+    out.push((i+1)+'. DAY: '+DN[d.getDay()].toUpperCase()+' '+d.toLocaleDateString('en-US',{month:'short',day:'numeric'}).toUpperCase()+' | GAME: '+String(g.kind||'').toUpperCase()+' | VENUE: '+String(g.venue||'').toUpperCase()+' | TIME: '+(tm?fmtTime(tm).toUpperCase():'(not set, leave it off)')+(c?' | CITY: '+c.toUpperCase():' | CITY: (not set, show only the time)'));});
   return out.join('\n');
 }
 function catLive(c){
   const mode=((bankData()[c]||{}).detail)||'week';
-  return mode==='none'?'':mode==='night'?nightDetails(bankDay):liveDetails(bankWeek);
+  return mode==='none'?'':mode==='night'?nightDetails():liveDetails(bankWeek);
 }
 function missingCities(){
-  const names=[...new Set(gigs.filter(g=>isPublicGig(g)&&g.date===bankDay).map(g=>g.venue))];
+  const names=[...new Set(gigs.filter(g=>isPublicGig(g)&&g.date>=bankFrom&&g.date<=(bankTo<bankFrom?bankFrom:bankTo)).map(g=>g.venue))];
   return names.filter(n=>!cityMap()[rtKey(n)]);
 }
 function venueCitiesHtml(){
@@ -2593,18 +2602,20 @@ function tplLookHtml(t){
     <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">${o.link?`<a href="${esc(o.link)}" target="_blank" rel="noopener"><button class="btn btn-g" type="button">Open template</button></a>`:''}${isCv?`<button class="btn btn-d" type="button" data-act="tpldel" data-arg="${t.id}">Remove template</button>`:''}</div></div>`;
 }
 function bankCatHtml(c,v){
+  const simple=['tonight','weekly','sched','monthly','mcover','recap'].includes(v.canvas);
   const its=v.items||[],un=its.filter(x=>!x.used).length;
   const open=!!((libOv.bank||{}).open||{})[c],qn=(v.queue||'').split('\n').filter(x=>x.trim()).length;
   return `<div class="card" style="margin:6px 0;background:var(--surface2)"><div data-act="bkfold" data-arg="${c}" style="cursor:pointer;display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span style="color:var(--gold2);width:14px">${open?'▾':'▸'}</span><b style="font-weight:600">${esc(v.name)}</b>${v.badge?`<span class="nick">${esc(v.badge)}</span>`:''}${v.silenced?'<span class="nick" style="color:var(--rose)">Paused / Retired</span>':''}<span class="has" style="display:inline;margin-left:auto">${un} unused ideas${(()=>{const iv=Object.values(invItems()).find(x=>x.cat===c);return iv?' · '+(+iv.count||0)+' in inventory':'';})()}${qn?' · '+qn+' in Make now':''}</span></div>
     ${open?`<div style="margin-top:10px"><div class="tools" style="margin:0 0 8px"><button class="btn ${v.silenced?'btn-p':'btn-g'}" data-act="bkpause" data-arg="${c}">${v.silenced?'Resume this category':'Pause / Retire this category'}</button></div><div class="f2"><div class="f"><label>Category name</label><input type="text" data-bk="${c}" data-f="name" value="${esc(v.name)}"/></div><div class="f"><label>Template look</label><select data-bk="${c}" data-f="canvas"><option value="">No template</option>${tplList().map(x=>`<option value="${x.id}" ${v.canvas===x.id?'selected':''}>${esc(x.name)}</option>`).join('')}</select>
       ${(v.alts||[]).map((a,i)=>`<div style="display:flex;gap:6px;margin-top:6px"><select data-bkalt="${c}|${i}" style="flex:1"><option value="">Pick a template</option>${tplList().map(x=>`<option value="${x.id}" ${a===x.id?'selected':''}>${esc(x.name)}</option>`).join('')}</select><button class="btn btn-d" data-act="bkaltdel" data-arg="${c}|${i}" style="padding:4px 10px">×</button></div>`).join('')}
       <div class="tools" style="margin:6px 0 0"><button class="btn btn-g" data-act="bkaltadd" data-arg="${c}">+ Add another template look</button></div></div></div>
-    <div class="f"><label>Badge on the template</label><input type="text" data-bk="${c}" data-f="badge" value="${esc(v.badge||'')}"/></div>
-    <div class="f"><label>Prompt notes (added to "Copy prompt + these" for this category)</label><textarea data-bx="${c}|pnotes" style="min-height:70px" placeholder="Extra instructions this category always needs, e.g. Two sentences per post: sentence one goes on the top of the PNG, sentence two goes on the bottom.">${esc(v.pnotes||'')}</textarea>
+    ${simple?'':`<div class="f"><label>Badge on the template</label><input type="text" data-bk="${c}" data-f="badge" value="${esc(v.badge||'')}"/></div>
+`}    <div class="f"><label>Prompt notes (added to "Copy prompt + these" for this category)</label><textarea data-bx="${c}|pnotes" style="min-height:70px" placeholder="Extra instructions this category always needs, e.g. Two sentences per post: sentence one goes on the top of the PNG, sentence two goes on the bottom.">${esc(v.pnotes||'')}</textarea>
       <div class="tools" style="margin:6px 0 0"><button class="btn btn-gold" data-md="bkcopypn" data-arg="${c}">Copy prompt notes</button></div>
       <div data-act="livefold" data-arg="${c}" style="cursor:pointer;color:var(--gold2);font-size:13px;margin-top:10px"><span style="display:inline-block;width:14px">${((libOv.tplui||{}).liveOpen||{})[c]?'▾':'▸'}</span>Live details from HQ (added automatically to the prompt notes when you copy)</div>
       ${((libOv.tplui||{}).liveOpen||{})[c]?`<div style="margin-top:6px">
       <select class="mini" data-bk="${c}" data-f="detail" style="margin-bottom:6px"><option value="week" ${(v.detail||'week')==='week'?'selected':''}>Whole week: nights, themes, big night (Weekly / Monthly graphics)</option><option value="night" ${v.detail==='night'?'selected':''}>One night: game, venue, time, city (Tonight stories)</option><option value="none" ${v.detail==='none'?'selected':''}>None</option></select>
+      ${v.detail==='night'?`<div class="bar" style="margin:0 0 6px">${bankRangeHtml()}</div>`:''}
       ${v.detail==='night'&&missingCities().length?`<div class="meta" style="color:var(--rose);margin:0 0 6px">No city set for: ${missingCities().map(esc).join(', ')}. Add them under Venue cities at the bottom of this page.</div>`:''}
       <pre style="white-space:pre-wrap;font-family:var(--font);font-size:12px;line-height:1.5;color:var(--text2);background:var(--surface3);border:1px solid var(--border);border-radius:var(--radius);padding:8px 10px;margin:0">${esc(catLive(c)||'(none)')}</pre></div>`:''}</div>
     ${catInvHtml(c)}
@@ -2612,12 +2623,12 @@ function bankCatHtml(c,v){
       <div class="tools" style="margin:6px 0 0"><button class="btn btn-gold" data-md="bkcopyq" data-arg="${c}">Copy prompt + these</button><button class="btn btn-g" data-md="bkcopyqo" data-arg="${c}">Copy just these</button><button class="btn btn-g" data-md="bkqclear" data-arg="${c}">Clear</button></div></div>
     <div class="meta">${un} unused ideas ready to post · <a href="#" data-act="libedit" data-arg="bk:${c}" style="color:var(--gold)">Set how often to post this</a></div>
     ${its.map(x=>`<div style="display:flex;gap:8px;align-items:center;margin-bottom:5px"><input type="checkbox" data-act="bkused" data-arg="${c}|${x.id}" ${x.used?'checked':''} style="width:17px;height:17px" title="Mark used"/><input type="text" data-bi="${c}|${x.id}" value="${esc(x.t)}" style="${x.used?'opacity:.45;text-decoration:line-through':''}"/><button class="btn btn-g" data-md="bkq" data-arg="${c}|${x.id}" style="padding:4px 12px" title="Add to Make now">+</button><button class="btn btn-d" data-act="bkdel" data-arg="${c}|${x.id}" style="padding:4px 10px">×</button></div>`).join('')}
-    <div class="f" style="margin-top:8px"><label>Add (one per line)</label><textarea id="bkadd-${c}" style="min-height:60px" placeholder="Paste or type posts, one on each line"></textarea>
+    ${simple?'':`<div class="f" style="margin-top:8px"><label>Add (one per line)</label><textarea id="bkadd-${c}" style="min-height:60px" placeholder="Paste or type posts, one on each line"></textarea>
       <div class="tools" style="margin:6px 0 0"><button class="btn btn-g" data-act="bkadd" data-arg="${c}">Add to bank</button></div></div>
-    <div class="f"><label>Notes</label><textarea data-bx="${c}|notes" style="min-height:70px" placeholder="Ideas, rules for this category, what works">${esc(v.notes||'')}</textarea></div>
-    <div class="f"><label>Used / Examples (copy this into ChatGPT for more ideas)</label><textarea id="bkx-${c}" data-bx="${c}|examples" style="min-height:90px" placeholder="Paste posts you've used or examples you like, as a paragraph or list">${esc(v.examples||'')}</textarea>
+`}    <div class="f"><label>Notes</label><textarea data-bx="${c}|notes" style="min-height:70px" placeholder="Ideas, rules for this category, what works">${esc(v.notes||'')}</textarea></div>
+    ${simple?'':`<div class="f"><label>Used / Examples (copy this into ChatGPT for more ideas)</label><textarea id="bkx-${c}" data-bx="${c}|examples" style="min-height:90px" placeholder="Paste posts you've used or examples you like, as a paragraph or list">${esc(v.examples||'')}</textarea>
       <div class="tools" style="margin:6px 0 0"><button class="btn btn-g" data-md="bkcopyx" data-arg="${c}">Copy</button><button class="btn btn-gold" data-md="bkcopyb" data-arg="${c}">Copy brainstorm prompt</button></div></div>
-    <div class="acts"><button class="btn btn-d" data-act="bkcatdel" data-arg="${c}">Delete this category</button></div>
+`}    <div class="acts"><button class="btn btn-d" data-act="bkcatdel" data-arg="${c}">Delete this category</button></div>
 </div>`:''}</div>`;
 }
 function tplCard(t){
@@ -2713,7 +2724,7 @@ function vTemplates(){
   const top=`<div class="bar">${chip('template','By template')}${chip('use','By use')}<div class="sp"></div><button class="btn btn-p" data-act="tplnew">+ New template</button></div>`;
   const hd=head('Templates','Every look, its words and how often you post it, in one place. Switch the grouping to find things your way.');
   if(view==='inventory'){$('view').innerHTML=hd+top.replace(/<button class="btn btn-p"[^>]*>\+ New template<\/button>/,'')+invHtml();return;}
-  const details=`<div class="bar"><span class="meta" style="margin:0">Details for graphics:</span><span class="meta" style="margin:0">Night</span><input type="date" id="bkday" value="${bankDay}" style="width:auto;padding:5px 10px"/><span class="meta" style="margin:0">Week</span><select class="mini" id="bkwk">${[[-1,'Last week'],[0,'This week'],[1,'Next week'],[2,'Week after next']].map(([o,l])=>`<option value="${o}" ${bankWeek===o?'selected':''}>${l} (${bankWeekLabel(o)})</option>`).join('')}</select></div>`;
+  const details=`<div class="bar"><span class="meta" style="margin:0">Details for graphics:</span>${bankRangeHtml()}<span class="meta" style="margin:0">Week</span><select class="mini" id="bkwk">${[[-1,'Last week'],[0,'This week'],[1,'Next week'],[2,'Week after next']].map(([o,l])=>`<option value="${o}" ${bankWeek===o?'selected':''}>${l} (${bankWeekLabel(o)})</option>`).join('')}</select></div>`;
   if(view==='schedule'){$('view').innerHTML=hd+top+details+tplScheduleHtml()+tplSettingsHtml();return;}
   const [pills,mgmt,cards]=view==='use'?tplUseParts(list):tplTemplateParts(list);
   const empty=(tplDue&&!list.length)?'<div class="empty">Nothing is due in the next 7 days.</div>':'';
