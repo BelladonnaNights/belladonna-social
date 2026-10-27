@@ -177,6 +177,7 @@ select:focus,input:focus,textarea:focus{outline:none;border-color:var(--gold);}
 <div class="ov" id="ov" onclick="if(event.target===this)closeEdit()">
   <div class="box">
     <h3 id="mt">Post</h3>
+    <div class="f"><label>What it is</label><input type="text" id="f-title"/></div>
     <div class="f2">
       <div class="f"><label>Date</label><input type="date" id="f-date"/></div>
       <div class="f"><label>Time</label><input type="time" id="f-time"/></div>
@@ -185,8 +186,17 @@ select:focus,input:focus,textarea:focus{outline:none;border-color:var(--gold);}
       <div class="f"><label>Template</label><select id="f-type"></select></div>
       <div class="f"><label>Where</label><input type="text" id="f-plat" placeholder="IG + FB"/></div>
     </div>
+    <div id="f-sum" class="card" style="padding:10px 12px;margin-bottom:10px"></div>
+    <div class="f"><label>Text from your Content Bank (The Muse puts it on the template)</label><select id="f-bank"></select></div>
+    <div class="checks">
+      <label><input type="checkbox" id="f-created"/> Made</label>
+      <label><input type="checkbox" id="f-sched"/> Scheduled</label>
+      <label><input type="checkbox" id="f-posted"/> Posted</label>
+    </div>
+    <div class="tools"><button class="btn btn-gold" type="button" onclick="promoPrompt()">✦ Copy caption prompt (for Muse)</button></div>
+    <div class="f" id="f-muse-wrap" style="display:none"><label>Prompt (copied to clipboard, edit the [brackets])</label><textarea id="f-muse" style="min-height:200px"></textarea></div>
+    <details id="f-more" style="margin:12px 0"><summary style="cursor:pointer;color:var(--gold2)">More: caption, hashtags, image, notes, graphic tools</summary>
     <div class="f"><label>Carousel post name (posts with the same name on the same day are grouped as slides of one post)</label><input type="text" id="f-grp" list="grp-list" placeholder="Leave empty for a single post, e.g. Songs that trigger the bar"/><datalist id="grp-list"></datalist></div>
-    <div class="f"><label>What it is (for a carousel: this slide)</label><input type="text" id="f-title"/></div>
     <div class="f"><label>Caption (goes to Buffer)</label><textarea id="f-cap"></textarea>
       <div class="tools" style="margin:6px 0 0"><button class="btn btn-g" type="button" id="b-cap" onclick="capPrompt()">Copy caption prompt (paste into ChatGPT)</button></div></div>
     <div class="f"><label>Hashtags (Instagram only, kept separate from the caption)</label><textarea id="f-hash" style="min-height:60px" placeholder="#belladonnanights #karaoke"></textarea>
@@ -196,19 +206,13 @@ select:focus,input:focus,textarea:focus{outline:none;border-color:var(--gold);}
       <img id="f-prev" alt="" style="display:none;max-width:140px;max-height:140px;margin-top:8px;border:1px solid var(--border2);border-radius:var(--radius)"/></div>
     <div class="f" id="f-win" style="display:none"></div>
     <div class="f"><label>Notes</label><input type="text" id="f-notes"/></div>
-    <div class="checks">
-      <label><input type="checkbox" id="f-created"/> Made</label>
-      <label><input type="checkbox" id="f-sched"/> Scheduled</label>
-      <label><input type="checkbox" id="f-posted"/> Posted</label>
-    </div>
-    <div class="f"><label>Text from your Content Bank (The Muse puts it on the template)</label><select id="f-bank"></select></div>
     <div class="tools">
       <button class="btn btn-gold" onclick="muse()">✦ The Muse: build ChatGPT prompt</button>
       <button class="btn btn-gold" onclick="openGfx()">▣ Make graphic</button>
       <button class="btn btn-gold" id="f-slide" onclick="addSlide()">▤ Add another slide</button>
       <button class="btn btn-gold" id="f-enc" onclick="encore()">↻ Encore: duplicate</button>
     </div>
-    <div class="f" id="f-muse-wrap" style="display:none"><label>Prompt (copied to clipboard, edit the [brackets])</label><textarea id="f-muse" style="min-height:200px"></textarea></div>
+    </details>
     <div class="acts">
       <button class="btn btn-d" id="f-del" onclick="delPost()">Delete</button>
       <div class="sp"></div>
@@ -877,11 +881,24 @@ function dashList(L,more){
   const show=L.slice(0,8);
   return show.map(p=>rowHtml(p)).join('')+(L.length>8?`<div class="meta" style="margin:4px 0">+${L.length-8} more. <a href="#studio" style="color:var(--gold)">Open Studio</a></div>`:'');
 }
+function storyBlock(real,t){
+  const mon=bankMonday(0),sun=addDays(mon,6),from=addDays(t,-2)<mon?addDays(t,-2):mon;
+  const L=real.filter(p=>isStory(p)&&p.date>=from&&p.date<=sun).sort(sortFn);
+  const days=[...new Set(L.map(p=>p.date))].sort();
+  const todo=L.filter(p=>!p.posted).length;
+  const dl=days.map(d=>DN[new Date(d+'T12:00:00').getDay()]);
+  const body=days.length?days.map(d=>{
+    const ps=L.filter(p=>p.date===d),dt=new Date(d+'T12:00:00'),left=ps.filter(p=>!p.posted).length;
+    return `<div class="meta" style="margin:10px 0 3px;${d===t?'color:var(--gold2);font-weight:600':(d<t&&left?'color:var(--rose)':'')}">${DN[dt.getDay()]} ${dt.getDate()}${d===t?' · TODAY':(d<t?' · missed?':'')} · ${left?left+' to post':'all posted'}</div>`+ps.map(p=>rowHtml(p)).join('');
+  }).join(''):'<div class="empty" style="padding:.5rem 0">No story days this week.</div>';
+  return `<div class="sec" style="margin-top:4px">Story posts${todo?` <span class="nick" style="color:var(--gold2)">${todo} left</span>`:''}</div><div class="meta" style="margin:0 0 4px">${days.length?'Story days this week: <b>'+dl.join(', ')+'</b>. Post them by hand, then tick Posted.':'Nothing scheduled.'}</div><div class="card" style="padding:6px 10px">${body}</div>`;
+}
+function isStory(p){return /Story/.test(p.platform||'')&&!isMile(p);}
 function vDashboard(){
-  const t=todayStr(),real=vposts.filter(p=>!isMile(p)),mine=real.filter(p=>!p.auto);
+  const t=todayStr(),real=vposts.filter(p=>!isMile(p)),mine=real.filter(p=>!p.auto&&!isStory(p));
   const od=mine.filter(p=>overdue(p,t)).sort(sortFn);
   const soon=mine.filter(p=>!p.posted&&!p.scheduled&&p.date>=t&&p.date<=addDays(t,3)).sort(sortFn);
-  const stories=real.filter(p=>p.auto&&p.date===t&&!p.posted).length;
+  const stories=0;
   const low=invLow();
   const nothing=!od.length&&!soon.length&&!low.length&&!stories;
   const attention=`<div class="sec" style="margin-top:4px">Needs attention</div>`+
@@ -903,11 +920,11 @@ function vDashboard(){
     evBox=`<div class="nick">${esc(daysAway(ev.date))} · ${esc(dayName(ev.date))}</div><div class="monthh" style="margin:2px 0;border:0;padding:0;font-size:1.2rem">${esc(evTitle(ev))}</div><div class="prog" style="margin:8px 0 4px"><i style="width:${tot?Math.round(n/tot*100):0}%"></i></div><div class="meta" style="margin:0 0 8px">${n} of ${tot} tasks done${late?' · <span style="color:var(--rose)">'+late+' behind</span>':''}</div><button class="btn btn-g" data-act="evgo" data-arg="${esc(ev.id)}">Open checklist</button>`;}
   const inv=Object.values(invItems());
   const invBox=inv.length?inv.map(v=>{const n=+v.count||0,l=(+v.low||0)>0&&n<=(+v.low||0);return `<div style="display:flex;justify-content:space-between;gap:8px;margin:3px 0;font-size:13px"><span>${esc(v.name)}</span><b style="color:${l?'var(--rose)':'var(--gold2)'}">${n}</b></div>`;}).join('')+`<button class="btn btn-g" style="margin-top:6px" data-act="tab" data-arg="inventory">Inventory</button>`:'<div class="meta">Nothing tracked yet.</div><button class="btn btn-g" data-act="tab" data-arg="inventory">Set up inventory</button>';
-  const mm=mine.filter(p=>p.date.startsWith(t.slice(0,7))),nm=mm.length;
+  const mm=real.filter(p=>!p.auto&&p.date.startsWith(t.slice(0,7))),nm=mm.length;
   const bar=(l,k)=>{const c=mm.filter(p=>p[k]).length;return `<div class="nick">${l} ${c}/${nm}</div><div class="prog ${k==='posted'?'posted':''}"><i style="width:${nm?Math.round(c/nm*100):0}%"></i></div>`;};
   const st=posts.filter(p=>!isMile(p)&&p.stats&&(p.stats.reach||p.stats.likes||p.stats.comments||p.stats.shares)&&p.date>=addDays(t,-60)).sort((a,b)=>engage(b)-engage(a))[0];
   const nums=`${bar('Made','created')}${bar('Scheduled','scheduled')}${bar('Posted','posted')}${st?`<div class="meta" style="margin:8px 0 0">Best recent post: <b>${esc(st.title)}</b> with ${engage(st).toLocaleString()} likes, comments and shares.</div>`:''}`;
-  $('view').innerHTML=head('Dashboard','What needs you today, what is coming, and how stock and numbers look.')+attention+week+
+  $('view').innerHTML=head('Dashboard','What needs you today, what is coming, and how stock and numbers look.')+storyBlock(real,t)+attention+week+
     `<div class="sec">Coming up</div><div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr))">
       <div class="card"><span class="lbl" style="margin-top:0">Next big night</span>${evBox}</div>
       <div class="card"><span class="lbl" style="margin-top:0">Inventory</span>${invBox}</div>
@@ -960,7 +977,14 @@ function vMonth(){
     `<div class="mgrid">${DN.map(d=>`<div class="mh">${d}</div>`).join('')}${grid}</div>`+
     (sel?`<div class="sec">${dayName(selDay)}</div>${sel.length?sel.map(rowHtml).join(''):'<div class="empty">Nothing on this day.</div>'}<div style="margin-top:8px"><button class="btn btn-g" data-act="newday" data-arg="${selDay}">+ Add post on this day</button></div>`:'');
 }
-function vCalendar(){vMonth();}
+function cadListOnly(){
+  const all=cadAll(),L=all.filter(e=>!e.silenced),sil=all.filter(e=>e.silenced),groups=orderGroups([...new Set(L.map(e=>e.group||'Other'))]);
+  const hid=libList(true).filter(e=>e.deleted&&!e.id.startsWith('cv_'));
+  return cadTop()+groups.map(g=>`<div class="monthh" style="font-size:1.1rem;margin:14px 0 6px">${esc(g)}</div>`+L.filter(e=>(e.group||'Other')===g).map(e=>cadRow(e,false)).join('')).join('')+
+  (sil.length?`<div class="monthh" style="font-size:1.1rem;margin:22px 0 6px">Silenced (turned off)</div>`+sil.map(e=>cadRow(e,true)).join(''):'')+
+  (hid.length?`<div class="monthh" style="font-size:1.1rem;margin:22px 0 6px">Hidden</div>`+hid.map(e=>cadRow(e,true,true)).join(''):'');
+}
+function vCalendar(){vMonth();$('view').insertAdjacentHTML('beforeend','<div class="sec" style="margin-top:28px">Cadence</div>'+cadListOnly());}
 
 /* ── CAMPAIGNS: each month is a campaign ── */
 async function setCampaign(m,field,val){
@@ -1155,8 +1179,8 @@ function cadModeNow(){return (libOv.settings||{}).cadMode||'list';}
 function cadOcc(from,to){
   const out={},add=(e,ds)=>{if(ds>=from&&ds<=to)(out[ds]=out[ds]||[]).push(e);};
   const bigs=posts.filter(p=>p.type==='big');
-  libList().forEach(e=>{
-    if(e.id.startsWith('cv_')||e.silenced)return;
+  cadAll().forEach(e=>{
+    if(e.silenced)return;
     const r=ruleOf(e.id);if(!r||!r.kind||r.kind==='none'||r.kind==='hq')return;
     if(r.kind==='monthly_day'||r.kind==='month_end'){
       let d=new Date(from.slice(0,7)+'-01T12:00:00');
@@ -1190,7 +1214,7 @@ function cadCalHtml(){
   (sel?`<div class="sec">${dayName(cadSel)}</div>${sel.length?sel.map(e=>cadRow(e,false)).join(''):'<div class="empty">Nothing from your cadence on this day.</div>'}`:'');
 }
 function cadenceHtml(){
-  const all=libList().filter(e=>!e.id.startsWith('cv_')),L=all.filter(e=>!e.silenced),sil=all.filter(e=>e.silenced),groups=orderGroups([...new Set(L.map(e=>e.group||'Other'))]);
+  const all=cadAll(),L=all.filter(e=>!e.silenced),sil=all.filter(e=>e.silenced),groups=orderGroups([...new Set(L.map(e=>e.group||'Other'))]);
   const modes=`<div class="bar"><button class="chip ${cadModeNow()==='list'?'on':''}" data-act="cadmode" data-arg="list">List</button><button class="chip ${cadModeNow()==='cal'?'on':''}" data-act="cadmode" data-arg="cal">Calendar view</button></div>`;
   const hid=libList(true).filter(e=>e.deleted&&!e.id.startsWith('cv_'));
   if(cadModeNow()==='cal')return modes+cadTop()+cadCalHtml();
@@ -1342,7 +1366,7 @@ function act(a,arg){
   else if(a==='tsgames'){const ks=[...new Set(gigs.filter(isPublicGig).map(g=>g.kind).filter(Boolean))];tsAdd(ks.length?ks:['Karaoke','Music Bingo','Trivia','Sing-Along'],'game');}
   else if(a==='tsvenues'){tsAdd([...new Set(gigs.filter(isPublicGig).map(g=>g.venue).filter(Boolean))],'venue');}
   else if(a==='bufsync')syncBuffer(false);
-  else if(/^iv(new|del|adj|add|make)$/.test(a))ivAct(a,arg);
+  else if(/^iv(new|del|adj|add|make|fold)$/.test(a))ivAct(a,arg);
   else if(a==='tvw'){tplGrp='all';saveLib('settings',{tplViewV2:arg},true).then(render);}
   else if(a==='tgf'){tplGrp=arg;render();}
   else if(a==='tdue'){tplDue=!tplDue;render();}
@@ -1360,7 +1384,30 @@ $('f-type').addEventListener('change',renderWin);
 $('f-date').addEventListener('change',renderWin);
 function buildTypeOptions(){const cur=$('f-type').value;$('f-type').innerHTML=Object.entries(TYPES).map(([k,v])=>`<option value="${k}">${v.l}</option>`).join('');if(cur)$('f-type').value=cur;}
 buildTypeOptions();
+let curBankCat='';
+function renderSum(){
+  const box=$('f-sum');if(!box)return;
+  const type=$('f-type').value,ent=libList(true).find(x=>x.id===type)||{},ref=$('f-bank').value,hit=ref?bankFind(ref):null;
+  const bcat=(hit&&hit.c)||curBankCat,bd=bcat?bankData()[bcat]:null;let cvId=(hit&&hit.cat.canvas)||(bd&&bd.canvas)||'';if(!cvId){try{cvId=effTpl(ent)||ent.canvas||'';}catch(e){cvId=ent.canvas||'';}}
+  const cv=libList(true).find(x=>x.id===cvId),img=cv&&(libOv[cv.id]||{}).tplImg;
+  const cats=bd?[bd]:Object.values(bankData()).filter(c=>cvId&&c.canvas===cvId);
+  const bn=hit?hit.cat.name:(cats.length?cats.map(c=>c.name+' ('+(c.items||[]).filter(x=>!x.used).length+' unused ideas)').join(', '):'');
+  box.innerHTML=`<div style="display:flex;gap:10px;align-items:center">${img?`<img src="${esc(img)}" alt="" style="width:44px;height:55px;object-fit:cover;border:1px solid var(--border2)"/>`:''}<div><div class="has" style="display:block">Make it with</div><b style="font-weight:600">${esc(cv?cv.name:'No template (nothing to attach)')}</b>${bn?`<div class="has" style="display:block;white-space:normal">Content bank: ${esc(bn)}</div>`:'<div class="has" style="display:block">No content bank category for this one</div>'}</div></div>`;
+}
+$('f-type').addEventListener('change',renderSum);$('f-bank').addEventListener('change',renderSum);
+function promoPrompt(){
+  const type=$('f-type').value,title=$('f-title').value.trim(),date=$('f-date').value,ref=$('f-bank').value,hit=ref?bankFind(ref):null;
+  const tn=(TYPES[type]&&TYPES[type].l)||type,cvEl=$('f-sum').querySelector('b'),cvn=cvEl?cvEl.textContent:'';
+  const wk=(type==='weekly'&&gigs.length&&date)?nightLines(date,addDays(date,6),true):[];
+  const extra=$('f-notes').value.trim();
+  const p=CAP_RULES+'\n\nHere is a post I\'m making. [ATTACH THE FINISHED IMAGE]\n\nThis is a '+tn+' post'+(cvn&&!/^No template/.test(cvn)?' made with the "'+cvn+'" look':'')+(title?': "'+title+'"':'')+'. Write the caption in the Belladonna brand voice, referencing what is said in the post itself.'
+   +(hit?'\n\nText on the post:\n"'+hit.item.t+'"':'')+(wk.length?'\n\nFacts to use (one per line):\n'+wk.join('\n'):'')+(extra?'\n\nExtra direction: '+extra:'')
+   +'\n\nPlatform: '+($('f-plat').value||'IG + FB')+'.';
+  $('f-muse').value=p;$('f-muse-wrap').style.display='';
+  (navigator.clipboard?navigator.clipboard.writeText(p).then(()=>toast('Prompt copied. Attach the finished image in Muse'),()=>toast('Select and copy the prompt below')):toast('Select and copy the prompt below'));
+}
 function fillForm(p){
+  curBankCat=p.bankCat||'';
   $('f-date').value=p.date;$('f-time').value=p.time||'';$('f-type').value=p.type;$('f-plat').value=p.platform||'';
   $('f-title').value=p.title;$('f-cap').value=p.caption||'';$('f-hash').value=p.hashtags||'';$('f-img').value=p.imageUrl||'';imgPrev();$('f-notes').value=p.notes||'';
   $('f-created').checked=!!p.created;$('f-sched').checked=!!p.scheduled;$('f-posted').checked=!!p.posted;
@@ -1368,7 +1415,7 @@ function fillForm(p){
   fillBank(p.bankRef||'');
   $('f-grp').value=p.grp||'';
   $('grp-list').innerHTML=[...new Set(posts.map(x=>x.grp).filter(Boolean))].map(g=>`<option value="${esc(g)}">`).join('');
-  renderTags();renderWin();
+  renderTags();renderWin();renderSum();$('f-more').open=false;
 }
 function openEdit(id,presetDate){
   editingId=id||null;
@@ -1393,7 +1440,7 @@ async function savePost(){
   if(!grp)slide=null;
   else if(!slide||(old&&old.grp!==grp)){slide=posts.filter(x=>x.grp===grp&&x.date===date&&x.id!==id).length+1;}
   await persist({...(old||{}),id,date,time:$('f-time').value,type:$('f-type').value,
-    platform:$('f-plat').value.trim(),title,grp,slide,bankRef:$('f-bank').value||'',caption:$('f-cap').value,hashtags:$('f-hash').value.trim(),imageUrl:$('f-img').value.trim(),notes:$('f-notes').value.trim(),created,scheduled,posted});
+    platform:$('f-plat').value.trim(),title,grp,slide,bankRef:$('f-bank').value||'',bankCat:(old&&old.bankCat)||'',caption:$('f-cap').value,hashtags:$('f-hash').value.trim(),imageUrl:$('f-img').value.trim(),notes:$('f-notes').value.trim(),created,scheduled,posted});
   const br=$('f-bank').value;if(br)markBank(br);
   return id;
 }
@@ -1774,7 +1821,10 @@ const RULE_DEFAULTS={
   tonight:{kind:'hq'},host:{kind:'hq'},best:{kind:'hq'}
 };
 const WD=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
-function ruleOf(id){const o=libOv[id]||{};return o.rule||RULE_DEFAULTS[id]||{kind:'none'};}
+function bankCadList(){return Object.entries(bankData()).map(([c,v])=>({id:'bk:'+c,bank:true,cat:c,name:v.name,nick:v.badge||'',group:'Content bank posts',canvas:v.canvas||'',badge:v.badge||'',use:v.cadUse||'',size:'',freq:v.freq||'',silenced:!!v.silenced,deleted:false,custom:false,pt:v.canvas==='cv_scroll'?'note':'rook'}));}
+function cadAll(){return libList().filter(e=>!e.id.startsWith('cv_')).concat(bankCadList());}
+function cadEnt(id){return libList(true).find(x=>x.id===id)||bankCadList().find(x=>x.id===id);}
+function ruleOf(id){if(String(id).startsWith('bk:')){const c=bankData()[id.slice(3)];return (c&&c.rule)||{kind:'none'};}const o=libOv[id]||{};return o.rule||RULE_DEFAULTS[id]||{kind:'none'};}
 function describeRule(r){
   if(!r)return '';
   if(r.kind==='monthly_day')return 'The '+r.day+ordSuf(r.day)+' of every month';
@@ -1823,14 +1873,14 @@ function planGen(){
   const taken=(type,date,label)=>posts.some(p=>p.type===type&&p.date===date&&(!label||p.title.includes(label)))||out.some(p=>p.type===type&&p.date===date&&(!label||p.title.includes(label)));
   const add=(e,date,time,anchor,off,ctx,label)=>{
     if(date<t||date>end)return;
-    const key=e.id+'|'+anchor+'|'+(off===undefined?'':off);
+    const key=e.id+'|'+anchor+'|'+(off===undefined?'':off),pt=e.pt||e.id;
     if(have.has(key)||skip.has(key))return;
-    if(taken(e.id,date,label))return;
-    out.push({id:'r_'+key.replace(/[^a-z0-9]+/gi,'_'),date,time:time||'12:00',type:e.id,title:genTitle(e.id,e.name,date,{...ctx,off}),
-      platform:(TYPES[e.id]&&TYPES[e.id].plat)||'IG + FB',caption:'',imageUrl:'',notes:'',created:false,posted:false,gen:true,genKey:key});
+    if(taken(pt,date,label||(e.bank?e.name:'')))return;
+    out.push({id:'r_'+key.replace(/[^a-z0-9]+/gi,'_'),date,time:time||'12:00',type:pt,title:genTitle(e.id,e.name,date,{...ctx,off}),
+      platform:(TYPES[pt]&&TYPES[pt].plat)||'IG + FB',caption:'',imageUrl:'',notes:'',created:false,posted:false,gen:true,genKey:key,...(e.bank?{bankCat:e.cat}:{})});
   };
   const bigs=posts.filter(p=>p.type==='big');
-  libList().forEach(e=>{
+  cadAll().forEach(e=>{
     if(e.silenced)return;
     const r=ruleOf(e.id);if(!r||r.kind==='none'||r.kind==='hq')return;
     if(r.kind==='monthly_day'){
@@ -1872,7 +1922,7 @@ function ensureLed(){
 }
 function openLibEdit(id){
   ensureLed();ledId=id;
-  const e=id?libList(true).find(x=>x.id===id):{name:'',nick:'',size:'1080x1350',use:'',group:'Event posts',freq:''};
+  const e=id?cadEnt(id):{name:'',nick:'',size:'1080x1350',use:'',group:'Event posts',freq:''};
   const groups=[...new Set(libList().map(x=>x.group||'Other'))];
   $('led').innerHTML=`<div class="box"><h3>${id?'Edit post type':'Add a post type'}</h3>
   <div class="f2"><div class="f"><label>Name</label><input type="text" id="le-name" value="${esc(e.name)}"/></div><div class="f"><label>Nickname (shows on badges)</label><input type="text" id="le-nick" value="${esc(e.nick)}"/></div></div>
@@ -1888,8 +1938,8 @@ function openLibEdit(id){
     <div class="f" id="le-notew" style="margin-top:6px"><label>Note on timing (optional, for manual ones)</label><input type="text" id="le-freq" value="${esc(e.freq||'')}" placeholder="Evergreen, update when the nights change…"/></div></div>
   <div class="f"><label>What it is / timing</label><input type="text" id="le-use" value="${esc(e.use||'')}" placeholder="Monday post: week theme plus each night"/></div>
   <div class="f"><label>Size</label><input type="text" id="le-size" value="${esc(e.size||'')}" placeholder="1080x1350"/></div>
-  ${id&&!e.custom?'<div class="meta">This is one of your built-in post types. “Hide” removes it from this list; posts already on the calendar keep working.</div>':''}
-  <div class="acts">${id?`<button class="btn btn-d" type="button" onclick="libHide()">${e.custom?'Delete':'Hide'}</button>`:''}<span class="sp"></span><button class="btn btn-g" type="button" onclick="document.getElementById('led').classList.remove('show')">Cancel</button><button class="btn btn-p" type="button" onclick="libSaveEdit()">Save</button></div></div>`;
+  ${id&&!e.custom&&!e.bank?'<div class="meta">This is one of your built-in post types. “Hide” removes it from this list; posts already on the calendar keep working.</div>':''}
+  <div class="acts">${id&&!String(id).startsWith('bk:')?`<button class="btn btn-d" type="button" onclick="libHide()">${e.custom?'Delete':'Hide'}</button>`:''}<span class="sp"></span><button class="btn btn-g" type="button" onclick="document.getElementById('led').classList.remove('show')">Cancel</button><button class="btn btn-p" type="button" onclick="libSaveEdit()">Save</button></div></div>`;
   $('led').classList.add('show');
   $('le-rule').value=(e.silenced?'silenced':(ruleOf(e.id||'').kind||'none'));ledRule();
 }
@@ -1916,6 +1966,9 @@ async function libSaveEdit(){
     if(k==='weekday')patch.rule.weekday=+$('le-wd').value;
     if(k==='nth_week'){patch.rule.weekday=+$('le-wd').value;patch.rule.weeks=[...document.querySelectorAll('.le-wk:checked')].map(x=>+x.value);if(!patch.rule.weeks.length){toast('Tick at least one week');return;}}
     if(k==='before_event')patch.rule.offsets=$('le-offs').value.split(',').map(x=>parseInt(x.trim())).filter(x=>!isNaN(x)&&x>=0);}
+  if(ledId&&String(ledId).startsWith('bk:')){const c=ledId.slice(3),cats=bankData();if(!cats[c])return;
+    cats[c].name=patch.name;cats[c].badge=patch.badge;cats[c].canvas=patch.canvas;cats[c].silenced=patch.silenced;cats[c].freq=patch.freq;if(patch.rule)cats[c].rule=patch.rule;
+    await saveLib('bank',{cats});$('led').classList.remove('show');render();return;}
   let id=ledId;
   if(!id){id='c_'+Date.now().toString(36);patch.custom=true;}
   const oldName=(libList(true).find(x=>x.id===id)||{}).name||'';
@@ -2027,7 +2080,7 @@ function vBank(){
     const its=v.items||[],un=its.filter(x=>!x.used).length;
     const open=!!((libOv.bank||{}).open||{})[c],qn=(v.queue||'').split('\n').filter(x=>x.trim()).length;
     if(bankOrg)return hdr+`<div class="card" data-bcat="${c}" data-bsec="${esc(cvk)}" draggable="true" style="padding:10px 12px;display:flex;gap:10px;align-items:center"><span style="cursor:grab;color:var(--gold2)" title="Drag to move">⠿</span><input type="text" data-bk="${c}" data-f="name" value="${esc(v.name)}" style="flex:1"/><button class="btn btn-d" data-act="bkcatdel" data-arg="${c}">Delete</button></div>`;
-    return hdr+`<div class="card" data-bcat="${c}" data-bsec="${esc(cvk)}"><div data-act="bkfold" data-arg="${c}" style="cursor:pointer;display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span style="color:var(--gold2);width:14px">${open?'▾':'▸'}</span><b style="font-weight:600">${esc(v.name)}</b>${v.badge?`<span class="nick">${esc(v.badge)}</span>`:''}<span class="has" style="display:inline;margin-left:auto">${un} unused${qn?' · '+qn+' in Make now':''}</span></div>
+    return hdr+`<div class="card" data-bcat="${c}" data-bsec="${esc(cvk)}"><div data-act="bkfold" data-arg="${c}" style="cursor:pointer;display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span style="color:var(--gold2);width:14px">${open?'▾':'▸'}</span><b style="font-weight:600">${esc(v.name)}</b>${v.badge?`<span class="nick">${esc(v.badge)}</span>`:''}<span class="has" style="display:inline;margin-left:auto">${un} unused ideas${(()=>{const iv=Object.values(invItems()).find(x=>x.cat===c);return iv?' · '+(+iv.count||0)+' in inventory':'';})()}${qn?' · '+qn+' in Make now':''}</span></div>
     ${open?`<div style="margin-top:10px"><div class="f"><label>Badge on the template</label><input type="text" data-bk="${c}" data-f="badge" value="${esc(v.badge||'')}"/></div>
     <div class="f"><label>Prompt notes (added to "Copy prompt + these" for this category)</label><textarea data-bx="${c}|pnotes" style="min-height:70px" placeholder="Extra instructions this category always needs, e.g. Two sentences per post: sentence one goes on the top of the PNG, sentence two goes on the bottom.">${esc(v.pnotes||'')}</textarea>
       <div class="tools" style="margin:6px 0 0"><button class="btn btn-gold" data-md="bkcopypn" data-arg="${c}">Copy prompt notes</button></div>
@@ -2037,7 +2090,7 @@ function vBank(){
       <pre style="white-space:pre-wrap;font-family:var(--font);font-size:12px;line-height:1.5;color:var(--text2);background:var(--surface3);border:1px solid var(--border);border-radius:var(--radius);padding:8px 10px;margin:0">${esc(catLive(c)||'(none)')}</pre></div>
     <div class="f"><label>Make now (what you want made this time)</label><textarea id="bkq-${c}" data-bx="${c}|queue" style="min-height:90px" placeholder="Press + next to a saved line below, or type here">${esc(v.queue||'')}</textarea>
       <div class="tools" style="margin:6px 0 0"><button class="btn btn-gold" data-md="bkcopyq" data-arg="${c}">Copy prompt + these</button><button class="btn btn-g" data-md="bkcopyqo" data-arg="${c}">Copy just these</button><button class="btn btn-g" data-md="bkqclear" data-arg="${c}">Clear</button></div></div>
-    <div class="meta">${un} unused ready to post</div>
+    <div class="meta">${un} unused ideas ready to post · <a href="#" data-act="libedit" data-arg="bk:${c}" style="color:var(--gold)">Set how often to post this</a></div>
     ${its.map(x=>`<div style="display:flex;gap:8px;align-items:center;margin-bottom:5px"><input type="checkbox" data-act="bkused" data-arg="${c}|${x.id}" ${x.used?'checked':''} style="width:17px;height:17px" title="Mark used"/><input type="text" data-bi="${c}|${x.id}" value="${esc(x.t)}" style="${x.used?'opacity:.45;text-decoration:line-through':''}"/><button class="btn btn-g" data-md="bkq" data-arg="${c}|${x.id}" style="padding:4px 12px" title="Add to Make now">+</button><button class="btn btn-d" data-act="bkdel" data-arg="${c}|${x.id}" style="padding:4px 10px">×</button></div>`).join('')}
     <div class="f" style="margin-top:8px"><label>Add (one per line)</label><textarea id="bkadd-${c}" style="min-height:60px" placeholder="Paste or type posts, one on each line"></textarea>
       <div class="tools" style="margin:6px 0 0"><button class="btn btn-g" data-act="bkadd" data-arg="${c}">Add to bank</button></div></div>
@@ -2355,7 +2408,7 @@ function capPrompt(){
 
 /* ═══ TEMPLATES HUB: Library + Content Bank + Cadence in one place. One card per template look. ═══ */
 let tplDue=false;
-function tplViewNow(){return (libOv.settings||{}).tplViewV2||'template';}
+function tplViewNow(){const v=(libOv.settings||{}).tplViewV2||'template';return v==='schedule'?'template':v;}
 function tplAll(){
   const L=tplList(),ids=new Set(L.map(x=>x.id));
   const types=libList().filter(e=>!e.id.startsWith('cv_')&&!effTpl(e));
@@ -2392,7 +2445,7 @@ function tplFreqLine(t){
 function tplHead(t,open){
   const pseudo=t.id==='_none',o=libOv[t.id]||{},img=o.tplImg,di=tplDueInfo(t),cats=tplCats(t);
   const un=cats.reduce((n,[,v])=>n+(v.items||[]).filter(x=>!x.used).length,0),fr=tplFreqLine(t);
-  const bits=[fr,cats.length?cats.length+' categor'+(cats.length>1?'ies':'y')+(un?' · '+un+' unused':''):''].filter(Boolean).join(' · ');
+  const bits=[fr,cats.length?cats.length+' categor'+(cats.length>1?'ies':'y')+(un?' · '+un+' unused ideas':''):''].filter(Boolean).join(' · ');
   return `<div data-act="tplfold" data-arg="${t.id}" ${pseudo?'':`data-tid="${t.id}" draggable="true"`} style="cursor:pointer;display:flex;gap:10px;align-items:center">
     <span style="color:var(--gold2);width:12px">${open?'▾':'▸'}</span>
     <div style="width:36px;height:45px;flex-shrink:0;background:var(--surface3);border:1px solid var(--border);border-radius:4px;overflow:hidden;display:flex;align-items:center;justify-content:center">${img?`<img src="${esc(img)}" alt="" loading="lazy" style="width:100%;height:100%;object-fit:contain" onerror="this.style.display='none'"/>`:''}</div>
@@ -2417,7 +2470,7 @@ function tplLookHtml(t){
 function bankCatHtml(c,v){
   const its=v.items||[],un=its.filter(x=>!x.used).length;
   const open=!!((libOv.bank||{}).open||{})[c],qn=(v.queue||'').split('\n').filter(x=>x.trim()).length;
-  return `<div class="card" style="margin:6px 0;background:var(--surface2)"><div data-act="bkfold" data-arg="${c}" style="cursor:pointer;display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span style="color:var(--gold2);width:14px">${open?'▾':'▸'}</span><b style="font-weight:600">${esc(v.name)}</b>${v.badge?`<span class="nick">${esc(v.badge)}</span>`:''}<span class="has" style="display:inline;margin-left:auto">${(()=>{const iv=Object.values(invItems()).find(x=>x.cat===c);return iv?(+iv.count||0)+' in stock · ':'';})()}${un} unused${qn?' · '+qn+' in Make now':''}</span></div>
+  return `<div class="card" style="margin:6px 0;background:var(--surface2)"><div data-act="bkfold" data-arg="${c}" style="cursor:pointer;display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span style="color:var(--gold2);width:14px">${open?'▾':'▸'}</span><b style="font-weight:600">${esc(v.name)}</b>${v.badge?`<span class="nick">${esc(v.badge)}</span>`:''}<span class="has" style="display:inline;margin-left:auto">${un} unused ideas${(()=>{const iv=Object.values(invItems()).find(x=>x.cat===c);return iv?' · '+(+iv.count||0)+' in inventory':'';})()}${qn?' · '+qn+' in Make now':''}</span></div>
     ${open?`<div style="margin-top:10px"><div class="f2"><div class="f"><label>Category name</label><input type="text" data-bk="${c}" data-f="name" value="${esc(v.name)}"/></div><div class="f"><label>Template look</label><select data-bk="${c}" data-f="canvas"><option value="">No template</option>${tplList().map(x=>`<option value="${x.id}" ${v.canvas===x.id?'selected':''}>${esc(x.name)}</option>`).join('')}</select></div></div>
     <div class="f"><label>Badge on the template</label><input type="text" data-bk="${c}" data-f="badge" value="${esc(v.badge||'')}"/></div>
     <div class="f"><label>Prompt notes (added to "Copy prompt + these" for this category)</label><textarea data-bx="${c}|pnotes" style="min-height:70px" placeholder="Extra instructions this category always needs, e.g. Two sentences per post: sentence one goes on the top of the PNG, sentence two goes on the bottom.">${esc(v.pnotes||'')}</textarea>
@@ -2428,7 +2481,7 @@ function bankCatHtml(c,v){
       <pre style="white-space:pre-wrap;font-family:var(--font);font-size:12px;line-height:1.5;color:var(--text2);background:var(--surface3);border:1px solid var(--border);border-radius:var(--radius);padding:8px 10px;margin:0">${esc(catLive(c)||'(none)')}</pre></div>
     <div class="f"><label>Make now (what you want made this time)</label><textarea id="bkq-${c}" data-bx="${c}|queue" style="min-height:90px" placeholder="Press + next to a saved line below, or type here">${esc(v.queue||'')}</textarea>
       <div class="tools" style="margin:6px 0 0"><button class="btn btn-gold" data-md="bkcopyq" data-arg="${c}">Copy prompt + these</button><button class="btn btn-g" data-md="bkcopyqo" data-arg="${c}">Copy just these</button><button class="btn btn-g" data-md="bkqclear" data-arg="${c}">Clear</button></div></div>
-    <div class="meta">${un} unused ready to post</div>
+    <div class="meta">${un} unused ideas ready to post · <a href="#" data-act="libedit" data-arg="bk:${c}" style="color:var(--gold)">Set how often to post this</a></div>
     ${its.map(x=>`<div style="display:flex;gap:8px;align-items:center;margin-bottom:5px"><input type="checkbox" data-act="bkused" data-arg="${c}|${x.id}" ${x.used?'checked':''} style="width:17px;height:17px" title="Mark used"/><input type="text" data-bi="${c}|${x.id}" value="${esc(x.t)}" style="${x.used?'opacity:.45;text-decoration:line-through':''}"/><button class="btn btn-g" data-md="bkq" data-arg="${c}|${x.id}" style="padding:4px 12px" title="Add to Make now">+</button><button class="btn btn-d" data-act="bkdel" data-arg="${c}|${x.id}" style="padding:4px 10px">×</button></div>`).join('')}
     <div class="f" style="margin-top:8px"><label>Add (one per line)</label><textarea id="bkadd-${c}" style="min-height:60px" placeholder="Paste or type posts, one on each line"></textarea>
       <div class="tools" style="margin:6px 0 0"><button class="btn btn-g" data-act="bkadd" data-arg="${c}">Add to bank</button></div></div>
@@ -2515,7 +2568,7 @@ function tplSettingsHtml(){
 function vTemplates(){
   const view=tplViewNow(),all=tplAll(),filt=(view==='template'||view==='use'),list=(tplDue&&filt)?all.filter(tplIsDue):all;
   const chip=(k,l)=>`<button class="chip ${view===k?'on':''}" data-act="tvw" data-arg="${k}">${l}</button>`;
-  const top=`<div class="bar">${chip('template','By template')}${chip('use','By use')}${chip('schedule','By schedule')}${chip('inventory','Inventory')}<div class="sp"></div>${filt?`<button class="chip ${tplDue?'on':''}" data-act="tdue">Due soon</button>`:''}<button class="btn btn-p" data-act="tplnew">+ New template</button></div>`;
+  const top=`<div class="bar">${chip('template','By template')}${chip('use','By use')}${chip('inventory','Inventory')}<div class="sp"></div>${filt?`<button class="chip ${tplDue?'on':''}" data-act="tdue">Due soon</button>`:''}<button class="btn btn-p" data-act="tplnew">+ New template</button></div>`;
   const hd=head('Templates','Every look, its words and how often you post it, in one place. Switch the grouping to find things your way.');
   if(view==='inventory'){$('view').innerHTML=hd+top.replace(/<button class="btn btn-p"[^>]*>\+ New template<\/button>/,'')+invHtml();return;}
   const details=`<div class="bar"><span class="meta" style="margin:0">Details for graphics:</span><span class="meta" style="margin:0">Night</span><input type="date" id="bkday" value="${bankDay}" style="width:auto;padding:5px 10px"/><span class="meta" style="margin:0">Week</span><select class="mini" id="bkwk">${[[-1,'Last week'],[0,'This week'],[1,'Next week'],[2,'Week after next']].map(([o,l])=>`<option value="${o}" ${bankWeek===o?'selected':''}>${l} (${bankWeekLabel(o)})</option>`).join('')}</select></div>`;
@@ -2543,18 +2596,19 @@ function invLow(){return Object.entries(invItems()).filter(([,v])=>(+v.low||0)>0
 function vInventory(){$('view').innerHTML=head('Inventory','Stock of finished posts.')+invHtml();}
 function invHtml(){
   const items=Object.entries(invItems()),cats=Object.entries(bankData()),types=libList().filter(e=>!e.id.startsWith('cv_')),low=invLow();
+  const openMap=(libOv.tplui||{}).invOpen||{};
   const row=([id,v])=>{
-    const n=+v.count||0,isLow=(+v.low||0)>0&&n<=(+v.low||0);
-    return `<div class="card" style="margin-bottom:8px;${isLow?'border-color:var(--rose)':''}">
-      <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
-        <div style="flex:1;min-width:180px"><span class="lbl" style="margin-top:0">What it is</span><input type="text" data-iv="${id}" data-f="name" value="${esc(v.name||'')}" placeholder="Bar Truths (Snark card)"/></div>
-        <div style="text-align:center"><div class="title" style="font-size:2.4rem;${isLow?'background:none;-webkit-text-fill-color:var(--rose);color:var(--rose)':''}">${n}</div><div class="nick">${isLow?'Running low':'in stock'}</div></div>
-        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center"><button class="btn btn-g" data-act="ivadj" data-arg="${id}|-1">−1</button><button class="btn btn-g" data-act="ivadj" data-arg="${id}|1">+1</button>
-          <input type="text" inputmode="numeric" id="iva-${id}" placeholder="Made" style="width:70px"/><button class="btn btn-p" data-act="ivadd" data-arg="${id}">Add</button></div></div>
-      <div class="f2" style="margin-top:8px"><div class="f"><label>Warn me at or below</label><input type="text" inputmode="numeric" data-iv="${id}" data-f="low" value="${esc(v.low||'')}" placeholder="5"/></div>
+    const n=+v.count||0,isLow=(+v.low||0)>0&&n<=(+v.low||0),open=!!openMap[id];
+    const head=`<div data-act="ivfold" data-arg="${id}" style="cursor:pointer;display:flex;gap:10px;align-items:center"><span style="color:var(--gold2);width:12px">${open?'▾':'▸'}</span><div style="flex:1;min-width:0"><b style="font-weight:600;font-size:.92rem">${esc(v.name||'Untitled')}</b></div><div style="text-align:right;flex-shrink:0"><b style="font-size:1.05rem;color:${isLow?'var(--rose)':'var(--gold2)'}">${n}</b> <span class="has" style="display:inline">in stock${isLow?' · running low':''}</span></div></div>`;
+    if(!open)return `<div class="card" style="padding:10px 12px;margin-bottom:6px;${isLow?'border-color:var(--rose)':''}">${head}</div>`;
+    return `<div class="card" style="margin-bottom:8px;${isLow?'border-color:var(--rose)':''}">${head}<div style="margin-top:10px">
+      <div class="f" style="max-width:520px"><label>What it is</label><input type="text" data-iv="${id}" data-f="name" value="${esc(v.name||'')}" placeholder="Bar Truths (Snark card)"/></div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:10px"><button class="btn btn-g" data-act="ivadj" data-arg="${id}|-1">−1</button><button class="btn btn-g" data-act="ivadj" data-arg="${id}|1">+1</button>
+        <input type="text" inputmode="numeric" id="iva-${id}" placeholder="Made" style="width:80px"/><button class="btn btn-p" data-act="ivadd" data-arg="${id}">Add to stock</button></div>
+      <div class="f2"><div class="f"><label>Warn me at or below</label><input type="text" inputmode="numeric" data-iv="${id}" data-f="low" value="${esc(v.low||'')}" placeholder="5"/></div>
         <div class="f"><label>Counts down when I tick Sched on a post using this bank category</label><select data-iv="${id}" data-f="cat"><option value="">(none)</option>${cats.map(([c,x])=>`<option value="${c}" ${v.cat===c?'selected':''}>${esc(x.name)}</option>`).join('')}</select></div>
         <div class="f"><label>Or on any post of this type</label><select data-iv="${id}" data-f="type"><option value="">(none)</option>${types.map(e=>`<option value="${e.id}" ${v.type===e.id?'selected':''}>${esc(e.name)}</option>`).join('')}</select></div></div>
-      <div class="acts" style="margin-top:0">${(v.cat&&bankData()[v.cat])?`<button class="btn btn-gold" data-act="ivmake" data-arg="${id}">Make more</button>`:''}<button class="btn btn-d" data-act="ivdel" data-arg="${id}">Delete</button></div></div>`;
+      <div class="acts" style="margin-top:0">${(v.cat&&bankData()[v.cat])?`<button class="btn btn-gold" data-act="ivmake" data-arg="${id}">Make more</button>`:''}<button class="btn btn-d" data-act="ivdel" data-arg="${id}">Delete</button></div></div></div>`;
   };
   return `<div class="sub" style="margin-top:0">How many finished posts you have in stock. The number drops by one each time you tick Sched on a matching post, and goes back up if you untick it.</div>`+
     (low.length?`<div class="banner err">Running low: ${low.map(([,v])=>esc(v.name)+' ('+(+v.count||0)+')').join(', ')}</div>`:'')+
@@ -2563,8 +2617,9 @@ function invHtml(){
     `<div class="meta" style="margin-top:8px">Linking: a post counts against an item when its Content Bank text came from the linked category (pick it in the post window), or, if no category is linked, when the post is the linked type.</div>`;
 }
 function ivAct(a,arg){
+  if(a==='ivfold'){const o={...((libOv.tplui||{}).invOpen||{})};if(o[arg])delete o[arg];else o[arg]=true;saveLib('tplui',{invOpen:o},true).then(render);return;}
   const items=JSON.parse(JSON.stringify(invItems()));
-  if(a==='ivnew'){items['i'+Date.now().toString(36)]={name:'New item',count:0,low:5,cat:'',type:''};}
+  if(a==='ivnew'){const nid='i'+Date.now().toString(36);items[nid]={name:'New item',count:0,low:5,cat:'',type:''};saveLib('tplui',{invOpen:{...((libOv.tplui||{}).invOpen||{}),[nid]:true}},true);}
   else if(a==='ivdel'){if(!confirm('Delete "'+(items[arg]||{}).name+'"?'))return;delete items[arg];}
   else if(a==='ivadj'){const[id,d]=arg.split('|');if(!items[id])return;items[id].count=Math.max(0,(+items[id].count||0)+(+d));}
   else if(a==='ivadd'){const el=$('iva-'+arg),n=parseInt(String(el&&el.value).replace(/[^\d-]/g,''));if(!n||!items[arg]){toast('Type how many you made');return;}items[arg].count=Math.max(0,(+items[arg].count||0)+n);toast(items[arg].name+': '+items[arg].count+' in stock');}
