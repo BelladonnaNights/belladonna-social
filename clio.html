@@ -1165,6 +1165,61 @@ function freqText(e){
   return describeRule(r)+((r.time&&r.kind!=='hq')?' at '+fmtTime(r.time):'');
 }
 function effTpl(e){return e.canvas||(isTpl(e)?e.id:'');}
+const HOW_STORY=`* Find the template PNG for this story in your files.
+* Copy the prompt for this category from Templates and drop both into ChatGPT.
+* Download the design as a high-resolution PNG to your phone's camera roll.
+* Open the Instagram Story Creator
+   * Open the Instagram app on your phone.
+   * From your home feed, swipe right or tap Your Story in the top-left corner.
+   * Select your downloaded 9:16 graphic from your camera roll.
+* Add the Invisible Venue Mention
+   * Tap anywhere on the screen (or tap the Aa text icon) to turn on the text tool.
+   * Type the venue's Instagram handle (for example @thecoaster).
+   * Pinch the text with two fingers until it is microscopic.
+   * Drag the tiny text into a dark area or corner so it blends into the background. (The venue gets a DM with a one-tap Add to Story button, with no visible tag cluttering your art.)
+* Add the Stealth Link Sticker
+   * Tap the square Sticker icon at the top of your screen.
+   * Pick the LINK sticker and paste your destination URL (belladonnanights.com).
+   * Under Customize sticker text, type a single character or subtle icon (like a black heart).
+   * Tap the sticker after placing it to cycle to the transparent style.
+   * Scale it down and put it in a discreet corner.
+* Publish and Cross-Post
+   * Tap Your Story at the bottom-left to publish.
+   * Make sure Meta cross-posting is on so it also posts to your Facebook Page Story.`;
+function howDefault(e){
+  if(e.id==='tonight')return HOW_STORY.replace('for this story','for the Tonight story').replace('prompt for this category','Tonight Story prompt');
+  if(e.id==='host')return HOW_STORY.replace('for this story',"for the Host story").replace('Add the Invisible Venue Mention','Add the Invisible Host Mention').replace("Type the venue's Instagram handle (for example @thecoaster).","Type the host's Instagram handle, if they have one.").replace(' (The venue gets a DM with a one-tap Add to Story button, with no visible tag cluttering your art.)','');
+  if(e.id==='crowd')return `* Pick a real photo or a 5 to 15 second clip from this week (host check-out photos, a singalong, a big moment).
+* Open the post in the calendar and tick Made.
+* Press Copy caption prompt (for Muse), paste it into ChatGPT, and attach the photo or clip.
+* Paste the caption into the post, then schedule it in Buffer and tick Sched.`;
+  const tn=effTpl(e),tpl=tn?((tplList().find(x=>x.id===tn)||{}).name||''):'',cat=e.bank?e.name:'this post type';
+  return `* Find the ${tpl||'template'} example PNG in your files (or Templates tab).
+* Open Templates, find ${cat}, and press Copy prompt + these. Drop the prompt and the example PNG into ChatGPT.
+* Download the finished design as a high-resolution PNG.
+* Open the post in the calendar and tick Made.
+* Press Copy caption prompt (for Muse), attach the finished image, and paste the caption into the post.
+* Schedule it in Buffer, then tick Sched. Posted ticks itself when Buffer sends it.`;
+}
+function howText(e){
+  const own=String(e.id).startsWith('bk:')?(bankData()[e.id.slice(3)]||{}).howto:(libOv[e.id]||{}).howto;
+  return own||howDefault(e);
+}
+function howRender(t){
+  return '<ol style="margin:6px 0 0;padding-left:20px">'+t.split('\n').reduce((a,l)=>{
+    if(/^\s+[*-]\s+/.test(l)&&a.length)a[a.length-1].sub.push(l.replace(/^\s+[*-]\s+/,''));
+    else if(/^\s*[*-]\s+/.test(l))a.push({t:l.replace(/^\s*[*-]\s+/,''),sub:[]});
+    else if(l.trim()&&a.length)a[a.length-1].t+=' '+l.trim();
+    return a;},[]).map(x=>`<li style="margin:3px 0">${esc(x.t)}${x.sub.length?'<ul style="margin:2px 0;padding-left:18px;color:var(--text2)">'+x.sub.map(y=>`<li>${esc(y)}</li>`).join('')+'</ul>':''}</li>`).join('')+'</ol>';
+}
+let howEditId='';
+function howOpenMap(){return (libOv.tplui||{}).howOpen||{};}
+function howBlock(e){
+  const open=!!howOpenMap()[e.id],t=howText(e);
+  return `<div style="flex-basis:100%;border-top:1px solid var(--border);padding-top:6px"><div data-act="howfold" data-arg="${e.id}" style="cursor:pointer;color:var(--gold2);font-size:13px"><span style="display:inline-block;width:14px">${open?'▾':'▸'}</span>How to make it</div>`+
+  (open?(howEditId===e.id?`<textarea data-how="${e.id}" style="min-height:220px;margin-top:6px;font-size:13px">${esc(t)}</textarea><div class="tools" style="margin:6px 0 0"><button class="btn btn-g" data-act="howedit" data-arg="">Done</button></div>`:
+    howRender(t)+`<div class="tools" style="margin:8px 0 0"><button class="btn btn-g" data-act="howedit" data-arg="${e.id}">Edit steps</button></div>`):'')+'</div>';
+}
 function cadRow(e,dim,restore){
   const tid=effTpl(e),tn=tid?((tplList().find(x=>x.id===tid)||{}).name||''):'';
   const img=tid?((libOv[tid]||{}).tplImg||''):'';
@@ -1172,7 +1227,7 @@ function cadRow(e,dim,restore){
       ${img?`<img src="${esc(img)}" alt="" loading="lazy" title="Your example template" style="width:40px;height:50px;object-fit:contain;background:var(--surface3);border:1px solid var(--border2);border-radius:4px;flex-shrink:0" onerror="this.style.display='none'"/>`:''}
       <div style="flex:1;min-width:180px"><div><b style="font-weight:600">${esc(e.name)}</b>${e.nick?` <span class="nick">(${esc(e.nick)})</span>`:''}</div>
       <div class="meta" style="margin:0">${esc(e.use||'')}${e.use?' · ':''}<span style="color:var(--gold2)">${esc(freqText(e))}</span></div><div class="meta" style="margin:2px 0 0">Template: ${tn?`<b>${esc(tn)}</b>`:`<span style="color:var(--red,#c0392b)">none yet, press Edit to pick one</span>`}</div></div>
-      ${restore?`<button class="btn btn-p" data-act="librestore" data-arg="${e.id}">Restore</button>`:`<button class="btn btn-g" data-act="libedit" data-arg="${e.id}">Edit</button>`}</div>`;
+      ${restore?`<button class="btn btn-p" data-act="librestore" data-arg="${e.id}">Restore</button>`:`<button class="btn btn-g" data-act="libedit" data-arg="${e.id}">Edit</button>`}${restore?'':howBlock(e)}</div>`;
 }
 function cadTop(){
   return `<div class="sub" style="margin:0 0 8px">Everything you post on a rhythm, grouped. Each line has a Frequency (like “every Monday” or “7, 3 days before and the day of each big night”), and Clio creates the posts for the next 60 days from it. Change a frequency and the new posts follow it. Posts already on your calendar are never duplicated or moved. Silenced ones are turned off and sit at the bottom.</div>
@@ -1294,6 +1349,8 @@ $('view').addEventListener('change',e=>{
   else if(e.target.id==='bkwk'){bankWeek=+e.target.value;render();}
   else if(e.target.id==='bkday'){bankDay=e.target.value||todayStr();render();}
   else if(e.target.dataset.iv){ivChange(e.target);}
+  else if(e.target.dataset.how){const id=e.target.dataset.how,v=e.target.value.trim();
+    if(id.startsWith('bk:')){const cats=bankData(),c=id.slice(3);if(cats[c]){cats[c].howto=v;saveLib('bank',{cats},true);}}else saveLib(id,{howto:v},true);toast('Saved');}
   else if(e.target.dataset.vc){const mp={...cityMap()};const v=e.target.value.trim();if(v)mp[e.target.dataset.vc]=v;else delete mp[e.target.dataset.vc];saveLib('venueCities',{map:mp}).then(render);}
   else if(e.target.dataset.ct){setCampaign(e.target.dataset.ct,e.target.dataset.f,e.target.value);}
   else if(e.target.dataset.ban){const u=e.target.value.trim();if(!u||/^https?:\/\//.test(u))setBanner(e.target.dataset.ban,u);else toast('That does not look like an image link');}
@@ -1361,6 +1418,8 @@ function act(a,arg){
   else if(a==='gennow')runGen(true);
   else if(a==='gentoggle'){saveLib('settings',{autoGen:(libOv.settings||{}).autoGen===false}).then(render);}
   else if(a==='libedit')openLibEdit(arg);
+  else if(a==='howfold'){const o={...howOpenMap()};if(o[arg])delete o[arg];else o[arg]=true;saveLib('tplui',{howOpen:o},true).then(render);}
+  else if(a==='howedit'){howEditId=arg;render();}
   else if(a==='grpadd')slideFrom(arg);
   else if(a==='librestore'){saveLib(arg,{deleted:false}).then(render);}
   else if(a==='bantoggle'){saveLib('settings',{showBanners:!showBanners()}).then(render);}
@@ -2239,7 +2298,7 @@ function mdAct(el){
     copyTxt($('bkmp').value.trim()+'\n\n'+(cv?'TEMPLATE LOOK: '+cv.name+' (attach your saved example image from Library)\n':'')+(v.badge?'TOP BADGE TEXT: '+v.badge+'\n':'')+'\nNOTES FOR THIS CATEGORY:\n'+((v.pnotes||'').trim()?v.pnotes.trim()+'\n\n':'')+catLive(arg)+'\n\nPOSTS TO MAKE (one PNG each, carousels where there are [brackets]):\n'+q);
   }
 }
-const TYPING='[data-secn],[data-bx],[data-bmp],[data-bbp],[data-ls],[data-lt],[data-lib],[data-ts],[data-ct],[data-bk],[data-bi],[data-stat],[data-ban],[data-vc],[data-iv]',AUTOSAVE='[data-bx],[data-bmp],[data-bbp],[data-ls],[data-lib],[data-ts],[data-ct]';
+const TYPING='[data-secn],[data-bx],[data-bmp],[data-bbp],[data-ls],[data-lt],[data-lib],[data-ts],[data-ct],[data-bk],[data-bi],[data-stat],[data-ban],[data-vc],[data-iv],[data-how]',AUTOSAVE='[data-bx],[data-bmp],[data-bbp],[data-ls],[data-lib],[data-ts],[data-ct]';
 $('view').addEventListener('input',e=>{
   const t=e.target;if(!t.matches||!t.matches(TYPING))return;
   editing=true;
