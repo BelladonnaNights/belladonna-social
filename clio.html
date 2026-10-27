@@ -1194,10 +1194,9 @@ function howDefault(e){
 * Press Copy caption prompt (for Muse), paste it into ChatGPT, and attach the photo or clip.
 * Paste the caption into the post, then schedule it in Buffer and tick Sched.`;
   const tn=effTpl(e),tpl=tn?((tplList().find(x=>x.id===tn)||{}).name||''):'',cat=e.bank?e.name:'this post type';
-  return `* Find the ${tpl||'template'} example PNG in your files (or Templates tab).
-* Open Templates, find ${cat}, and press Copy prompt + these. Drop the prompt and the example PNG into ChatGPT.
-* Download the finished design as a high-resolution PNG.
-* Open the post in the calendar and tick Made.
+  return `* Open the post in the calendar and check the template: ${tpl||'the template'}.
+* If the image is not made yet, use the batch steps, or press The Muse and make just this one.
+* Upload the finished image and tick Made.
 * Press Copy caption prompt (for Muse), attach the finished image, and paste the caption into the post.
 * Schedule it in Buffer, then tick Sched. Posted ticks itself when Buffer sends it.`;
 }
@@ -1219,10 +1218,20 @@ function howBatchDefault(e){
 * Upload each image and tick Made.
 * Add captions, schedule them all in Buffer in one sitting, and tick Sched on each.`;
 }
+function howBrainDefault(e){
+  if(e.bank)return `* Open Templates and find ${e.name}.
+* Look at the saved lines already in the category so you do not repeat yourself.
+* Press Copy brainstorm prompt and paste it into ChatGPT.
+* Pick the ideas you like and paste them into "Add (one per line)", then press Add to bank.
+* Delete or rewrite anything that does not sound like Belladonna.`;
+  return `* Open the post type's category in Templates, or a recent post of this type in the calendar.
+* Write down what you want this one to say or show.
+* Ask ChatGPT for a few options, pick one, and put it in the post's title or notes.`;
+}
 function howText(e,kind){
-  const k=kind==='batch'?'howtoBatch':'howto',bk=String(e.id).startsWith('bk:');
+  const k=kind==='batch'?'howtoBatch':kind==='brain'?'howtoBrain':'howto',bk=String(e.id).startsWith('bk:');
   const own=bk?(bankData()[e.id.slice(3)]||{})[k]:(libOv[e.id]||{})[k];
-  return own||(kind==='batch'?howBatchDefault(e):howDefault(e));
+  return own||(kind==='batch'?howBatchDefault(e):kind==='brain'?howBrainDefault(e):howDefault(e));
 }
 function howRender(t){
   return '<ol style="margin:6px 0 0;padding-left:20px">'+t.split('\n').reduce((a,l)=>{
@@ -1240,7 +1249,7 @@ function howBlock(e){
     (open?(howEditId===key?`<textarea data-how="${key}" style="min-height:220px;margin-top:6px;font-size:13px">${esc(t)}</textarea><div class="tools" style="margin:6px 0 0"><button class="btn btn-g" data-act="howedit" data-arg="">Done</button></div>`:
       howRender(t)+`<div class="tools" style="margin:8px 0 0"><button class="btn btn-g" data-act="howedit" data-arg="${key}">Edit steps</button></div>`):'');
   };
-  return `<div style="flex-basis:100%;border-top:1px solid var(--border);padding-top:6px">${one('post','How to make it: one post')}${one('batch','How to make it: batch')}</div>`;
+  return `<div style="flex-basis:100%;border-top:1px solid var(--border);padding-top:6px">${one('brain','How To Make It: Idea Brainstorm')}${one('batch','How To Make It: Batch Creation')}${one('post','How To Make It: Ready for Post')}</div>`;
 }
 function cadRow(e,dim,restore){
   const tid=effTpl(e),tn=tid?((tplList().find(x=>x.id===tid)||{}).name||''):'';
@@ -1371,7 +1380,7 @@ $('view').addEventListener('change',e=>{
   else if(e.target.id==='bkwk'){bankWeek=+e.target.value;render();}
   else if(e.target.id==='bkday'){bankDay=e.target.value||todayStr();render();}
   else if(e.target.dataset.iv){ivChange(e.target);}
-  else if(e.target.dataset.how){const[id,kind]=e.target.dataset.how.split('|'),f=kind==='batch'?'howtoBatch':'howto',v=e.target.value.trim();
+  else if(e.target.dataset.how){const[id,kind]=e.target.dataset.how.split('|'),f=kind==='batch'?'howtoBatch':kind==='brain'?'howtoBrain':'howto',v=e.target.value.trim();
     if(id.startsWith('bk:')){const cats=bankData(),c=id.slice(3);if(cats[c]){cats[c][f]=v;saveLib('bank',{cats},true);}}else saveLib(id,{[f]:v},true);toast('Saved');}
   else if(e.target.dataset.vc){const mp={...cityMap()};const v=e.target.value.trim();if(v)mp[e.target.dataset.vc]=v;else delete mp[e.target.dataset.vc];saveLib('venueCities',{map:mp}).then(render);}
   else if(e.target.dataset.ct){setCampaign(e.target.dataset.ct,e.target.dataset.f,e.target.value);}
@@ -2631,12 +2640,15 @@ function tplPillRow(items,sel,act){
   return `<div class="bar">${items.map(([k,l,n,att])=>`<button class="chip ${sel===k?'on':''}" data-act="${act}" data-arg="${esc(k)}" ${att||''}>${esc(l)}${n!==undefined?' ('+n+')':''}</button>`).join('')}</div>`;
 }
 function tplUseParts(list){
-  const g={};list.forEach(t=>{const tier=tplTier(t),key=tier==='off'?'off':(tplMake(t)==='batch'?'batch':tier);(g[key]=g[key]||[]).push(t);});
-  const groups=[...TPL_TIERS,['batch','Batch-made, as needed'],['off','Turned off']].filter(([k])=>g[k]).map(([k,l])=>[k,l,g[k]]);
-  if(tplGrp!=='all'&&!groups.some(x=>x[0]===tplGrp))tplGrp='all';
-  const pills=tplPillRow([['all','All',list.length],...groups.map(([k,l,L])=>[k,l,L.length])],tplGrp,'tgf');
-  const cards=tplGrp==='all'?(groups.map(([k,l,L])=>`<div class="sec">${esc(l)}</div>${L.map(tplCard).join('')}`).join('')||'<div class="empty">Nothing here.</div>'):groups.find(x=>x[0]===tplGrp)[2].map(tplCard).join('');
-  return [pills,'',cards];
+  const rows=bankCadList().map(e=>{const r=ruleOf(e.id),k=r.kind;
+    const tier=e.silenced?'off':(k==='weekday'||k==='nth_week')?'week':(k==='monthly_day'||k==='month_end')?'month':k==='before_event'?'event':'manual';
+    return {e,tier,wd:r.weekday===undefined?9:((+r.weekday+6)%7)};});
+  const secs=[['week','Every week'],['month','Every month'],['event','Around each big night'],['manual','As needed'],['off','Turned off']];
+  const cats=bankData();
+  const cards=secs.map(([k,l])=>{const L=rows.filter(x=>x.tier===k).sort((a,b)=>a.wd-b.wd);
+    return L.length?`<div class="sec">${esc(l)}</div>`+L.map(x=>{const c=x.e.cat;return `<div class="meta" style="margin:0 0 -2px;color:var(--gold2)">${esc(freqText(x.e))}</div>`+bankCatHtml(c,cats[c]);}).join(''):'';}).join('')
+    +`<div class="tools" style="margin:10px 0 0"><button class="btn btn-g" data-act="bknewt" data-arg="">+ Add a category</button></div>`;
+  return ['','',cards];
 }
 function tplTemplateParts(list){
   const secs=tplSections(),has=list.some(x=>x.id==='_none');
