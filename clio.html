@@ -1124,7 +1124,7 @@ function vEcho(){
 
 /* ── LIBRARY ── */
 function usedBy(id){
-  const cats=Object.values(bankData()).filter(c=>c.canvas===id).map(c=>c.name);
+  const cats=Object.values(bankData()).filter(c=>c.canvas===id||(c.alts||[]).includes(id)).map(c=>c.name);
   const types=libList().filter(x=>!x.id.startsWith('cv_')&&(x.canvas===id||x.id===id)).map(x=>x.name);
   return [...types.map(n=>n+' (post type)'),...cats.map(n=>n+' (bank category)')];
 }
@@ -1388,7 +1388,7 @@ $('view').addEventListener('change',e=>{
   else if(e.target.dataset.bx){const[c,f]=e.target.dataset.bx.split('|');bankField(c,f,e.target.value);}
   else if(e.target.dataset.bmp)bankPromptSave(e.target.value);
   else if(e.target.dataset.bbp)brainPromptSave(e.target.value);
-  else if(e.target.dataset.bk||e.target.dataset.bi)bankChange(e.target);
+  else if(e.target.dataset.bk||e.target.dataset.bi||e.target.dataset.bkalt)bankChange(e.target);
   else if(e.target.dataset.ls||e.target.dataset.lt)listChange(e.target);
 });
 function act(a,arg){
@@ -1479,7 +1479,7 @@ function renderSum(){
   const cv=libList(true).find(x=>x.id===cvId),img=cv&&(libOv[cv.id]||{}).tplImg;
   const cats=bd?[bd]:Object.values(bankData()).filter(c=>cvId&&c.canvas===cvId);
   const bn=hit?hit.cat.name:(cats.length?cats.map(c=>c.name+' ('+(c.items||[]).filter(x=>!x.used).length+' unused ideas)').join(', '):'');
-  box.innerHTML=`<div style="display:flex;gap:10px;align-items:center">${img?`<img src="${esc(img)}" alt="" style="width:44px;height:55px;object-fit:cover;border:1px solid var(--border2)"/>`:''}<div><div class="has" style="display:block">Make it with</div><b style="font-weight:600">${esc(cv?cv.name:'No template (nothing to attach)')}</b>${bn?`<div class="has" style="display:block;white-space:normal">Content bank: ${esc(bn)}</div>`:'<div class="has" style="display:block">No content bank category for this one</div>'}</div></div>`;
+  box.innerHTML=`<div style="display:flex;gap:10px;align-items:center">${img?`<img src="${esc(img)}" alt="" style="width:44px;height:55px;object-fit:cover;border:1px solid var(--border2)"/>`:''}<div><div class="has" style="display:block">Make it with</div><b style="font-weight:600">${esc(cv?cv.name:'No template (nothing to attach)')}</b>${(bd&&(bd.alts||[]).filter(Boolean).length)?`<div class="has" style="display:block;white-space:normal">Also: ${bd.alts.filter(Boolean).map(id=>esc((tplList().find(x=>x.id===id)||{}).name||id)).join(', ')}</div>`:''}${bn?`<div class="has" style="display:block;white-space:normal">Content bank: ${esc(bn)}</div>`:'<div class="has" style="display:block">No content bank category for this one</div>'}</div></div>`;
 }
 $('f-type').addEventListener('change',renderSum);$('f-bank').addEventListener('change',renderSum);
 function promoPrompt(){
@@ -2277,6 +2277,8 @@ function bankAct(a,arg){
   if(a==='bkcloseall'){saveLib('bank',{open:{}},true).then(render);return;}
   const cats=bankData();
   if(a==='bkorg'){bankOrg=!bankOrg;render();return;}
+  if(a==='bkaltadd'){if(!cats[arg])return;cats[arg].alts=[...(cats[arg].alts||[]),''];saveBank(cats);return;}
+  if(a==='bkaltdel'){const[c,i]=arg.split('|');if(!cats[c])return;cats[c].alts=(cats[c].alts||[]).filter((_,k)=>k!==+i);saveBank(cats);return;}
   if(a==='bktup'||a==='bktdn'){const ids=tplBankOrder().map(x=>x.id),i=ids.indexOf(arg),k=a==='bktup'?i-1:i+1;if(i<0||k<0||k>=ids.length)return;[ids[i],ids[k]]=[ids[k],ids[i]];saveLib('tplui',{bankOrder:ids},true).then(render);return;}
   if(a==='bknewt'){const id='k'+Date.now().toString(36);cats[id]={name:'New category',canvas:arg,badge:'',items:[]};open[id]=true;saveLib('bank',{cats,open}).then(render);return;}
   if(a==='bknew'){const id='k'+Date.now().toString(36);cats[id]={name:'New category',canvas:'',badge:'',items:[]};open[id]=true;saveLib('bank',{cats,open}).then(render);return;}
@@ -2290,7 +2292,8 @@ function bankAct(a,arg){
 function bankChange(t){
   if(t.tagName==='SELECT'){t.blur();editing=false;pendingRender=false;}
   const cats=bankData();
-  if(t.dataset.bk){cats[t.dataset.bk][t.dataset.f]=t.value.trim();}
+  if(t.dataset.bkalt){const[c,i]=t.dataset.bkalt.split('|');if(!cats[c])return;const al=[...(cats[c].alts||[])];al[+i]=t.value;cats[c].alts=al;}
+  else if(t.dataset.bk){cats[t.dataset.bk][t.dataset.f]=t.value.trim();}
   else if(t.dataset.bi){const[c,i]=t.dataset.bi.split('|'),it=cats[c].items.find(x=>x.id===i);if(!it)return;const v=t.value.trim();if(!v){cats[c].items=cats[c].items.filter(x=>x.id!==i);}else it.t=v;}
   saveBank(cats);
 }
@@ -2322,7 +2325,7 @@ function mdAct(el){
     copyTxt($('bkmp').value.trim()+'\n\n'+(cv?'TEMPLATE LOOK: '+cv.name+' (attach your saved example image from Library)\n':'')+(v.badge?'TOP BADGE TEXT: '+v.badge+'\n':'')+'\nNOTES FOR THIS CATEGORY:\n'+((v.pnotes||'').trim()?v.pnotes.trim()+'\n\n':'')+catLive(arg)+'\n\nPOSTS TO MAKE (one PNG each, carousels where there are [brackets]):\n'+q);
   }
 }
-const TYPING='[data-secn],[data-bx],[data-bmp],[data-bbp],[data-ls],[data-lt],[data-lib],[data-ts],[data-ct],[data-bk],[data-bi],[data-stat],[data-ban],[data-vc],[data-iv],[data-how]',AUTOSAVE='[data-bx],[data-bmp],[data-bbp],[data-ls],[data-lib],[data-ts],[data-ct]';
+const TYPING='[data-secn],[data-bx],[data-bmp],[data-bbp],[data-ls],[data-lt],[data-lib],[data-ts],[data-ct],[data-bk],[data-bkalt],[data-bi],[data-stat],[data-ban],[data-vc],[data-iv],[data-how]',AUTOSAVE='[data-bx],[data-bmp],[data-bbp],[data-ls],[data-lib],[data-ts],[data-ct]';
 $('view').addEventListener('input',e=>{
   const t=e.target;if(!t.matches||!t.matches(TYPING))return;
   editing=true;
@@ -2525,7 +2528,7 @@ function tplAll(){
   return (types.length||cats.length)?L.concat([{id:'_none',name:'No template',nick:'',group:'Other',size:'',use:'Reminders, stories and anything without a template look'}]):L;
 }
 function tplTypes(t){return libList().filter(e=>!e.id.startsWith('cv_')&&(t.id==='_none'?!effTpl(e):effTpl(e)===t.id));}
-function tplCats(t){const ids=new Set(tplList().map(x=>x.id));return Object.entries(bankData()).filter(([c,v])=>t.id==='_none'?!ids.has(v.canvas||''):(v.canvas||'')===t.id);}
+function tplCats(t){const ids=new Set(tplList().map(x=>x.id));return Object.entries(bankData()).filter(([c,v])=>t.id==='_none'?!ids.has(v.canvas||''):((v.canvas||'')===t.id||(v.alts||[]).includes(t.id)));}
 function tplMake(t){return t.id==='_none'?'batch':((libOv[t.id]||{}).makeStyle||(t.id.startsWith('cv_')?'batch':'every'));}
 function tplRuleIds(t){return MONTHLY_SET_IDS.includes(t.id)?['monthly']:tplTypes(t).map(e=>e.id);}
 function tplTier(t){
@@ -2580,7 +2583,9 @@ function bankCatHtml(c,v){
   const its=v.items||[],un=its.filter(x=>!x.used).length;
   const open=!!((libOv.bank||{}).open||{})[c],qn=(v.queue||'').split('\n').filter(x=>x.trim()).length;
   return `<div class="card" style="margin:6px 0;background:var(--surface2)"><div data-act="bkfold" data-arg="${c}" style="cursor:pointer;display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span style="color:var(--gold2);width:14px">${open?'▾':'▸'}</span><b style="font-weight:600">${esc(v.name)}</b>${v.badge?`<span class="nick">${esc(v.badge)}</span>`:''}<span class="has" style="display:inline;margin-left:auto">${un} unused ideas${(()=>{const iv=Object.values(invItems()).find(x=>x.cat===c);return iv?' · '+(+iv.count||0)+' in inventory':'';})()}${qn?' · '+qn+' in Make now':''}</span></div>
-    ${open?`<div style="margin-top:10px"><div class="f2"><div class="f"><label>Category name</label><input type="text" data-bk="${c}" data-f="name" value="${esc(v.name)}"/></div><div class="f"><label>Template look</label><select data-bk="${c}" data-f="canvas"><option value="">No template</option>${tplList().map(x=>`<option value="${x.id}" ${v.canvas===x.id?'selected':''}>${esc(x.name)}</option>`).join('')}</select></div></div>
+    ${open?`<div style="margin-top:10px"><div class="f2"><div class="f"><label>Category name</label><input type="text" data-bk="${c}" data-f="name" value="${esc(v.name)}"/></div><div class="f"><label>Template look</label><select data-bk="${c}" data-f="canvas"><option value="">No template</option>${tplList().map(x=>`<option value="${x.id}" ${v.canvas===x.id?'selected':''}>${esc(x.name)}</option>`).join('')}</select>
+      ${(v.alts||[]).map((a,i)=>`<div style="display:flex;gap:6px;margin-top:6px"><select data-bkalt="${c}|${i}" style="flex:1"><option value="">Pick a template</option>${tplList().map(x=>`<option value="${x.id}" ${a===x.id?'selected':''}>${esc(x.name)}</option>`).join('')}</select><button class="btn btn-d" data-act="bkaltdel" data-arg="${c}|${i}" style="padding:4px 10px">×</button></div>`).join('')}
+      <div class="tools" style="margin:6px 0 0"><button class="btn btn-g" data-act="bkaltadd" data-arg="${c}">+ Add another template look</button></div></div></div>
     <div class="f"><label>Badge on the template</label><input type="text" data-bk="${c}" data-f="badge" value="${esc(v.badge||'')}"/></div>
     <div class="f"><label>Prompt notes (added to "Copy prompt + these" for this category)</label><textarea data-bx="${c}|pnotes" style="min-height:70px" placeholder="Extra instructions this category always needs, e.g. Two sentences per post: sentence one goes on the top of the PNG, sentence two goes on the bottom.">${esc(v.pnotes||'')}</textarea>
       <div class="tools" style="margin:6px 0 0"><button class="btn btn-gold" data-md="bkcopypn" data-arg="${c}">Copy prompt notes</button></div>
