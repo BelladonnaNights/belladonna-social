@@ -983,9 +983,9 @@ function vMonth(){
     (sel?`<div class="sec">${dayName(selDay)}</div>${sel.length?sel.map(rowHtml).join(''):'<div class="empty">Nothing on this day.</div>'}<div style="margin-top:8px"><button class="btn btn-g" data-act="newday" data-arg="${selDay}">+ Add post on this day</button></div>`:'');
 }
 function cadListOnly(){
-  const all=cadAll(),L=all.filter(e=>!e.silenced),sil=all.filter(e=>e.silenced),groups=orderGroups([...new Set(L.map(e=>e.group||'Other'))]);
+  const all=cadAll().filter(e=>qHas(cadQ,e.name,e.nick,e.use,e.group,freqText(e))),L=all.filter(e=>!e.silenced),sil=all.filter(e=>e.silenced),groups=orderGroups([...new Set(L.map(e=>e.group||'Other'))]);
   const hid=libList(true).filter(e=>e.deleted&&!e.id.startsWith('cv_'));
-  return cadTop()+groups.map(g=>`<div class="monthh" style="font-size:1.1rem;margin:14px 0 6px">${esc(g)}</div>`+L.filter(e=>(e.group||'Other')===g).map(e=>cadRow(e,false)).join('')).join('')+
+  return searchBox('cadq',cadQ,'Search the cadence list')+cadTop()+groups.map(g=>`<div class="monthh" style="font-size:1.1rem;margin:14px 0 6px">${esc(g)}</div>`+L.filter(e=>(e.group||'Other')===g).map(e=>cadRow(e,false)).join('')).join('')+
   (sil.length?`<div class="monthh" style="font-size:1.1rem;margin:22px 0 6px">Silenced (turned off)</div>`+sil.map(e=>cadRow(e,true)).join(''):'')+
   (hid.length?`<div class="monthh" style="font-size:1.1rem;margin:22px 0 6px">Hidden</div>`+hid.map(e=>cadRow(e,true,true)).join(''):'');
 }
@@ -1305,7 +1305,7 @@ function cadCalHtml(){
   (sel?`<div class="sec">${dayName(cadSel)}</div>${sel.length?sel.map(e=>cadRow(e,false)).join(''):'<div class="empty">Nothing from your cadence on this day.</div>'}`:'');
 }
 function cadenceHtml(){
-  const all=cadAll(),L=all.filter(e=>!e.silenced),sil=all.filter(e=>e.silenced),groups=orderGroups([...new Set(L.map(e=>e.group||'Other'))]);
+  const all=cadAll().filter(e=>qHas(cadQ,e.name,e.nick,e.use,e.group,freqText(e))),L=all.filter(e=>!e.silenced),sil=all.filter(e=>e.silenced),groups=orderGroups([...new Set(L.map(e=>e.group||'Other'))]);
   const modes=`<div class="bar"><button class="chip ${cadModeNow()==='list'?'on':''}" data-act="cadmode" data-arg="list">List</button><button class="chip ${cadModeNow()==='cal'?'on':''}" data-act="cadmode" data-arg="cal">Calendar view</button></div>`;
   const hid=libList(true).filter(e=>e.deleted&&!e.id.startsWith('cv_'));
   if(cadModeNow()==='cal')return modes+cadTop()+cadCalHtml();
@@ -1450,6 +1450,7 @@ function act(a,arg){
   else if(a==='gentoggle'){saveLib('settings',{autoGen:(libOv.settings||{}).autoGen===false}).then(render);}
   else if(a==='libedit')openLibEdit(arg);
   else if(a==='howfold'){const o={...howOpenMap()};if(o[arg])delete o[arg];else o[arg]=true;saveLib('tplui',{howOpen:o},true).then(render);}
+  else if(a==='qclear'){if(arg==='tplq')tplQ='';else cadQ='';render();}
   else if(a==='howedit'){howEditId=arg;render();}
   else if(a==='livefold'){const o={...((libOv.tplui||{}).liveOpen||{})};if(o[arg])delete o[arg];else o[arg]=true;saveLib('tplui',{liveOpen:o},true).then(render);}
   else if(a==='grpadd')slideFrom(arg);
@@ -2635,12 +2636,20 @@ function tplGroupBlock(k,label,list){
   const open=tplDue||gopenNow(k);
   return `<div class="monthh" data-act="tgrp" data-arg="${k}" style="font-size:1.1rem;margin:18px 0 8px;cursor:pointer;display:flex;gap:8px;align-items:baseline"><span style="font-size:.9rem">${open?'▾':'▸'}</span>${esc(label)}<span class="meta" style="margin:0;font-size:.8rem">${list.length}</span></div>${open?list.map(tplCard).join(''):''}`;
 }
-let tplGrp='all';
+let tplGrp='all',tplQ='',cadQ='';
+function qHas(q,...a){q=String(q||'').trim().toLowerCase();return !q||a.join(' ').toLowerCase().includes(q);}
+function searchBox(id,val,ph){return `<div class="bar"><input type="search" id="${id}" value="${esc(val)}" placeholder="${esc(ph)}" autocomplete="off" style="max-width:360px;flex:1"/>${val?`<button class="btn btn-g" data-act="qclear" data-arg="${id}">Clear</button>`:''}</div>`;}
+$('view').addEventListener('input',e=>{
+  const id=e.target.id;if(id!=='tplq'&&id!=='cadq')return;
+  if(id==='tplq')tplQ=e.target.value;else cadQ=e.target.value;
+  const pos=e.target.selectionStart;render();
+  const el=$(id);if(el){el.focus();try{el.setSelectionRange(pos,pos);}catch(x){}}
+});
 function tplPillRow(items,sel,act){
   return `<div class="bar">${items.map(([k,l,n,att])=>`<button class="chip ${sel===k?'on':''}" data-act="${act}" data-arg="${esc(k)}" ${att||''}>${esc(l)}${n!==undefined?' ('+n+')':''}</button>`).join('')}</div>`;
 }
 function tplUseParts(list){
-  const rows=bankCadList().map(e=>{const r=ruleOf(e.id),k=r.kind;
+  const rows=bankCadList().filter(e=>qHas(tplQ,e.name,e.nick,freqText(e))).map(e=>{const r=ruleOf(e.id),k=r.kind;
     const tier=e.silenced?'off':(k==='weekday'||k==='nth_week')?'week':(k==='monthly_day'||k==='month_end')?'month':k==='before_event'?'event':'manual';
     return {e,tier,wd:r.weekday===undefined?9:((+r.weekday+6)%7)};});
   const secs=[['week','Every week'],['month','Every month'],['event','Around each big night'],['manual','As needed'],['off','Turned off']];
@@ -2694,7 +2703,7 @@ function tplSettingsHtml(){
 }
 function vTemplates(){
   tplGrp='all';tplDue=false;
-  const view=tplViewNow(),all=tplAll(),filt=(view==='template'||view==='use'),list=(tplDue&&filt)?all.filter(tplIsDue):all;
+  const view=tplViewNow(),all0=tplAll(),filt=(view==='template'||view==='use'),all=tplQ.trim()?all0.filter(t=>qHas(tplQ,t.name,t.nick,t.use,t.group,tplCats(t).map(([c,v])=>v.name+' '+(v.badge||'')).join(' '),tplTypes(t).map(x=>x.name).join(' '))):all0,list=(tplDue&&filt)?all.filter(tplIsDue):all;
   const chip=(k,l)=>`<button class="chip ${view===k?'on':''}" data-act="tvw" data-arg="${k}">${l}</button>`;
   const top=`<div class="bar">${chip('template','By template')}${chip('use','By use')}${chip('inventory','Inventory')}<div class="sp"></div><button class="btn btn-p" data-act="tplnew">+ New template</button></div>`;
   const hd=head('Templates','Every look, its words and how often you post it, in one place. Switch the grouping to find things your way.');
@@ -2703,7 +2712,7 @@ function vTemplates(){
   if(view==='schedule'){$('view').innerHTML=hd+top+details+tplScheduleHtml()+tplSettingsHtml();return;}
   const [pills,mgmt,cards]=view==='use'?tplUseParts(list):tplTemplateParts(list);
   const empty=(tplDue&&!list.length)?'<div class="empty">Nothing is due in the next 7 days.</div>':'';
-  $('view').innerHTML=hd+top+mgmt+details+cards+empty+tplSettingsHtml();
+  $('view').innerHTML=hd+top+(filt?searchBox('tplq',tplQ,'Search templates and categories'):'')+mgmt+details+cards+(tplQ.trim()&&!list.length?'<div class="empty">Nothing matches.</div>':'')+empty+tplSettingsHtml();
 }
 /* ═══ INVENTORY: how many ready-to-post posts you have per kind. Goes down when you tick Sched on a matching post. ═══ */
 function invItems(){return (libOv.inventory||{}).items||{};}
