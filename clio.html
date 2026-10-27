@@ -546,7 +546,7 @@ function addDays(s,n){const d=new Date(s+'T12:00:00');d.setDate(d.getDate()+n);r
 function toast(m){const t=$('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2600);}
 function banner(html,err){$('banner').innerHTML=html?`<div class="banner${err?' err':''}">${html}</div>`:'';}
 const isMile=p=>TYPES[p.type]?.milestone;
-const overdue=(p,t)=>!isMile(p)&&!p.posted&&p.date<t&&p.date>=addDays(t,-2);
+const overdue=()=>false;
 function monthName(m){return new Date(m+'-15T12:00:00').toLocaleDateString('en-US',{month:'long',year:'numeric'});}
 function dayName(d){return new Date(d+'T12:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'});}
 function fmtTime(t){if(!t)return '';const[h,m]=t.split(':').map(Number);return `${((h+11)%12)+1}:${pad(m)} ${h<12?'am':'pm'}`;}
@@ -807,7 +807,7 @@ function groupedList(list,monthHeads,desc){
 }
 function statsHtml(list,t){
   const real=list.filter(p=>!isMile(p));
-  return `<div class="stats"><div class="stat"><b>${real.length}</b><span>Showing</span></div><div class="stat"><b>${real.filter(p=>p.created).length}</b><span>Made</span></div><div class="stat"><b>${real.filter(p=>p.posted).length}</b><span>Posted</span></div><div class="stat ${vposts.some(p=>overdue(p,t))?'bad':''}"><b>${vposts.filter(p=>overdue(p,t)).length}</b><span>Overdue (all)</span></div></div>`;
+  return `<div class="stats"><div class="stat"><b>${real.length}</b><span>Showing</span></div><div class="stat"><b>${real.filter(p=>p.created).length}</b><span>Made</span></div><div class="stat"><b>${real.filter(p=>p.posted).length}</b><span>Posted</span></div></div>`;
 }
 
 /* ── DASHBOARD ── */
@@ -837,7 +837,7 @@ function evChecklist(p){
     const due=addDays(p.date,-x.d),done=!!tk[x.k],late=!done&&due<t;
     const g=x.g&&x.g!==lastG?`<div class="lbl" style="margin:10px 0 2px">${esc(x.g)}</div>`:'';lastG=x.g||'';
     const label=x.g?x.t.replace(/^Make event flyer:\s*/,''):x.t;
-    return g+`<div class="row ${done?'done':''} ${late?'od':''}" style="cursor:pointer;${x.g?'margin-left:14px;':''}" data-act="task" data-arg="${esc(p.id)}|${x.k}"><input type="checkbox" ${done?'checked':''} style="pointer-events:none"/><div class="rt">${esc(label)}</div><div class="has" style="display:block">${done?'Done':(late?'Overdue · ':'Do by ')+(late?'':'')+new Date(due+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})}</div></div>`;
+    return g+`<div class="row ${done?'done':''} " style="cursor:pointer;${x.g?'margin-left:14px;':''}" data-act="task" data-arg="${esc(p.id)}|${x.k}"><input type="checkbox" ${done?'checked':''} style="pointer-events:none"/><div class="rt">${esc(label)}</div><div class="has" style="display:block">${done?'Done':'Do by '+(late?'':'')+new Date(due+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})}</div></div>`;
   }).join('');
 }
 function evProgress(p){const L=setFor(p).tasks,n=L.filter(x=>(p.tasks||{})[x.k]).length;return [n,L.length];}
@@ -889,26 +889,26 @@ function storyBlock(real,t){
   const dl=days.map(d=>DN[new Date(d+'T12:00:00').getDay()]);
   const body=days.length?days.map(d=>{
     const ps=L.filter(p=>p.date===d),dt=new Date(d+'T12:00:00'),left=ps.filter(p=>!p.posted).length;
-    return `<div class="meta" style="margin:10px 0 3px;${d===t?'color:var(--gold2);font-weight:600':(d<t&&left?'color:var(--rose)':'')}">${DN[dt.getDay()]} ${dt.getDate()}${d===t?' · TODAY':(d<t?' · missed?':'')} · ${left?left+' to post':'all posted'}</div>`+ps.map(p=>rowHtml(p)).join('');
+    return `<div class="meta" style="margin:10px 0 3px;${d===t?'color:var(--gold2);font-weight:600':''}">${DN[dt.getDay()]} ${dt.getDate()}${d===t?' · TODAY':''} · ${left?left+' to post':'all posted'}</div>`+ps.map(p=>rowHtml(p)).join('');
   }).join(''):'<div class="empty" style="padding:.5rem 0">No story days this week.</div>';
   return `<div class="sec" style="margin-top:4px">Story posts${todo?` <span class="nick" style="color:var(--gold2)">${todo} left</span>`:''}</div><div class="meta" style="margin:0 0 4px">${days.length?'Story days this week: <b>'+dl.join(', ')+'</b>. Post them by hand, then tick Posted.':'Nothing scheduled.'}</div><div class="card" style="padding:6px 10px">${body}</div>`;
 }
 function isStory(p){return /Story/.test(p.platform||'')&&!isMile(p);}
 function vDashboard(){
   const t=todayStr(),real=vposts.filter(p=>!isMile(p)),mine=real.filter(p=>!p.auto&&!isStory(p));
-  const od=mine.filter(p=>overdue(p,t)).sort(sortFn);
+  const od=[];
   const soon=mine.filter(p=>!p.posted&&!p.scheduled&&p.date>=t&&p.date<=addDays(t,3)).sort(sortFn);
   const stories=0;
   const low=invLow();
   const nothing=!od.length&&!soon.length&&!low.length&&!stories;
   const attention=`<div class="sec" style="margin-top:4px">Needs attention</div>`+
-    (nothing?'<div class="card"><div class="empty" style="padding:.5rem 0">You are caught up. Nothing overdue and nothing due in the next 3 days.</div></div>':
+    (nothing?'<div class="card"><div class="empty" style="padding:.5rem 0">You are caught up. Nothing due in the next 3 days.</div></div>':
     (od.length?`<div class="meta" style="color:var(--rose);margin:4px 0">Overdue (last 2 days): ${od.length}</div>`+dashList(od):'')+
     (soon.length?`<div class="meta" style="margin:10px 0 4px">Due in the next 3 days, not scheduled yet: ${soon.length}</div>`+dashList(soon):'')+
     (stories?`<div class="meta" style="margin:10px 0 4px">${stories} story post${stories>1?'s':''} for today still to post. <button class="chip" data-act="view" data-arg="todo">Open Studio</button></div>`:'')+
     (low.length?`<div class="banner err" style="margin-top:10px">Running low: ${low.map(([,v])=>esc(v.name)+' ('+(+v.count||0)+')').join(', ')}. <button class="btn btn-g" data-act="tab" data-arg="inventory">Open Inventory</button></div>`:''));
   const mon=bankMonday(0),days=[0,1,2,3,4,5,6].map(i=>addDays(mon,i));
-  const week=`<div class="sec">This week</div><div class="meta" style="margin:0 0 6px">Nights from HQ, and your posts. Green = posted, gold outline = scheduled, red = overdue. Tap a day to open it.</div>
+  const week=`<div class="sec">This week</div><div class="meta" style="margin:0 0 6px">Nights from HQ, and your posts. Green = posted, gold outline = scheduled. Tap a day to open it.</div>
   <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:6px">${days.map(d=>{
     const nights=gigs.filter(g=>isPublicGig(g)&&g.date===d).sort((a,b)=>(t24(a.time)||'99')<(t24(b.time)||'99')?-1:1);
     const ps=mine.filter(p=>p.date===d).sort(sortFn),dt=new Date(d+'T12:00:00');
@@ -917,7 +917,7 @@ function vDashboard(){
     ${ps.map(dashPost).join('')}</div>`;}).join('')}</div>`;
   const ev=upcomingEvents()[0];let evBox='<div class="meta">No upcoming big nights.</div>';
   if(ev){const[n,tot]=evProgress(ev),tk=ev.tasks||{},late=setFor(ev).tasks.filter(x=>!tk[x.k]&&addDays(ev.date,-x.d)<t).length;
-    evBox=`<div class="nick">${esc(daysAway(ev.date))} · ${esc(dayName(ev.date))}</div><div class="monthh" style="margin:2px 0;border:0;padding:0;font-size:1.2rem">${esc(evTitle(ev))}</div><div class="prog" style="margin:8px 0 4px"><i style="width:${tot?Math.round(n/tot*100):0}%"></i></div><div class="meta" style="margin:0 0 8px">${n} of ${tot} tasks done${late?' · <span style="color:var(--rose)">'+late+' behind</span>':''}</div><button class="btn btn-g" data-act="evgo" data-arg="${esc(ev.id)}">Open checklist</button>`;}
+    evBox=`<div class="nick">${esc(daysAway(ev.date))} · ${esc(dayName(ev.date))}</div><div class="monthh" style="margin:2px 0;border:0;padding:0;font-size:1.2rem">${esc(evTitle(ev))}</div><div class="prog" style="margin:8px 0 4px"><i style="width:${tot?Math.round(n/tot*100):0}%"></i></div><div class="meta" style="margin:0 0 8px">${n} of ${tot} tasks done${''}</div><button class="btn btn-g" data-act="evgo" data-arg="${esc(ev.id)}">Open checklist</button>`;}
   const inv=Object.values(invItems());
   const invBox=inv.length?inv.map(v=>{const n=+v.count||0,l=(+v.low||0)>0&&n<=(+v.low||0);return `<div style="display:flex;justify-content:space-between;gap:8px;margin:3px 0;font-size:13px"><span>${esc(v.name)}</span><b style="color:${l?'var(--rose)':'var(--gold2)'}">${n}</b></div>`;}).join('')+`<button class="btn btn-g" style="margin-top:6px" data-act="tab" data-arg="inventory">Inventory</button>`:'<div class="meta">Nothing tracked yet.</div><button class="btn btn-g" data-act="tab" data-arg="inventory">Set up inventory</button>';
   const mm=real.filter(p=>!p.auto&&p.date.startsWith(t.slice(0,7))),nm=mm.length;
@@ -935,7 +935,7 @@ function overviewStats(){
   const od=real.filter(p=>overdue(p,t)).length;
   const next=real.filter(p=>p.date>=t&&p.date<=wk&&!p.posted);
   const mp=real.filter(p=>p.date.startsWith(t.slice(0,7)));
-  return `<div class="stats"><div class="stat ${od?'bad':''}"><b>${od}</b><span>Overdue</span></div><div class="stat"><b>${next.length}</b><span>Next 7 days</span></div><div class="stat"><b>${next.filter(p=>!p.created).length}</b><span>Still to make</span></div><div class="stat"><b>${mp.filter(p=>p.posted).length}/${mp.length}</b><span>Posted this month</span></div></div><div class="bar" style="margin-top:-6px"><button class="btn btn-g" data-act="bufsync">Sync with Buffer</button></div>`;
+  return `<div class="stats"><div class="stat"><b>${next.length}</b><span>Next 7 days</span></div><div class="stat"><b>${next.filter(p=>!p.created).length}</b><span>Still to make</span></div><div class="stat"><b>${mp.filter(p=>p.posted).length}/${mp.length}</b><span>Posted this month</span></div></div><div class="bar" style="margin-top:-6px"><button class="btn btn-g" data-act="bufsync">Sync with Buffer</button></div>`;
 }
 
 function isFeedIG(p){return !isMile(p)&&/IG/.test(p.platform||'')&&!/Story/.test(p.platform||'');}
@@ -971,7 +971,7 @@ function vMonth(){
     return `<div class="mc ${ds===t?'today':''} ${ds===selDay?'sel':''}" data-act="day" data-arg="${ds}"><div class="md">${+ds.slice(8)}</div>${chips}${ps.length>3?`<span class="mp more">+${ps.length-3}</span>`:''}</div>`;
   }).join('');
   const sel=selDay&&selDay.startsWith(calMonth)?(by[selDay]||[]):null;
-  $('view').innerHTML=head('Calendar','Tap a day to see its posts. Gold = to do, green = posted, red = overdue, ★ = big night.')+overviewStats()+
+  $('view').innerHTML=head('Calendar','Tap a day to see its posts. Gold = to do, green = posted, ★ = big night.')+overviewStats()+
     `<div class="bar"><select class="mini" id="tf"><option value="all">All templates</option>${Object.entries(TYPES).map(([k,v])=>`<option value="${k}" ${typeF===k?'selected':''}>${v.l}</option>`).join('')}</select></div>`+
     `<div class="mnav"><button class="btn btn-g" data-act="mprev">‹</button><div class="mt">${monthTitle}</div><button class="btn btn-g" data-act="mtoday">Today</button><button class="btn btn-g" data-act="mnext">›</button></div>`+
     `<div class="mgrid">${DN.map(d=>`<div class="mh">${d}</div>`).join('')}${grid}</div>`+
@@ -1049,7 +1049,7 @@ function studioSets(){
 }
 function studioBar(F){
   const months=[...new Set(vposts.map(p=>p.date.slice(0,7)))].sort();
-  const chips=[['todo','To do'],['overdue','Overdue'],['caption','Needs caption'],['image','Needs image'],['ready','Ready for Buffer'],['all','Everything'],['history','History']];
+  const chips=[['todo','To do'],['caption','Needs caption'],['image','Needs image'],['ready','Ready for Buffer'],['all','Everything'],['history','History']];
   return `<div class="bar">${chips.map(([k,l])=>`<button class="chip ${studioF===k?'on':''}" data-act="studio" data-arg="${k}">${l} (${F[k].length})</button>`).join('')}<button class="chip ${studioF==='grid'?'on':''}" data-act="studio" data-arg="grid">Instagram grid</button></div>
     <div class="bar"><select class="mini" id="tf"><option value="all">All templates</option>${Object.entries(TYPES).map(([k,v])=>`<option value="${k}" ${typeF===k?'selected':''}>${v.l}</option>`).join('')}</select>
       <select class="mini" id="mf"><option value="all">All months</option>${months.map(m=>`<option value="${m}" ${monthF===m?'selected':''}>${monthName(m)}</option>`).join('')}</select><div class="sp"></div>
@@ -1821,10 +1821,22 @@ const RULE_DEFAULTS={
   tonight:{kind:'hq'},host:{kind:'hq'},best:{kind:'hq'}
 };
 const WD=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
-function bankCadList(){return Object.entries(bankData()).map(([c,v])=>({id:'bk:'+c,bank:true,cat:c,name:v.name,nick:v.badge||'',group:'Content bank posts',canvas:v.canvas||'',badge:v.badge||'',use:v.cadUse||'',size:'',freq:v.freq||'',silenced:!!v.silenced,deleted:false,custom:false,pt:v.canvas==='cv_scroll'?'note':'rook'}));}
+const _nw=(wd,weeks,time)=>({kind:'nth_week',weekday:wd,weeks,time:time||'12:00'});
+const BANK_CAD={
+  quotes:{rule:_nw(2,[1,3,5]),why:'Tuesdays, weeks 1, 3, 5'},memes:{rule:_nw(2,[2,4]),why:'Tuesdays, weeks 2 and 4'},
+  rookasks:{rule:_nw(4,[1,3,5])},confess:{rule:_nw(4,[2,4])},
+  crowdv:{rule:_nw(6,[1,3,5],'17:00')},vibe:{rule:_nw(6,[2,4],'17:00')},
+  rooksays:{rule:_nw(3,[1,3,5])},crow:{rule:_nw(3,[2,4])},
+  inside:{rule:_nw(0,[1])},debates:{rule:_nw(0,[2])},hostspot:{rule:_nw(0,[3])},collage:{rule:_nw(0,[4])},
+  bestm:{freq:'With the Monthly Recap, last day of every month'},
+  event:{freq:'As needed: 3 to 5 days before any gig or special event that is not a Big Night'},
+  reels:{freq:'Every other Friday, instead of the photo for the Live Photo or Reel post'},
+  stories:{freq:'Any non-event night. Event nights already get Tonight and Host stories'}
+};
+function bankCadList(){return Object.entries(bankData()).map(([c,v])=>({id:'bk:'+c,bank:true,cat:c,name:v.name,nick:v.badge||'',group:'Content bank posts',canvas:v.canvas||'',badge:v.badge||'',use:v.cadUse||'',size:'',freq:v.freq||(BANK_CAD[c]||{}).freq||'',silenced:!!v.silenced,deleted:false,custom:false,pt:v.canvas==='cv_scroll'?'note':'rook'}));}
 function cadAll(){return libList().filter(e=>!e.id.startsWith('cv_')).concat(bankCadList());}
 function cadEnt(id){return libList(true).find(x=>x.id===id)||bankCadList().find(x=>x.id===id);}
-function ruleOf(id){if(String(id).startsWith('bk:')){const c=bankData()[id.slice(3)];return (c&&c.rule)||{kind:'none'};}const o=libOv[id]||{};return o.rule||RULE_DEFAULTS[id]||{kind:'none'};}
+function ruleOf(id){if(String(id).startsWith('bk:')){const c=bankData()[id.slice(3)];return (c&&c.rule)||(BANK_CAD[id.slice(3)]||{}).rule||{kind:'none'};}const o=libOv[id]||{};return o.rule||RULE_DEFAULTS[id]||{kind:'none'};}
 function describeRule(r){
   if(!r)return '';
   if(r.kind==='monthly_day')return 'The '+r.day+ordSuf(r.day)+' of every month';
@@ -1901,12 +1913,20 @@ function planGen(){
       }));
     }
   });
+  planRemove=[];
+  out.filter(b=>b.bankCat).forEach(b=>{
+    const gname=(libList().find(e=>e.id===b.type)||{}).name;if(!gname)return;
+    for(let i=out.length-1;i>=0;i--)if(out[i].type===b.type&&out[i].date===b.date&&!out[i].bankCat&&out[i].title===gname)out.splice(i,1);
+    posts.filter(x=>x.type===b.type&&x.date===b.date&&x.gen&&!x.bankCat&&!x.created&&!x.posted&&x.title===gname).forEach(x=>planRemove.push(x.id));
+  });
   return out;
 }
+let planRemove=[];
 async function runGen(manual){
   if(!manual&&(libOv.settings||{}).autoGen===false)return;
   const L=planGen();
   if(!L.length){if(manual)toast('Nothing new to create');return;}
+  for(const id of planRemove)await removePost(id);
   L.forEach(p=>quietSave(p));
   render();
   toast(L.length+' post'+(L.length>1?'s':'')+' created from your cadence');
@@ -2436,7 +2456,7 @@ function tplDueInfo(t){
   const od=L.filter(p=>p.date<td).length,up=L.filter(p=>p.date>=td).sort(sortFn)[0];
   return {od,next:up?up.date:''};
 }
-function tplIsDue(t){const d=tplDueInfo(t);return d.od>0||(d.next&&d.next<=addDays(todayStr(),7));}
+function tplIsDue(t){const d=tplDueInfo(t);return (d.next&&d.next<=addDays(todayStr(),7));}
 function tplFreqLine(t){
   const ids=tplRuleIds(t),all=libList(true);
   const L=[...new Set(ids.map(id=>all.find(x=>x.id===id)).filter(e=>e&&!e.silenced).map(e=>freqText(e)).filter(x=>x&&x!=='Manual'))];
@@ -2450,7 +2470,7 @@ function tplHead(t,open){
     <span style="color:var(--gold2);width:12px">${open?'▾':'▸'}</span>
     <div style="width:36px;height:45px;flex-shrink:0;background:var(--surface3);border:1px solid var(--border);border-radius:4px;overflow:hidden;display:flex;align-items:center;justify-content:center">${img?`<img src="${esc(img)}" alt="" loading="lazy" style="width:100%;height:100%;object-fit:contain" onerror="this.style.display='none'"/>`:''}</div>
     <div style="flex:1;min-width:0"><b style="font-weight:600;font-size:.92rem">${esc(t.name)}</b>${t.nick&&t.nick!==t.name?` <span class="nick">${esc(t.nick)}</span>`:''}<div class="meta" style="margin:0">${esc(bits)||'<span style="opacity:.6">Nothing scheduled yet</span>'}</div></div>
-    <div style="text-align:right;flex-shrink:0">${di.od?`<div class="nick" style="color:var(--rose)">${di.od} overdue</div>`:''}${di.next?`<div class="has" style="display:block">Next: ${esc(shortDay(di.next))}</div>`:''}</div></div>`;
+    <div style="text-align:right;flex-shrink:0">${di.next?`<div class="has" style="display:block">Next: ${esc(shortDay(di.next))}</div>`:''}</div></div>`;
 }
 function tplLookHtml(t){
   const o=libOv[t.id]||{},isCv=t.id.startsWith('cv_'),ub=usedBy(t.id),n=vposts.filter(p=>p.type===t.id).length;
@@ -2566,16 +2586,17 @@ function tplSettingsHtml(){
   </div>`;
 }
 function vTemplates(){
+  tplGrp='all';tplDue=false;
   const view=tplViewNow(),all=tplAll(),filt=(view==='template'||view==='use'),list=(tplDue&&filt)?all.filter(tplIsDue):all;
   const chip=(k,l)=>`<button class="chip ${view===k?'on':''}" data-act="tvw" data-arg="${k}">${l}</button>`;
-  const top=`<div class="bar">${chip('template','By template')}${chip('use','By use')}${chip('inventory','Inventory')}<div class="sp"></div>${filt?`<button class="chip ${tplDue?'on':''}" data-act="tdue">Due soon</button>`:''}<button class="btn btn-p" data-act="tplnew">+ New template</button></div>`;
+  const top=`<div class="bar">${chip('template','By template')}${chip('use','By use')}${chip('inventory','Inventory')}<div class="sp"></div><button class="btn btn-p" data-act="tplnew">+ New template</button></div>`;
   const hd=head('Templates','Every look, its words and how often you post it, in one place. Switch the grouping to find things your way.');
   if(view==='inventory'){$('view').innerHTML=hd+top.replace(/<button class="btn btn-p"[^>]*>\+ New template<\/button>/,'')+invHtml();return;}
   const details=`<div class="bar"><span class="meta" style="margin:0">Details for graphics:</span><span class="meta" style="margin:0">Night</span><input type="date" id="bkday" value="${bankDay}" style="width:auto;padding:5px 10px"/><span class="meta" style="margin:0">Week</span><select class="mini" id="bkwk">${[[-1,'Last week'],[0,'This week'],[1,'Next week'],[2,'Week after next']].map(([o,l])=>`<option value="${o}" ${bankWeek===o?'selected':''}>${l} (${bankWeekLabel(o)})</option>`).join('')}</select></div>`;
   if(view==='schedule'){$('view').innerHTML=hd+top+details+tplScheduleHtml()+tplSettingsHtml();return;}
   const [pills,mgmt,cards]=view==='use'?tplUseParts(list):tplTemplateParts(list);
   const empty=(tplDue&&!list.length)?'<div class="empty">Nothing is due in the next 7 days.</div>':'';
-  $('view').innerHTML=hd+top+pills+mgmt+details+cards+empty+tplSettingsHtml();
+  $('view').innerHTML=hd+top+mgmt+details+cards+empty+tplSettingsHtml();
 }
 /* ═══ INVENTORY: how many ready-to-post posts you have per kind. Goes down when you tick Sched on a matching post. ═══ */
 function invItems(){return (libOv.inventory||{}).items||{};}
