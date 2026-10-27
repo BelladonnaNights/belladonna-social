@@ -771,8 +771,13 @@ function render(){
 function head(t,s){return `<div class="title">${t}</div><div class="sub">${s}</div>`;}
 
 /* ── ROWS ── */
+function postLabel(p){
+  const c=p.bankCat||(p.bankRef||'').split('|')[0],v=c?bankData()[c]:null;
+  if(v&&v.name)return v.name.replace(/\s*\(.*?\)\s*/g,' ').trim();
+  return (TYPES[p.type]||{}).l||p.type;
+}
 function rowHtml(p,sl){
-  const T=TYPES[p.type]||TYPES.other,mile=isMile(p),hi=['monthly','big','cover'].includes(p.type)?' hi':'';
+  const T={...(TYPES[p.type]||TYPES.other),l:postLabel(p)},mile=isMile(p),hi=['monthly','big','cover'].includes(p.type)?' hi':'';
   const checks=mile?'<div class="ck" style="visibility:hidden"></div>':
     `<div class="ck"><input type="checkbox" data-k="created" ${p.created?'checked':''}/>Made</div><div class="ck"><input type="checkbox" data-k="scheduled" ${p.scheduled?'checked':''}/>Sched</div><div class="ck"><input type="checkbox" data-k="posted" ${p.posted?'checked':''}/>Posted</div>`;
   const has=(p.caption?'✎ ':'')+(p.imageUrl?'🖼':'');
@@ -875,7 +880,7 @@ function vEventsTab(){
 function dashPost(p){
   const t=todayStr(),st=p.posted?'Posted':p.scheduled?'Sched':p.created?'Made':'To make';
   const cls=p.posted?'done':(overdue(p,t)?'od':(p.scheduled?'sched':''));
-  return `<span class="dp ${cls}" data-act="dashpost" data-arg="${esc(p.id)}" title="${esc(p.title)}">${esc((TYPES[p.type]||TYPES.other).l)} · ${st}</span>`;
+  return `<span class="dp ${cls}" data-act="dashpost" data-arg="${esc(p.id)}" title="${esc(p.title)}">${esc(postLabel(p))} · ${st}</span>`;
 }
 function dashList(L,more){
   const show=L.slice(0,8);
@@ -941,7 +946,7 @@ function overviewStats(){
 function isFeedIG(p){return !isMile(p)&&/IG/.test(p.platform||'')&&!/Story/.test(p.platform||'');}
 function gridTile(p){
   return `<div class="gt ${p.posted?'live':''}" data-id="${esc(p.id)}" title="${esc(p.title)}">${p.imageUrl?`<img src="${esc(p.imageUrl)}" alt="" loading="lazy" onerror="this.style.display='none'"/>`:''}
-    <div class="gtl"><span class="badge hi">${esc(TYPES[p.type]?.l||p.type)}${p.grp?' ▤'+grpMembers(p).length:''}</span><span>${esc(p.grp||p.title)}</span></div>
+    <div class="gtl"><span class="badge hi">${esc(postLabel(p))}${p.grp?' ▤'+grpMembers(p).length:''}</span><span>${esc(p.grp||p.title)}</span></div>
     <div class="gtd">${new Date(p.date+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})}${p.imageUrl?'':' · no image yet'}</div></div>`;
 }
 function vGrid(F){
@@ -967,7 +972,7 @@ function vMonth(){
   const grid=cells.map(ds=>{
     if(!ds)return '<div class="mc out"></div>';
     const ps=by[ds]||[];
-    const chips=ps.slice(0,3).map(p=>`<span class="mp ${isMile(p)?'big':p.posted?'done':overdue(p,t)?'od':p.scheduled?'sched':''}" title="${esc(p.title)}">${isMile(p)?'★ ':''}${esc(TYPES[p.type]?.l||p.type)}</span>`).join('');
+    const chips=ps.slice(0,3).map(p=>`<span class="mp ${isMile(p)?'big':p.posted?'done':overdue(p,t)?'od':p.scheduled?'sched':''}" title="${esc(p.title)}">${isMile(p)?'★ ':''}${esc(postLabel(p))}</span>`).join('');
     return `<div class="mc ${ds===t?'today':''} ${ds===selDay?'sel':''}" data-act="day" data-arg="${ds}"><div class="md">${+ds.slice(8)}</div>${chips}${ps.length>3?`<span class="mp more">+${ps.length-3}</span>`:''}</div>`;
   }).join('');
   const sel=selDay&&selDay.startsWith(calMonth)?(by[selDay]||[]):null;
@@ -2061,6 +2066,7 @@ function bankData(){
   const b=libOv.bank;let cats;
   if(b&&b.cats)cats=JSON.parse(JSON.stringify(b.cats));
   else{cats={};BANK_SEED.forEach(([id,name,canvas,badge])=>cats[id]={name,canvas,badge,items:[]});}
+  if(cats.vibe&&/^The Vibe/.test(cats.vibe.name))cats.vibe.name='Meme';
   Object.values(cats).forEach(c=>{c.items=c.items||[];const ex=c.items.filter(x=>x.ex);if(ex.length){c.examples=[c.examples||'',...ex.map(x=>x.t)].filter(Boolean).join('\n');c.items=c.items.filter(x=>!x.ex);}});
   return cats;
 }
