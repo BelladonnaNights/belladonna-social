@@ -1201,9 +1201,28 @@ function howDefault(e){
 * Press Copy caption prompt (for Muse), attach the finished image, and paste the caption into the post.
 * Schedule it in Buffer, then tick Sched. Posted ticks itself when Buffer sends it.`;
 }
-function howText(e){
-  const own=String(e.id).startsWith('bk:')?(bankData()[e.id.slice(3)]||{}).howto:(libOv[e.id]||{}).howto;
-  return own||howDefault(e);
+function howBatchDefault(e){
+  if(e.id==='tonight'||e.id==='host')return `* Open Templates and find the ${e.id==='tonight'?'Tonight Story':'Host Story'} category.
+* Pick the week in "Details for graphics" so this week's nights are filled in.
+* Press Copy prompt + these, and drop it with the example PNG into ChatGPT. It makes one story per night.
+* Download every PNG to your camera roll, in night order.
+* Each night, post that night's story by hand (see the single-post steps).`;
+  if(e.bank)return `* Open Templates and find ${e.name}.
+* Press + next to each saved line you want this round, or type lines into Make now.
+* Press Copy prompt + these. Drop it with the example PNG into ChatGPT. It makes one PNG per line, in order.
+* Download all the PNGs.
+* In the calendar, open each upcoming ${e.name} post, upload its image, and tick Made.
+* Paste captions in (Copy caption prompt for each), schedule them all in Buffer in one sitting, and tick Sched on each.
+* Put the number you made into Inventory so you know when to make more.`;
+  return `* Open each upcoming post of this type in the calendar.
+* For each, press The Muse: build ChatGPT prompt and make the image.
+* Upload each image and tick Made.
+* Add captions, schedule them all in Buffer in one sitting, and tick Sched on each.`;
+}
+function howText(e,kind){
+  const k=kind==='batch'?'howtoBatch':'howto',bk=String(e.id).startsWith('bk:');
+  const own=bk?(bankData()[e.id.slice(3)]||{})[k]:(libOv[e.id]||{})[k];
+  return own||(kind==='batch'?howBatchDefault(e):howDefault(e));
 }
 function howRender(t){
   return '<ol style="margin:6px 0 0;padding-left:20px">'+t.split('\n').reduce((a,l)=>{
@@ -1215,10 +1234,13 @@ function howRender(t){
 let howEditId='';
 function howOpenMap(){return (libOv.tplui||{}).howOpen||{};}
 function howBlock(e){
-  const open=!!howOpenMap()[e.id],t=howText(e);
-  return `<div style="flex-basis:100%;border-top:1px solid var(--border);padding-top:6px"><div data-act="howfold" data-arg="${e.id}" style="cursor:pointer;color:var(--gold2);font-size:13px"><span style="display:inline-block;width:14px">${open?'▾':'▸'}</span>How to make it</div>`+
-  (open?(howEditId===e.id?`<textarea data-how="${e.id}" style="min-height:220px;margin-top:6px;font-size:13px">${esc(t)}</textarea><div class="tools" style="margin:6px 0 0"><button class="btn btn-g" data-act="howedit" data-arg="">Done</button></div>`:
-    howRender(t)+`<div class="tools" style="margin:8px 0 0"><button class="btn btn-g" data-act="howedit" data-arg="${e.id}">Edit steps</button></div>`):'')+'</div>';
+  const one=(kind,label)=>{
+    const key=e.id+'|'+kind,open=!!howOpenMap()[key],t=howText(e,kind);
+    return `<div data-act="howfold" data-arg="${key}" style="cursor:pointer;color:var(--gold2);font-size:13px;margin-top:4px"><span style="display:inline-block;width:14px">${open?'▾':'▸'}</span>${label}</div>`+
+    (open?(howEditId===key?`<textarea data-how="${key}" style="min-height:220px;margin-top:6px;font-size:13px">${esc(t)}</textarea><div class="tools" style="margin:6px 0 0"><button class="btn btn-g" data-act="howedit" data-arg="">Done</button></div>`:
+      howRender(t)+`<div class="tools" style="margin:8px 0 0"><button class="btn btn-g" data-act="howedit" data-arg="${key}">Edit steps</button></div>`):'');
+  };
+  return `<div style="flex-basis:100%;border-top:1px solid var(--border);padding-top:6px">${one('post','How to make it: one post')}${one('batch','How to make it: batch')}</div>`;
 }
 function cadRow(e,dim,restore){
   const tid=effTpl(e),tn=tid?((tplList().find(x=>x.id===tid)||{}).name||''):'';
@@ -1349,8 +1371,8 @@ $('view').addEventListener('change',e=>{
   else if(e.target.id==='bkwk'){bankWeek=+e.target.value;render();}
   else if(e.target.id==='bkday'){bankDay=e.target.value||todayStr();render();}
   else if(e.target.dataset.iv){ivChange(e.target);}
-  else if(e.target.dataset.how){const id=e.target.dataset.how,v=e.target.value.trim();
-    if(id.startsWith('bk:')){const cats=bankData(),c=id.slice(3);if(cats[c]){cats[c].howto=v;saveLib('bank',{cats},true);}}else saveLib(id,{howto:v},true);toast('Saved');}
+  else if(e.target.dataset.how){const[id,kind]=e.target.dataset.how.split('|'),f=kind==='batch'?'howtoBatch':'howto',v=e.target.value.trim();
+    if(id.startsWith('bk:')){const cats=bankData(),c=id.slice(3);if(cats[c]){cats[c][f]=v;saveLib('bank',{cats},true);}}else saveLib(id,{[f]:v},true);toast('Saved');}
   else if(e.target.dataset.vc){const mp={...cityMap()};const v=e.target.value.trim();if(v)mp[e.target.dataset.vc]=v;else delete mp[e.target.dataset.vc];saveLib('venueCities',{map:mp}).then(render);}
   else if(e.target.dataset.ct){setCampaign(e.target.dataset.ct,e.target.dataset.f,e.target.value);}
   else if(e.target.dataset.ban){const u=e.target.value.trim();if(!u||/^https?:\/\//.test(u))setBanner(e.target.dataset.ban,u);else toast('That does not look like an image link');}
@@ -1420,6 +1442,7 @@ function act(a,arg){
   else if(a==='libedit')openLibEdit(arg);
   else if(a==='howfold'){const o={...howOpenMap()};if(o[arg])delete o[arg];else o[arg]=true;saveLib('tplui',{howOpen:o},true).then(render);}
   else if(a==='howedit'){howEditId=arg;render();}
+  else if(a==='livefold'){const o={...((libOv.tplui||{}).liveOpen||{})};if(o[arg])delete o[arg];else o[arg]=true;saveLib('tplui',{liveOpen:o},true).then(render);}
   else if(a==='grpadd')slideFrom(arg);
   else if(a==='librestore'){saveLib(arg,{deleted:false}).then(render);}
   else if(a==='bantoggle'){saveLib('settings',{showBanners:!showBanners()}).then(render);}
@@ -2169,10 +2192,11 @@ function vBank(){
     ${open?`<div style="margin-top:10px"><div class="f"><label>Badge on the template</label><input type="text" data-bk="${c}" data-f="badge" value="${esc(v.badge||'')}"/></div>
     <div class="f"><label>Prompt notes (added to "Copy prompt + these" for this category)</label><textarea data-bx="${c}|pnotes" style="min-height:70px" placeholder="Extra instructions this category always needs, e.g. Two sentences per post: sentence one goes on the top of the PNG, sentence two goes on the bottom.">${esc(v.pnotes||'')}</textarea>
       <div class="tools" style="margin:6px 0 0"><button class="btn btn-gold" data-md="bkcopypn" data-arg="${c}">Copy prompt notes</button></div>
-      <label style="margin-top:10px">Live details from HQ (added automatically to the prompt notes when you copy)</label>
+      <div data-act="livefold" data-arg="${c}" style="cursor:pointer;color:var(--gold2);font-size:13px;margin-top:10px"><span style="display:inline-block;width:14px">${((libOv.tplui||{}).liveOpen||{})[c]?'▾':'▸'}</span>Live details from HQ (added automatically to the prompt notes when you copy)</div>
+      ${((libOv.tplui||{}).liveOpen||{})[c]?`<div style="margin-top:6px">
       <select class="mini" data-bk="${c}" data-f="detail" style="margin-bottom:6px"><option value="week" ${(v.detail||'week')==='week'?'selected':''}>Whole week: nights, themes, big night (Weekly / Monthly graphics)</option><option value="night" ${v.detail==='night'?'selected':''}>One night: game, venue, time, city (Tonight stories)</option><option value="none" ${v.detail==='none'?'selected':''}>None</option></select>
       ${v.detail==='night'&&missingCities().length?`<div class="meta" style="color:var(--rose);margin:0 0 6px">No city set for: ${missingCities().map(esc).join(', ')}. Add them under Venue cities at the bottom of this page.</div>`:''}
-      <pre style="white-space:pre-wrap;font-family:var(--font);font-size:12px;line-height:1.5;color:var(--text2);background:var(--surface3);border:1px solid var(--border);border-radius:var(--radius);padding:8px 10px;margin:0">${esc(catLive(c)||'(none)')}</pre></div>
+      <pre style="white-space:pre-wrap;font-family:var(--font);font-size:12px;line-height:1.5;color:var(--text2);background:var(--surface3);border:1px solid var(--border);border-radius:var(--radius);padding:8px 10px;margin:0">${esc(catLive(c)||'(none)')}</pre></div>`:''}</div>
     <div class="f"><label>Make now (what you want made this time)</label><textarea id="bkq-${c}" data-bx="${c}|queue" style="min-height:90px" placeholder="Press + next to a saved line below, or type here">${esc(v.queue||'')}</textarea>
       <div class="tools" style="margin:6px 0 0"><button class="btn btn-gold" data-md="bkcopyq" data-arg="${c}">Copy prompt + these</button><button class="btn btn-g" data-md="bkcopyqo" data-arg="${c}">Copy just these</button><button class="btn btn-g" data-md="bkqclear" data-arg="${c}">Clear</button></div></div>
     <div class="meta">${un} unused ideas ready to post · <a href="#" data-act="libedit" data-arg="bk:${c}" style="color:var(--gold)">Set how often to post this</a></div>
@@ -2560,10 +2584,11 @@ function bankCatHtml(c,v){
     <div class="f"><label>Badge on the template</label><input type="text" data-bk="${c}" data-f="badge" value="${esc(v.badge||'')}"/></div>
     <div class="f"><label>Prompt notes (added to "Copy prompt + these" for this category)</label><textarea data-bx="${c}|pnotes" style="min-height:70px" placeholder="Extra instructions this category always needs, e.g. Two sentences per post: sentence one goes on the top of the PNG, sentence two goes on the bottom.">${esc(v.pnotes||'')}</textarea>
       <div class="tools" style="margin:6px 0 0"><button class="btn btn-gold" data-md="bkcopypn" data-arg="${c}">Copy prompt notes</button></div>
-      <label style="margin-top:10px">Live details from HQ (added automatically to the prompt notes when you copy)</label>
+      <div data-act="livefold" data-arg="${c}" style="cursor:pointer;color:var(--gold2);font-size:13px;margin-top:10px"><span style="display:inline-block;width:14px">${((libOv.tplui||{}).liveOpen||{})[c]?'▾':'▸'}</span>Live details from HQ (added automatically to the prompt notes when you copy)</div>
+      ${((libOv.tplui||{}).liveOpen||{})[c]?`<div style="margin-top:6px">
       <select class="mini" data-bk="${c}" data-f="detail" style="margin-bottom:6px"><option value="week" ${(v.detail||'week')==='week'?'selected':''}>Whole week: nights, themes, big night (Weekly / Monthly graphics)</option><option value="night" ${v.detail==='night'?'selected':''}>One night: game, venue, time, city (Tonight stories)</option><option value="none" ${v.detail==='none'?'selected':''}>None</option></select>
       ${v.detail==='night'&&missingCities().length?`<div class="meta" style="color:var(--rose);margin:0 0 6px">No city set for: ${missingCities().map(esc).join(', ')}. Add them under Venue cities at the bottom of this page.</div>`:''}
-      <pre style="white-space:pre-wrap;font-family:var(--font);font-size:12px;line-height:1.5;color:var(--text2);background:var(--surface3);border:1px solid var(--border);border-radius:var(--radius);padding:8px 10px;margin:0">${esc(catLive(c)||'(none)')}</pre></div>
+      <pre style="white-space:pre-wrap;font-family:var(--font);font-size:12px;line-height:1.5;color:var(--text2);background:var(--surface3);border:1px solid var(--border);border-radius:var(--radius);padding:8px 10px;margin:0">${esc(catLive(c)||'(none)')}</pre></div>`:''}</div>
     <div class="f"><label>Make now (what you want made this time)</label><textarea id="bkq-${c}" data-bx="${c}|queue" style="min-height:90px" placeholder="Press + next to a saved line below, or type here">${esc(v.queue||'')}</textarea>
       <div class="tools" style="margin:6px 0 0"><button class="btn btn-gold" data-md="bkcopyq" data-arg="${c}">Copy prompt + these</button><button class="btn btn-g" data-md="bkcopyqo" data-arg="${c}">Copy just these</button><button class="btn btn-g" data-md="bkqclear" data-arg="${c}">Clear</button></div></div>
     <div class="meta">${un} unused ideas ready to post · <a href="#" data-act="libedit" data-arg="bk:${c}" style="color:var(--gold)">Set how often to post this</a></div>
