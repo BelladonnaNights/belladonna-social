@@ -2205,10 +2205,10 @@ function vBank(){
     <div class="f"><label>Prompt notes (added to "Copy prompt + these" for this category)</label><textarea data-bx="${c}|pnotes" style="min-height:70px" placeholder="Extra instructions this category always needs, e.g. Two sentences per post: sentence one goes on the top of the PNG, sentence two goes on the bottom.">${esc(v.pnotes||'')}</textarea>
       <div class="tools" style="margin:6px 0 0"><button class="btn btn-gold" data-md="bkcopypn" data-arg="${c}">Copy prompt notes</button></div>
       <div data-act="livefold" data-arg="${c}" style="cursor:pointer;color:var(--gold2);font-size:13px;margin-top:10px"><span style="display:inline-block;width:14px">${((libOv.tplui||{}).liveOpen||{})[c]?'▾':'▸'}</span>Live details from HQ (added automatically to the prompt notes when you copy)</div>
+      ${mode==='night'?`<div class="bar" style="margin:6px 0 0">${bankRangeHtml()}</div>`:''}
       ${((libOv.tplui||{}).liveOpen||{})[c]?`<div style="margin-top:6px">
-      <select class="mini" data-bk="${c}" data-f="detail" style="margin-bottom:6px"><option value="week" ${(v.detail||'week')==='week'?'selected':''}>Whole week: nights, themes, big night (Weekly / Monthly graphics)</option><option value="night" ${v.detail==='night'?'selected':''}>One night: game, venue, time, city (Tonight stories)</option><option value="none" ${v.detail==='none'?'selected':''}>None</option></select>
-      ${v.detail==='night'?`<div class="bar" style="margin:0 0 6px">${bankRangeHtml()}</div>`:''}
-      ${v.detail==='night'&&missingCities().length?`<div class="meta" style="color:var(--rose);margin:0 0 6px">No city set for: ${missingCities().map(esc).join(', ')}. Add them under Venue cities at the bottom of this page.</div>`:''}
+      <select class="mini" data-bk="${c}" data-f="detail" style="margin-bottom:6px"><option value="week" ${mode==='week'?'selected':''}>Whole week: nights, themes, big night (Weekly / Monthly graphics)</option><option value="night" ${mode==='night'?'selected':''}>One night: game, venue, time, city (Tonight stories)</option><option value="none" ${mode==='none'?'selected':''}>None</option></select>
+      ${mode==='night'&&missingCities().length?`<div class="meta" style="color:var(--rose);margin:0 0 6px">No city set for: ${missingCities().map(esc).join(', ')}. Add them under Venue cities at the bottom of this page.</div>`:''}
       <pre style="white-space:pre-wrap;font-family:var(--font);font-size:12px;line-height:1.5;color:var(--text2);background:var(--surface3);border:1px solid var(--border);border-radius:var(--radius);padding:8px 10px;margin:0">${esc(catLive(c)||'(none)')}</pre></div>`:''}</div>
     ${catInvHtml(c)}
     <div class="f"><label>Make now (what you want made this time)</label><textarea id="bkq-${c}" data-bx="${c}|queue" style="min-height:90px" placeholder="Press + next to a saved line below, or type here">${esc(v.queue||'')}</textarea>
@@ -2279,8 +2279,11 @@ function nightDetails(){
     out.push((i+1)+'. DAY: '+DN[d.getDay()].toUpperCase()+' '+d.toLocaleDateString('en-US',{month:'short',day:'numeric'}).toUpperCase()+' | GAME: '+String(g.kind||'').toUpperCase()+' | VENUE: '+String(g.venue||'').toUpperCase()+' | TIME: '+(tm?fmtTime(tm).toUpperCase():'(not set, leave it off)')+(c?' | CITY: '+c.toUpperCase():' | CITY: (not set, show only the time)'));});
   return out.join('\n');
 }
+function catTplName(v){return ((tplList().find(x=>x.id===(v.canvas||''))||{}).name)||'';}
+function catSimple(v){return ['tonight','weekly','sched','monthly','mcover','recap'].includes(v.canvas)||/tonight|event-day|weekly graphic|monthly (announcement|schedule|cover|recap)/i.test((v.name||'')+' '+catTplName(v));}
+function catMode(v){return v.detail||(/tonight|event-day/i.test((v.name||'')+' '+catTplName(v))?'night':'week');}
 function catLive(c){
-  const mode=((bankData()[c]||{}).detail)||'week';
+  const mode=catMode(bankData()[c]||{});
   return mode==='none'?'':mode==='night'?nightDetails():liveDetails(bankWeek);
 }
 function missingCities(){
@@ -2602,7 +2605,7 @@ function tplLookHtml(t){
     <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">${o.link?`<a href="${esc(o.link)}" target="_blank" rel="noopener"><button class="btn btn-g" type="button">Open template</button></a>`:''}${isCv?`<button class="btn btn-d" type="button" data-act="tpldel" data-arg="${t.id}">Remove template</button>`:''}</div></div>`;
 }
 function bankCatHtml(c,v){
-  const simple=['tonight','weekly','sched','monthly','mcover','recap'].includes(v.canvas);
+  const simple=catSimple(v),mode=catMode(v);
   const its=v.items||[],un=its.filter(x=>!x.used).length;
   const open=!!((libOv.bank||{}).open||{})[c],qn=(v.queue||'').split('\n').filter(x=>x.trim()).length;
   return `<div class="card" style="margin:6px 0;background:var(--surface2)"><div data-act="bkfold" data-arg="${c}" style="cursor:pointer;display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span style="color:var(--gold2);width:14px">${open?'▾':'▸'}</span><b style="font-weight:600">${esc(v.name)}</b>${v.badge?`<span class="nick">${esc(v.badge)}</span>`:''}${v.silenced?'<span class="nick" style="color:var(--rose)">Paused / Retired</span>':''}<span class="has" style="display:inline;margin-left:auto">${un} unused ideas${(()=>{const iv=Object.values(invItems()).find(x=>x.cat===c);return iv?' · '+(+iv.count||0)+' in inventory':'';})()}${qn?' · '+qn+' in Make now':''}</span></div>
@@ -2613,10 +2616,10 @@ function bankCatHtml(c,v){
 `}    <div class="f"><label>Prompt notes (added to "Copy prompt + these" for this category)</label><textarea data-bx="${c}|pnotes" style="min-height:70px" placeholder="Extra instructions this category always needs, e.g. Two sentences per post: sentence one goes on the top of the PNG, sentence two goes on the bottom.">${esc(v.pnotes||'')}</textarea>
       <div class="tools" style="margin:6px 0 0"><button class="btn btn-gold" data-md="bkcopypn" data-arg="${c}">Copy prompt notes</button></div>
       <div data-act="livefold" data-arg="${c}" style="cursor:pointer;color:var(--gold2);font-size:13px;margin-top:10px"><span style="display:inline-block;width:14px">${((libOv.tplui||{}).liveOpen||{})[c]?'▾':'▸'}</span>Live details from HQ (added automatically to the prompt notes when you copy)</div>
+      ${mode==='night'?`<div class="bar" style="margin:6px 0 0">${bankRangeHtml()}</div>`:''}
       ${((libOv.tplui||{}).liveOpen||{})[c]?`<div style="margin-top:6px">
-      <select class="mini" data-bk="${c}" data-f="detail" style="margin-bottom:6px"><option value="week" ${(v.detail||'week')==='week'?'selected':''}>Whole week: nights, themes, big night (Weekly / Monthly graphics)</option><option value="night" ${v.detail==='night'?'selected':''}>One night: game, venue, time, city (Tonight stories)</option><option value="none" ${v.detail==='none'?'selected':''}>None</option></select>
-      ${v.detail==='night'?`<div class="bar" style="margin:0 0 6px">${bankRangeHtml()}</div>`:''}
-      ${v.detail==='night'&&missingCities().length?`<div class="meta" style="color:var(--rose);margin:0 0 6px">No city set for: ${missingCities().map(esc).join(', ')}. Add them under Venue cities at the bottom of this page.</div>`:''}
+      <select class="mini" data-bk="${c}" data-f="detail" style="margin-bottom:6px"><option value="week" ${mode==='week'?'selected':''}>Whole week: nights, themes, big night (Weekly / Monthly graphics)</option><option value="night" ${mode==='night'?'selected':''}>One night: game, venue, time, city (Tonight stories)</option><option value="none" ${mode==='none'?'selected':''}>None</option></select>
+      ${mode==='night'&&missingCities().length?`<div class="meta" style="color:var(--rose);margin:0 0 6px">No city set for: ${missingCities().map(esc).join(', ')}. Add them under Venue cities at the bottom of this page.</div>`:''}
       <pre style="white-space:pre-wrap;font-family:var(--font);font-size:12px;line-height:1.5;color:var(--text2);background:var(--surface3);border:1px solid var(--border);border-radius:var(--radius);padding:8px 10px;margin:0">${esc(catLive(c)||'(none)')}</pre></div>`:''}</div>
     ${catInvHtml(c)}
     <div class="f"><label>Make now (what you want made this time)</label><textarea id="bkq-${c}" data-bx="${c}|queue" style="min-height:90px" placeholder="Press + next to a saved line below, or type here">${esc(v.queue||'')}</textarea>
