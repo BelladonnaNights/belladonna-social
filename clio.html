@@ -197,6 +197,7 @@ select:focus,input:focus,textarea:focus{outline:none;border-color:var(--gold);}
     <div class="f" id="f-muse-wrap" style="display:none"><label>Prompt (copied to clipboard, edit the [brackets])</label><textarea id="f-muse" style="min-height:200px"></textarea></div>
     <details id="f-more" style="margin:12px 0"><summary style="cursor:pointer;color:var(--gold2)">More: caption, hashtags, image, notes, graphic tools</summary>
     <div class="f"><label>Carousel post name (posts with the same name on the same day are grouped as slides of one post)</label><input type="text" id="f-grp" list="grp-list" placeholder="Leave empty for a single post, e.g. Songs that trigger the bar"/><datalist id="grp-list"></datalist></div>
+    <div id="ember-box"></div>
     <div class="f"><label>Caption (goes to Buffer)</label><textarea id="f-cap"></textarea>
       <div class="tools" style="margin:6px 0 0"><button class="btn btn-g" type="button" id="b-cap" onclick="capPrompt()">Copy caption prompt (paste into ChatGPT)</button></div></div>
     <div class="f"><label>Hashtags (Instagram only, kept separate from the caption)</label><textarea id="f-hash" style="min-height:60px" placeholder="#belladonnanights #karaoke"></textarea>
@@ -526,6 +527,7 @@ function buildSeed(){
 }
 
 /* ── STATE ── */
+let emCfg={},emAv='';
 let db=null,fs=null,auth=null,authMod=null,user=null,authChecked=false,unsubs=[],mode='local',posts=[],vposts=[],gigs=[],hqGigs=[],libOv={},rtMod=null,rtdb=null,rt={};
 let tab=(location.hash||'#dashboard').slice(1);
 let evIdx=0,calView='todo',typeF='all',monthF='all',studioF='todo',editingId=null,selDay=null;
@@ -571,6 +573,8 @@ async function init(){
         if(u){
           const bad=err=>banner('Firestore says: '+esc(err.message)+'. Clio needs an account with role admin to read and save.',true);
           unsubs.push(fs.onSnapshot(fs.collection(db,COL_POSTS),snap=>{posts=snap.docs.map(d=>({id:d.id,...d.data()}));postsLoaded=true;render();bigSoon();},bad));
+          unsubs.push(fs.onSnapshot(fs.doc(db,'agent_config','social'),snap=>{emCfg=snap.exists()?snap.data():{};render();if($('ov')&&$('ov').classList.contains('show'))emberBox(editingId);},err=>console.warn('Ember captions:',err.message)));
+          unsubs.push(fs.onSnapshot(fs.doc(db,'agent_config','avatars'),snap=>{const a=snap.exists()?snap.data():{};emAv=a.ember||'';},err=>{}));
           unsubs.push(fs.onSnapshot(fs.collection(db,COL_LIB),snap=>{libOv={};snap.docs.forEach(d=>libOv[d.id]=d.data());render();},bad));
           unsubs.push(fs.onSnapshot(fs.collection(db,'gig_schedule'),snap=>{hqGigs=snap.docs.map(d=>({id:d.id,...d.data()}));rebuildGigs();gigsLoaded=true;render();bigSoon();},err=>console.warn('gig_schedule:',err.message)));
           if(rtdb){[['tv','trivia/planner/venues'],['tg','trivia/planner/gigs'],['kv','trivia/planner/karaokeVenues'],['kg','trivia/planner/karaokeGigs'],['ev','trivia/planner/eventVenues'],['eg','trivia/planner/eventGigs'],['bv','bingo/landing/venues'],['bs','bingo/landing/schedule'],['mv','venues']].forEach(([k,path])=>{try{unsubs.push(rtMod.onValue(rtMod.ref(rtdb,path),sn=>{rt[k]=sn.val()||{};rtSoon();},err=>console.warn(path+': '+err.message)));}catch(e){console.warn(path,e.message);}});}
@@ -785,7 +789,7 @@ function rowHtml(p,sl){
   const T={...(TYPES[p.type]||TYPES.other),l:postLabel(p)},mile=isMile(p),hi=['monthly','big','cover'].includes(p.type)?' hi':'';
   const checks=mile?'<div class="ck" style="visibility:hidden"></div>':
     `<div class="ck"><input type="checkbox" data-k="created" ${p.created?'checked':''}/>Made</div><div class="ck"><input type="checkbox" data-k="scheduled" ${p.scheduled?'checked':''}/>Sched</div><div class="ck"><input type="checkbox" data-k="posted" ${p.posted?'checked':''}/>Posted</div>`;
-  const has=(p.caption?'✎ ':'')+(p.imageUrl?'🖼':'');
+  const has=(p.caption?'✎ ':(emFor(p.id)?'E ':''))+(p.imageUrl?'🖼':'');
   return `<div class="row ${mile?'milestone':''} ${p.posted?'done':''} ${p.scheduled&&!p.posted?'sched':''} ${overdue(p,todayStr())?'od':''}" data-id="${esc(p.id)}">${checks}<div class="time">${fmtTime(p.time)||'—'}</div><span class="badge${hi}">${T.l}</span><div class="rt">${p.gen?'<span class="has" style="display:inline" title="Created from your cadence rules">✦ </span>':''}${sl?`<span class="nick" style="margin-right:6px">${sl}</span>`:''}${esc(p.title)}${p.notes?`<small>${esc(p.notes)}</small>`:''}</div><div class="has">${has}</div>${p.auto?'':`<button class="btn btn-d" style="padding:3px 9px" data-act="delrow" data-arg="${esc(p.id)}" title="Delete this post">✕</button>`}</div>`;
 }
 function grpMembers(p){return posts.filter(x=>x.grp&&x.grp===p.grp&&x.date===p.date).sort((a,b)=>((a.slide||99)-(b.slide||99))||sortFn(a,b));}
@@ -904,6 +908,43 @@ function storyBlock(real,t){
   return `<div class="sec" style="margin-top:4px">Story posts${todo?` <span class="nick" style="color:var(--gold2)">${todo} left</span>`:''}</div><div class="meta" style="margin:0 0 4px">${days.length?'Story days this week: <b>'+dl.join(', ')+'</b>. Post them by hand, then tick Posted.':'Nothing scheduled.'}</div><div class="card" style="padding:6px 10px">${body}</div>`;
 }
 function isStory(p){return /Story/.test(p.platform||'')&&!isMile(p);}
+/* ── Ember: caption writer. Her captions come from HQ (agent_config/social) ── */
+function emCaps(){return (emCfg&&emCfg.captions)||{};}
+function emFor(id){const c=emCaps()[id];return (c&&c.caption&&c.status!=='skip')?c:null;}
+function emFace(){return emAv||('data:image/svg+xml;utf8,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" fill="#1c0f0a"/><circle cx="32" cy="32" r="23" fill="none" stroke="#ff7f6e" stroke-width="2"/><text x="32" y="41" font-size="26" text-anchor="middle" fill="#ff7f6e" font-family="Georgia,serif">E</text></svg>'));}
+function emCopy(t,m){if(!t){toast('Nothing to copy');return;}(navigator.clipboard?navigator.clipboard.writeText(t).then(()=>toast(m||'Copied. Paste it into Buffer'),()=>toast('Could not copy. Select it and copy by hand')):Promise.resolve(toast('Could not copy. Select it and copy by hand')));}
+function embCopy(id,f){const c=emFor(id);if(!c){toast('No caption from Ember for this post');return;}
+  const t=f==='hash'?(c.hashtags||''):f==='alt'?(c.alt||''):f==='all'?(c.caption+(c.hashtags?'\n\n'+c.hashtags:'')):c.caption;
+  emCopy(t,f==='hash'?'Hashtags copied':'Caption copied. Paste it into Buffer');}
+function embUse(f){const c=editingId&&emFor(editingId);if(!c)return;
+  const which=f||'main',txt=which==='alt'?(c.alt||''):c.caption;
+  $('f-cap').value=txt;if(c.hashtags&&!$('f-hash').value.trim())$('f-hash').value=c.hashtags;
+  $('f-more').open=true;toast('Ember\'s caption is in the box. Press Save to keep it');}
+function emberBox(id){
+  const el=$('ember-box');if(!el)return;
+  const c=id&&emFor(id);
+  if(!c){el.innerHTML='';return;}
+  const b=(l,on,cls)=>`<button class="btn ${cls||'btn-g'}" type="button" onclick="${on}">${l}</button>`;
+  el.innerHTML=`<div class="card" style="border-color:#ff7f6e;margin:10px 0;padding:10px"><div style="display:flex;gap:10px;align-items:center;margin-bottom:6px"><img src="${emFace()}" alt="" style="width:34px;height:34px;border-radius:50%;object-fit:cover;border:1px solid #ff7f6e"><div><div class="nick" style="color:#ff7f6e">Ember wrote this</div><div class="meta" style="margin:0">Copy it into Buffer, or put it in the caption box below.</div></div></div>
+    <div style="white-space:pre-wrap;font-size:14px;line-height:1.5;margin:6px 0">${esc(c.caption)}</div>
+    ${c.hashtags?`<div class="meta" style="margin:4px 0;word-break:break-word">${esc(c.hashtags)}</div>`:''}
+    ${c.alt?`<details style="margin:6px 0"><summary class="meta" style="cursor:pointer">Another version</summary><div style="white-space:pre-wrap;font-size:14px;line-height:1.5;margin:6px 0">${esc(c.alt)}</div>${b('Use this one','embUse(\'alt\')')} ${b('Copy this one','embCopyCur(\'alt\')')}</details>`:''}
+    ${c.note?`<div class="meta" style="margin:4px 0">Note from Ember: ${esc(c.note)}</div>`:''}
+    <div class="tools" style="margin-top:6px">${b('Copy caption','embCopyCur(\'cap\')','btn-gold')} ${c.hashtags?b('Copy hashtags','embCopyCur(\'hash\')'):''} ${b('Use in the caption box','embUse()')}</div></div>`;
+}
+function emberDash(){
+  const t=todayStr(),lim=addDays(t,14);
+  const L=vposts.filter(p=>!isMile(p)&&!p.posted&&!isStory(p)&&p.date>=addDays(t,-1)&&p.date<=lim);
+  const ready=L.filter(p=>!(p.caption||'').trim()&&emFor(p.id)).sort(sortFn);
+  const need=L.filter(p=>!(p.caption||'').trim()&&!emFor(p.id));
+  if(!ready.length&&!need.length&&!Object.keys(emCaps()).length)return '';
+  const row=p=>{const c=emFor(p.id),dt=new Date(p.date+'T12:00:00');
+    return `<div style="border-top:1px solid var(--line,#3a2f25);padding:8px 0"><div class="meta" style="margin:0 0 3px"><b>${DN[dt.getDay()]} ${dt.getDate()}</b> · ${esc(postLabel(p))}</div>
+    <div style="white-space:pre-wrap;font-size:14px;line-height:1.5">${esc(c.caption)}</div>${c.hashtags?`<div class="meta" style="margin:4px 0;word-break:break-word">${esc(c.hashtags)}</div>`:''}
+    <div class="tools" style="margin-top:6px"><button class="btn btn-gold" data-act="embcopy" data-arg="${esc(p.id)}|cap">Copy caption</button>${c.hashtags?` <button class="btn btn-g" data-act="embcopy" data-arg="${esc(p.id)}|hash">Copy hashtags</button>`:''} <button class="btn btn-g" data-act="embuse2" data-arg="${esc(p.id)}">Put in post</button> <button class="btn btn-g" data-act="embopen" data-arg="${esc(p.id)}">Open post</button></div></div>`;};
+  return `<div class="sec" style="margin-top:4px"><img src="${emFace()}" alt="" style="width:26px;height:26px;border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:8px;border:1px solid #ff7f6e">Ember's captions <span class="nick" style="color:#ff7f6e">${ready.length} ready</span></div>
+    <div class="card" style="border-color:#ff7f6e"><div class="meta" style="margin:0 0 4px">${ready.length?'Written in your voice. Copy, paste into Buffer, and tick Made when it is scheduled.':'Nothing ready right now.'}${need.length?` ${need.length} post${need.length>1?'s':''} in the next 14 days still need a caption. Ember writes them in her next run.`:''}</div>${ready.map(row).join('')}</div>`;
+}
 function vDashboard(){
   const t=todayStr(),real=vposts.filter(p=>!isMile(p)),mine=real.filter(p=>!p.auto&&!isStory(p));
   const od=[];
@@ -934,7 +975,7 @@ function vDashboard(){
   const bar=(l,k)=>{const c=mm.filter(p=>p[k]).length;return `<div class="nick">${l} ${c}/${nm}</div><div class="prog ${k==='posted'?'posted':''}"><i style="width:${nm?Math.round(c/nm*100):0}%"></i></div>`;};
   const st=posts.filter(p=>!isMile(p)&&p.stats&&(p.stats.reach||p.stats.likes||p.stats.comments||p.stats.shares)&&p.date>=addDays(t,-60)).sort((a,b)=>engage(b)-engage(a))[0];
   const nums=`${bar('Made','created')}${bar('Scheduled','scheduled')}${bar('Posted','posted')}${st?`<div class="meta" style="margin:8px 0 0">Best recent post: <b>${esc(st.title)}</b> with ${engage(st).toLocaleString()} likes, comments and shares.</div>`:''}`;
-  $('view').innerHTML=head('Dashboard','What needs you today, what is coming, and how stock and numbers look.')+storyBlock(real,t)+attention+week+
+  $('view').innerHTML=head('Dashboard','What needs you today, what is coming, and how stock and numbers look.')+storyBlock(real,t)+emberDash()+attention+week+
     `<div class="sec">Coming up</div><div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr))">
       <div class="card"><span class="lbl" style="margin-top:0">Next big night</span>${evBox}</div>
       <div class="card"><span class="lbl" style="margin-top:0">Inventory</span>${invBox}</div>
@@ -1406,6 +1447,10 @@ $('view').addEventListener('change',e=>{
   else if(e.target.dataset.ls||e.target.dataset.lt)listChange(e.target);
 });
 function act(a,arg){
+  if(a==='embcopy'){const[i,f]=String(arg).split('|');embCopy(i,f);return;}
+  if(a==='embuse'){embUse(arg);return;}
+  if(a==='embopen'){openEdit(arg);return;}
+  if(a==='embuse2'){openEdit(arg);embUse();return;}
   if(a==='tab')setTab(arg);
   else if(a==='burger')document.body.classList.toggle('menu-open');
   else if(a==='cadmode'){saveLib('settings',{cadMode:arg},true).then(render);}
@@ -1524,7 +1569,7 @@ function openEdit(id,presetDate){
   editingId=id||null;
   const p=id?vposts.find(x=>x.id===id):{date:presetDate||todayStr(),time:'12:00',type:'weekly',title:'',platform:'IG + FB',caption:'',imageUrl:'',notes:'',created:false,posted:false};
   $('mt').textContent=id?'Edit post':'Add post';
-  fillForm(p);
+  fillForm(p);emberBox(id);
   $('f-del').style.display=(id&&!p.auto)?'':'none';
   $('f-enc').style.display=id?'':'none';
   $('ov').classList.add('show');
@@ -2859,7 +2904,7 @@ function exportBuffer(){
   toast(`Instagram ${ig.length} · Facebook ${fb.length}`+(noCap?` · ${noCap} skipped (no caption)`:'')+(igNoImg?` · ${igNoImg} Instagram posts need an image`:''));
 }
 
-window.closeEdit=closeEdit;window.saveEdit=saveEdit;window.addSlide=addSlide;window.delPost=delPost;window.encore=encore;window.muse=muse;window.libSaveEdit=libSaveEdit;window.ledRule=ledRule;window.libHide=libHide;window.banUpload=banUpload;window.addTags=addTags;window.setWin=setWin;window.tw=null;Object.defineProperty(window,'tw',{get:()=>tw,set:v=>{tw=v;}});Object.defineProperty(window,'twKey',{get:()=>twKey});window.twPick=twPick;window.twAdd=twAdd;window.twDelTask=twDelTask;window.twMove=twMove;window.twNewSet=twNewSet;window.twDelSet=twDelSet;window.twSave=twSave;window.libUpload=libUpload;window.aiCaption=aiCaption;window.capPrompt=capPrompt;window.openGfx=openGfx;window.gfxPick=gfxPick;window.gfxSaveBg=gfxSaveBg;window.gfxUse=gfxUse;window.uploadImg=uploadImg;window.imgPrev=imgPrev;
+window.embCopyCur=f=>embCopy(editingId,f);window.embUse=embUse;window.closeEdit=closeEdit;window.saveEdit=saveEdit;window.addSlide=addSlide;window.delPost=delPost;window.encore=encore;window.muse=muse;window.libSaveEdit=libSaveEdit;window.ledRule=ledRule;window.libHide=libHide;window.banUpload=banUpload;window.addTags=addTags;window.setWin=setWin;window.tw=null;Object.defineProperty(window,'tw',{get:()=>tw,set:v=>{tw=v;}});Object.defineProperty(window,'twKey',{get:()=>twKey});window.twPick=twPick;window.twAdd=twAdd;window.twDelTask=twDelTask;window.twMove=twMove;window.twNewSet=twNewSet;window.twDelSet=twDelSet;window.twSave=twSave;window.libUpload=libUpload;window.aiCaption=aiCaption;window.capPrompt=capPrompt;window.openGfx=openGfx;window.gfxPick=gfxPick;window.gfxSaveBg=gfxSaveBg;window.gfxUse=gfxUse;window.uploadImg=uploadImg;window.imgPrev=imgPrev;
 window.addEventListener('hashchange',()=>{let h=location.hash.slice(1);if(['library','bank','cadence','inventory'].includes(h)){location.hash='templates';return;}if((TABS.some(t=>t[0]===h)||h==='events')&&h!==tab){editing=false;tab=h;render();}});
 applyTheme(document.documentElement.getAttribute('data-theme')||'dark');
 init();
