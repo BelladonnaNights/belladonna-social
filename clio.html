@@ -197,6 +197,7 @@ select:focus,input:focus,textarea:focus{outline:none;border-color:var(--gold);}
     <div class="f" id="f-muse-wrap" style="display:none"><label>Prompt (copied to clipboard, edit the [brackets])</label><textarea id="f-muse" style="min-height:200px"></textarea></div>
     <details id="f-more" style="margin:12px 0"><summary style="cursor:pointer;color:var(--gold2)">More: caption, hashtags, image, notes, graphic tools</summary>
     <div class="f"><label>Carousel post name (posts with the same name on the same day are grouped as slides of one post)</label><input type="text" id="f-grp" list="grp-list" placeholder="Leave empty for a single post, e.g. Songs that trigger the bar"/><datalist id="grp-list"></datalist></div>
+    <div class="f"><label>What is on the image (Sabine reads this to write the caption)</label><textarea id="f-imgtext" style="min-height:56px" placeholder="The exact words on the graphic, or a short description of the photo"></textarea><select id="f-imgpick" onchange="pickImgText()" style="margin-top:6px"></select></div>
     <div id="ember-box"></div>
     <div class="f"><label>Caption (goes to Buffer)</label><textarea id="f-cap"></textarea>
       <div class="tools" style="margin:6px 0 0"><button class="btn btn-g" type="button" id="b-cap" onclick="capPrompt()">Copy caption prompt (paste into ChatGPT)</button></div></div>
@@ -716,6 +717,7 @@ function virtualRows(){
     const mk=(code,date,time,type,title)=>{
       const id='g_'+g.id+'_'+code;if(have.has(id))return;
       if((libOv[type]||{}).silenced||(libOv[type]||{}).deleted)return;
+      if(((libOv.hide||{}).ids||[]).includes(id))return;
       out.push({id,date,time,type,title,platform:TYPES[type].plat,caption:'',imageUrl:'',notes:(g.host&&g.host!=='Unassigned')?'Host: '+g.host:'',created:false,posted:false,auto:true});
     };
     mk('tonight',g.date,'15:00','tonight','Tonight story: '+v+', '+k+(t?' at '+fmtTime(t):''));
@@ -790,7 +792,7 @@ function rowHtml(p,sl){
   const checks=mile?'<div class="ck" style="visibility:hidden"></div>':
     `<div class="ck"><input type="checkbox" data-k="created" ${p.created?'checked':''}/>Made</div><div class="ck"><input type="checkbox" data-k="scheduled" ${p.scheduled?'checked':''}/>Sched</div><div class="ck"><input type="checkbox" data-k="posted" ${p.posted?'checked':''}/>Posted</div>`;
   const has=(p.caption?'✎ ':(emFor(p.id)?'E ':''))+(p.imageUrl?'🖼':'');
-  return `<div class="row ${mile?'milestone':''} ${p.posted?'done':''} ${p.scheduled&&!p.posted?'sched':''} ${overdue(p,todayStr())?'od':''}" data-id="${esc(p.id)}">${checks}<div class="time">${fmtTime(p.time)||'—'}</div><span class="badge${hi}">${T.l}</span><div class="rt">${p.gen?'<span class="has" style="display:inline" title="Created from your cadence rules">✦ </span>':''}${sl?`<span class="nick" style="margin-right:6px">${sl}</span>`:''}${esc(p.title)}${p.notes?`<small>${esc(p.notes)}</small>`:''}</div><div class="has">${has}</div>${p.auto?'':`<button class="btn btn-d" style="padding:3px 9px" data-act="delrow" data-arg="${esc(p.id)}" title="Delete this post">✕</button>`}</div>`;
+  return `<div class="row ${mile?'milestone':''} ${p.posted?'done':''} ${p.scheduled&&!p.posted?'sched':''} ${overdue(p,todayStr())?'od':''}" data-id="${esc(p.id)}">${checks}<div class="time">${fmtTime(p.time)||'—'}</div><span class="badge${hi}">${T.l}</span><div class="rt">${p.gen?'<span class="has" style="display:inline" title="Created from your cadence rules">✦ </span>':''}${sl?`<span class="nick" style="margin-right:6px">${sl}</span>`:''}${esc(p.title)}${p.notes?`<small>${esc(p.notes)}</small>`:''}</div><div class="has">${has}</div><button class="btn btn-d" style="padding:3px 9px" data-act="${p.auto?'hiderow':'delrow'}" data-arg="${esc(p.id)}" title="${p.auto?'Remove this one post':'Delete this post'}">✕</button></div>`;
 }
 function grpMembers(p){return posts.filter(x=>x.grp&&x.grp===p.grp&&x.date===p.date).sort((a,b)=>((a.slide||99)-(b.slide||99))||sortFn(a,b));}
 function groupHtml(ms){
@@ -1309,7 +1311,7 @@ function cadRow(e,dim,restore){
 function cadTop(){
   return `<div class="sub" style="margin:0 0 8px">Everything you post on a rhythm, grouped. Each line has a Frequency (like “every Monday” or “7, 3 days before and the day of each big night”), and Clio creates the posts for the next 60 days from it. Change a frequency and the new posts follow it. Posts already on your calendar are never duplicated or moved. Silenced ones are turned off and sit at the bottom.</div>
   <div class="bar"><button class="btn btn-p" data-act="libnew">+ Add a post type</button><button class="btn btn-g" data-act="gennow">Create posts now (${planGen().length} waiting)</button>
-  <label style="display:flex;gap:8px;align-items:center;cursor:pointer;font-size:13px;color:var(--text2)"><input type="checkbox" data-act="gentoggle" ${(libOv.settings||{}).autoGen===false?'':'checked'} style="width:17px;height:17px"/> Create them automatically when I open Clio</label></div>`;
+  <label style="display:flex;gap:8px;align-items:center;cursor:pointer;font-size:13px;color:var(--text2)"><input type="checkbox" data-act="gentoggle" ${(libOv.settings||{}).autoGen===false?'':'checked'} style="width:17px;height:17px"/> Create them automatically when I open Clio</label>${(((libOv.hide||{}).ids||[]).length)?`<div style="margin-top:8px"><button class="btn btn-g" data-act="unhide">Bring back the ${(libOv.hide.ids||[]).length} post${libOv.hide.ids.length>1?'s':''} I removed from the calendar</button></div>`:''}</div>`;
 }
 let cadMonth=todayStr().slice(0,7),cadSel=null;
 function cadModeNow(){return (libOv.settings||{}).cadMode||'list';}
@@ -1470,6 +1472,8 @@ function act(a,arg){
   else if(a==='mprev'||a==='mnext'){const[y,m]=calMonth.split('-').map(Number);const d=new Date(y,m-1+(a==='mnext'?1:-1),1);calMonth=d.getFullYear()+'-'+pad(d.getMonth()+1);selDay=null;render();}
   else if(a==='mtoday'){calMonth=todayStr().slice(0,7);selDay=todayStr();render();}
   else if(a==='newday')openEdit(null,arg);
+  else if(a==='hiderow'){hidePost(arg);}
+  else if(a==='unhide'){if(confirm('Bring back every post you removed from the calendar?'))saveLib('hide',{ids:[]}).then(()=>{render();toast('Brought back');});}
   else if(a==='delrow'){const p=posts.find(x=>x.id===arg);if(p&&confirm('Delete "'+p.title+'"? This cannot be undone.')){removePost(arg);toast('Deleted');}}
   else if(a==='task'){const[id,k]=arg.split('|'),p=posts.find(x=>x.id===id);if(p){const tk={...(p.tasks||{})};if(tk[k])delete tk[k];else tk[k]=true;persist({...p,tasks:tk});}}
   else if(a==='evprev'||a==='evnext'){evIdx+=a==='evnext'?1:-1;render();}
@@ -1557,7 +1561,7 @@ function promoPrompt(){
 function fillForm(p){
   curBankCat=p.bankCat||'';
   $('f-date').value=p.date;$('f-time').value=p.time||'';$('f-type').value=p.type;$('f-plat').value=p.platform||'';
-  $('f-title').value=p.title;$('f-cap').value=p.caption||'';$('f-hash').value=p.hashtags||'';$('f-img').value=p.imageUrl||'';imgPrev();$('f-notes').value=p.notes||'';
+  $('f-title').value=p.title;$('f-cap').value=p.caption||'';$('f-hash').value=p.hashtags||'';$('f-img').value=p.imageUrl||'';imgPrev();$('f-notes').value=p.notes||'';$('f-imgtext').value=p.imageText||'';fillImgPick();
   $('f-created').checked=!!p.created;$('f-sched').checked=!!p.scheduled;$('f-posted').checked=!!p.posted;
   $('f-muse-wrap').style.display='none';
   fillBank(p.bankRef||'');
@@ -1570,7 +1574,7 @@ function openEdit(id,presetDate){
   const p=id?vposts.find(x=>x.id===id):{date:presetDate||todayStr(),time:'12:00',type:'weekly',title:'',platform:'IG + FB',caption:'',imageUrl:'',notes:'',created:false,posted:false};
   $('mt').textContent=id?'Edit post':'Add post';
   fillForm(p);emberBox(id);
-  $('f-del').style.display=(id&&!p.auto)?'':'none';
+  $('f-del').style.display=id?'':'none';
   $('f-enc').style.display=id?'':'none';
   $('ov').classList.add('show');
 }
@@ -1588,7 +1592,7 @@ async function savePost(){
   if(!grp)slide=null;
   else if(!slide||(old&&old.grp!==grp)){slide=posts.filter(x=>x.grp===grp&&x.date===date&&x.id!==id).length+1;}
   await persist({...(old||{}),id,date,time:$('f-time').value,type:$('f-type').value,
-    platform:$('f-plat').value.trim(),title,grp,slide,bankRef:$('f-bank').value||'',bankCat:(old&&old.bankCat)||'',caption:$('f-cap').value,hashtags:$('f-hash').value.trim(),imageUrl:$('f-img').value.trim(),notes:$('f-notes').value.trim(),created,scheduled,posted});
+    platform:$('f-plat').value.trim(),title,grp,slide,bankRef:$('f-bank').value||'',bankCat:(old&&old.bankCat)||'',caption:$('f-cap').value,hashtags:$('f-hash').value.trim(),imageUrl:$('f-img').value.trim(),notes:$('f-notes').value.trim(),imageText:$('f-imgtext').value.trim(),created,scheduled,posted});
   const br=$('f-bank').value;if(br)markBank(br);
   return id;
 }
@@ -1609,7 +1613,13 @@ function slideFrom(id){
   fillForm({date:p.date,time:p.time,type:p.type,platform:p.platform,grp:p.grp,title:'',caption:'',hashtags:'',imageUrl:'',notes:'',created:false,posted:false});
   $('mt').textContent='Add a slide to "'+p.grp+'"';$('f-del').style.display='none';$('f-enc').style.display='none';$('ov').classList.add('show');
 }
-async function delPost(){if(editingId&&confirm('Delete this post?')){await removePost(editingId);closeEdit();}}
+async function hidePost(id){
+  const p=vposts.find(x=>x.id===id);if(!p)return;
+  if(!confirm('Remove "'+p.title+'" from the calendar?\n\nJust this post. Other weeks and other nights stay.'))return;
+  await saveLib('hide',{ids:[...new Set([...((libOv.hide||{}).ids||[]),id])]});
+  render();toast('Removed. You can bring it back in Settings.');
+}
+async function delPost(){if(!editingId)return;if(!posts.find(x=>x.id===editingId)){const id=editingId;closeEdit();await hidePost(id);return;}if(confirm('Delete this post?')){await removePost(editingId);closeEdit();}}
 
 /* Encore: duplicate this post as a fresh one (new date, not made, not posted) */
 function encore(){
@@ -2395,7 +2405,22 @@ function bankReturn(c,all,noRender){
   return true;
 }
 function bankReturnAll(){Object.keys(bankData()).forEach(c=>bankReturn(c,false,true));}
-function bankCommit(c){const cats=bankData();if(cats[c]&&(cats[c].pending||[]).length){cats[c].pending=[];saveLib('bank',{cats},true);}}
+function bankCommit(c,q){
+  const cats=bankData();if(!cats[c])return;let ch=false;
+  if((cats[c].pending||[]).length){cats[c].pending=[];ch=true;}
+  const lines=String(q||'').split('\n').map(x=>x.trim()).filter(Boolean);
+  if(lines.length){const at=Date.now();cats[c].made=[...lines.map((t,i)=>({id:'m'+at.toString(36)+i,t,at})),...(cats[c].made||[])].slice(0,60);ch=true;}
+  if(ch)saveLib('bank',{cats},true);
+}
+function fillImgPick(){
+  const sel=$('f-imgpick');if(!sel)return;
+  sel.innerHTML='<option value="">Pick a line you recently made into an image</option>'+Object.entries(bankData()).map(([c,v])=>{const m=(v.made||[]).slice(0,25);return m.length?`<optgroup label="${esc(v.name)}">${m.map(x=>`<option value="${c}|${x.id}">${esc(x.t.length>80?x.t.slice(0,80)+'…':x.t)}</option>`).join('')}</optgroup>`:'';}).join('');
+}
+function pickImgText(){
+  const v=$('f-imgpick').value;if(!v)return;const[c,i]=v.split('|'),x=((bankData()[c]||{}).made||[]).find(m=>m.id===i);
+  if(x){$('f-imgtext').value=x.t;toast('Added to "What is on the image"');}
+  $('f-imgpick').value='';
+}
 let bankRestored=false;
 let mdT=0;
 function mdAct(el){
@@ -2410,7 +2435,7 @@ function mdAct(el){
   else if(a==='bkqback'){toast(bankReturn(arg,false)?'Put back in the bank':'Nothing to put back');}
   else if(a==='bkqclear'){bankReturn(arg,true);toast('Cleared. Lines from the bank went back.');}
   else if(a==='bkcopypn'){const el=document.querySelector('[data-bx="'+arg+'|pnotes"]'),t=((el?el.value:(bankData()[arg]||{}).pnotes)||'').trim();copyTxt((t?t+'\n\n':'')+catLive(arg));}
-  else if(a==='bkcopyqo'){const q=$('bkq-'+arg).value.trim();copyTxt(q);if(q)bankCommit(arg);}
+  else if(a==='bkcopyqo'){const q=$('bkq-'+arg).value.trim();copyTxt(q);if(q)bankCommit(arg,q);}
   else if(a==='bkcopyx')copyTxt($('bkx-'+arg).value.trim());
   else if(a==='bkcopyp')copyTxt($('bkmp').value.trim());
   else if(a==='bkcopybp')copyTxt($('bkbp').value.trim());
@@ -2426,7 +2451,7 @@ function mdAct(el){
     const q=($('bkq-'+arg).value||'').trim();if(!q){toast('Add some posts to Make now first');return;}
     const v=bankData()[arg]||{},cv=libList(true).find(x=>x.id===v.canvas);
     copyTxt($('bkmp').value.trim()+'\n\n'+(cv?'TEMPLATE LOOK: '+cv.name+' (attach your saved example image from Library)\n':'')+(v.badge?'TOP BADGE TEXT: '+v.badge+'\n':'')+'\nNOTES FOR THIS CATEGORY:\n'+((v.pnotes||'').trim()?v.pnotes.trim()+'\n\n':'')+catLive(arg)+'\n\nPOSTS TO MAKE (one PNG each, carousels where there are [brackets]):\n'+q);
-    bankCommit(arg);
+    bankCommit(arg,q);
   }
 }
 const TYPING='[data-secn],[data-bx],[data-bmp],[data-bbp],[data-ls],[data-lt],[data-lib],[data-ts],[data-ct],[data-bk],[data-bkalt],[data-bi],[data-stat],[data-ban],[data-vc],[data-iv],[data-how]',AUTOSAVE='[data-bx],[data-bmp],[data-bbp],[data-ls],[data-lib],[data-ts],[data-ct]';
@@ -2609,6 +2634,11 @@ async function syncBuffer(manual){
 
 /* Caption helper that costs nothing: builds a ready-to-paste prompt for the ChatGPT chat you already use */
 const CAP_RULES='You write social media captions for Belladonna, a gothic, elegant live-entertainment brand in the Pacific Northwest (Music Bingo, Karaoke, Trivia and Sing-Along nights at local venues). Voice: warm, witty, a little mysterious, never cheesy. No emojis, no hashtags, no clip-art phrases like "get ready to party". Under 600 characters. Use only the facts below; never invent a venue, time, prize or date. If a detail is missing, leave it out. End with a short call to action when it fits. Return only the caption text.';
+function bankBrief(ref){
+  const[c,id]=String(ref||'').split('|'),cat=c?bankData()[c]:null;if(!cat)return '';
+  const it=(cat.items||[]).find(x=>String(x.id)===id);
+  return '\nWhat the image is: a "'+cat.name+'" post'+(it?'\nThe exact text that appears on the image: '+it.t:'')+(cat.pnotes?'\nNotes for this kind of post: '+cat.pnotes:'');
+}
 function capPrompt(){
   const type=$('f-type').value,title=$('f-title').value.trim(),date=$('f-date').value;
   if(!title){toast('Add a title first');return;}
@@ -2616,7 +2646,7 @@ function capPrompt(){
   const mo=(type==='monthly'&&gigs.length&&date)?(()=>{const d=new Date(date+'T12:00:00');return nightLines(ymd(new Date(d.getFullYear(),d.getMonth()+1,1)),ymd(new Date(d.getFullYear(),d.getMonth()+2,0)),false);})():[];
   const win=(type==='recap'&&date)?winLines(date.slice(0,7),false).map(x=>'Best Dressed winner - '+x):[];
   const facts=[...wk,...mo,...win],old=$('f-cap').value.trim(),extra=$('f-notes').value.trim();
-  const p=CAP_RULES+'\n\nPost type: '+(TYPES[type]?.l||type)+'\nPost title: '+title+(date?'\nPost date: '+date:'')+'\nPlatform: '+($('f-plat').value||'IG + FB')+
+  const p=CAP_RULES+'\n\nPost type: '+(TYPES[type]?.l||type)+'\nPost title: '+title+(date?'\nPost date: '+date:'')+($('f-imgtext').value.trim()?'\nWhat is on the image: '+$('f-imgtext').value.trim():'')+bankBrief($('f-bank')&&$('f-bank').value)+'\nPlatform: '+($('f-plat').value||'IG + FB')+
     (facts.length?'\nFacts to use (one per line):\n'+facts.join('\n'):'')+(old?'\n\nCurrent draft to improve:\n'+old:'')+(extra?'\n\nExtra direction: '+extra:'');
   $('f-muse').value=p;$('f-muse-wrap').style.display='';
   (navigator.clipboard?navigator.clipboard.writeText(p).then(()=>toast('Caption prompt copied. Paste it into ChatGPT, then paste the answer here'),()=>toast('Select and copy the prompt below')):toast('Select and copy the prompt below'));
@@ -2904,7 +2934,7 @@ function exportBuffer(){
   toast(`Instagram ${ig.length} · Facebook ${fb.length}`+(noCap?` · ${noCap} skipped (no caption)`:'')+(igNoImg?` · ${igNoImg} Instagram posts need an image`:''));
 }
 
-window.embCopyCur=f=>embCopy(editingId,f);window.embUse=embUse;window.closeEdit=closeEdit;window.saveEdit=saveEdit;window.addSlide=addSlide;window.delPost=delPost;window.encore=encore;window.muse=muse;window.libSaveEdit=libSaveEdit;window.ledRule=ledRule;window.libHide=libHide;window.banUpload=banUpload;window.addTags=addTags;window.setWin=setWin;window.tw=null;Object.defineProperty(window,'tw',{get:()=>tw,set:v=>{tw=v;}});Object.defineProperty(window,'twKey',{get:()=>twKey});window.twPick=twPick;window.twAdd=twAdd;window.twDelTask=twDelTask;window.twMove=twMove;window.twNewSet=twNewSet;window.twDelSet=twDelSet;window.twSave=twSave;window.libUpload=libUpload;window.aiCaption=aiCaption;window.capPrompt=capPrompt;window.openGfx=openGfx;window.gfxPick=gfxPick;window.gfxSaveBg=gfxSaveBg;window.gfxUse=gfxUse;window.uploadImg=uploadImg;window.imgPrev=imgPrev;
+window.pickImgText=pickImgText;window.embCopyCur=f=>embCopy(editingId,f);window.embUse=embUse;window.closeEdit=closeEdit;window.saveEdit=saveEdit;window.addSlide=addSlide;window.delPost=delPost;window.encore=encore;window.muse=muse;window.libSaveEdit=libSaveEdit;window.ledRule=ledRule;window.libHide=libHide;window.banUpload=banUpload;window.addTags=addTags;window.setWin=setWin;window.tw=null;Object.defineProperty(window,'tw',{get:()=>tw,set:v=>{tw=v;}});Object.defineProperty(window,'twKey',{get:()=>twKey});window.twPick=twPick;window.twAdd=twAdd;window.twDelTask=twDelTask;window.twMove=twMove;window.twNewSet=twNewSet;window.twDelSet=twDelSet;window.twSave=twSave;window.libUpload=libUpload;window.aiCaption=aiCaption;window.capPrompt=capPrompt;window.openGfx=openGfx;window.gfxPick=gfxPick;window.gfxSaveBg=gfxSaveBg;window.gfxUse=gfxUse;window.uploadImg=uploadImg;window.imgPrev=imgPrev;
 window.addEventListener('hashchange',()=>{let h=location.hash.slice(1);if(['library','bank','cadence','inventory'].includes(h)){location.hash='templates';return;}if((TABS.some(t=>t[0]===h)||h==='events')&&h!==tab){editing=false;tab=h;render();}});
 applyTheme(document.documentElement.getAttribute('data-theme')||'dark');
 init();
