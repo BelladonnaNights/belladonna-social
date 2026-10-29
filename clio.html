@@ -1298,8 +1298,8 @@ function cadRow(e,dim,restore){
   return `<div class="card" style="padding:10px 12px;margin-bottom:6px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;${dim?'opacity:.55':''}">
       ${img?`<img src="${esc(img)}" alt="" loading="lazy" title="Your example template" style="width:40px;height:50px;object-fit:contain;background:var(--surface3);border:1px solid var(--border2);border-radius:4px;flex-shrink:0" onerror="this.style.display='none'"/>`:''}
       <div style="flex:1;min-width:180px"><div><b style="font-weight:600">${esc(e.name)}</b>${e.nick?` <span class="nick">(${esc(e.nick)})</span>`:''}</div>
-      <div class="meta" style="margin:0">${esc(e.use||'')}${e.use?' · ':''}<span style="color:var(--gold2)">${esc(freqText(e))}</span></div><div class="meta" style="margin:2px 0 0">Template: ${tn?`<b>${esc(tn)}</b>`:`<span style="color:var(--red,#c0392b)">none yet, press Edit to pick one</span>`}</div></div>
-      ${restore?`<button class="btn btn-p" data-act="librestore" data-arg="${e.id}">Restore</button>`:`${String(e.id).startsWith('bk:')?`<button class="btn btn-g" data-act="bkpause" data-arg="${e.cat}">${e.silenced?'Resume':'Pause / Retire'}</button>`:''}<button class="btn btn-g" data-act="libedit" data-arg="${e.id}">Edit</button>`}${restore?'':howBlock(e)}</div>`;
+      <div class="meta" style="margin:0">${esc(e.use||'')}${e.use?' · ':''}<span style="color:var(--gold2);text-decoration:underline;cursor:pointer" data-act="libedit" data-arg="${e.id}" title="Change when and how often">${esc(freqText(e))}</span></div><div class="meta" style="margin:2px 0 0">Template: ${tn?`<b>${esc(tn)}</b>`:`<span style="color:var(--red,#c0392b)">none yet, press Edit to pick one</span>`}</div></div>
+      ${restore?`<button class="btn btn-p" data-act="librestore" data-arg="${e.id}">Restore</button>`:`${String(e.id).startsWith('bk:')?`<button class="btn btn-g" data-act="bkpause" data-arg="${e.cat}">${e.silenced?'Resume':'Pause / Retire'}</button>`:''}<button class="btn btn-g" data-act="libedit" data-arg="${e.id}">Edit time &amp; frequency</button>`}${restore?'':howBlock(e)}</div>`;
 }
 function cadTop(){
   return `<div class="sub" style="margin:0 0 8px">Everything you post on a rhythm, grouped. Each line has a Frequency (like “every Monday” or “7, 3 days before and the day of each big night”), and Clio creates the posts for the next 60 days from it. Change a frequency and the new posts follow it. Posts already on your calendar are never duplicated or moved. Silenced ones are turned off and sit at the bottom.</div>
@@ -2733,9 +2733,13 @@ function tplHead(t,open){
     <div style="flex:1;min-width:0"><b style="font-weight:600;font-size:.92rem">${esc(t.name)}</b>${t.nick&&t.nick!==t.name?` <span class="nick">${esc(t.nick)}</span>`:''}<div class="meta" style="margin:0">${esc(bits)||'<span style="opacity:.6">Nothing scheduled yet</span>'}</div></div>
     <div style="text-align:right;flex-shrink:0">${di.next?`<div class="has" style="display:block">Next: ${esc(shortDay(di.next))}</div>`:''}</div></div>`;
 }
+function tplWhenHtml(t){
+  const all=libList(true),L=tplRuleIds(t).map(id=>all.find(x=>x.id===id)).filter(Boolean);
+  return `<div class="sec">When it posts</div><div style="max-width:640px">`+(L.length?L.map(e=>`<div class="card" style="padding:8px 12px;margin:4px 0;display:flex;gap:10px;align-items:center;flex-wrap:wrap"><div style="flex:1;min-width:160px"><b style="font-weight:600">${esc(e.name)}</b><div class="meta" style="margin:0;color:var(--gold2)">${esc(freqText(e))}</div></div><button class="btn btn-g" data-act="libedit" data-arg="${e.id}">Change time &amp; frequency</button></div>`).join(''):'<div class="meta">Nothing is scheduled from this template yet. Add a post type to schedule one.</div>')+'</div>';
+}
 function tplLookHtml(t){
   const o=libOv[t.id]||{},isCv=t.id.startsWith('cv_'),ub=usedBy(t.id),n=vposts.filter(p=>p.type===t.id).length;
-  return `<div class="sec">Look</div><div style="max-width:640px">
+  return tplWhenHtml(t)+`<div class="sec">Look</div><div style="max-width:640px">
     <div class="f2"><div class="f"><label>Template name</label><input type="text" data-lib="${t.id}" data-f="name" value="${esc(t.name)}"/></div><div class="f"><label>Nickname (short label)</label><input type="text" data-lib="${t.id}" data-f="nick" value="${esc(t.nick||'')}"/></div></div>
     <div class="f2"><div class="f"><label>Size</label><input type="text" data-lib="${t.id}" data-f="size" value="${esc(t.size||'')}" placeholder="1080x1350"/></div><div class="f"><label>What it is / when it's used</label><input type="text" data-lib="${t.id}" data-f="use" value="${esc(t.use||'')}"/></div></div>
     <div class="f"><label>Section (used in "By template" view)</label><select data-lib="${t.id}" data-f="group">${tplSections().map(g=>`<option value="${esc(g)}" ${(t.group||'Other')===g?'selected':''}>${esc(g)}</option>`).join('')}</select></div>
