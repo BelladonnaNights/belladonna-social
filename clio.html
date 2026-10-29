@@ -195,7 +195,7 @@ select:focus,input:focus,textarea:focus{outline:none;border-color:var(--gold);}
     </div>
     <div class="tools"><button class="btn btn-gold" type="button" onclick="capPrompt()">✦ Copy caption prompt</button></div>
     <div class="f" id="f-muse-wrap" style="display:none"><label>Prompt (copied to clipboard, edit the [brackets])</label><textarea id="f-muse" style="min-height:200px"></textarea></div>
-    <details id="f-more" style="margin:12px 0"><summary style="cursor:pointer;color:var(--gold2)">More: caption, hashtags, notes</summary>
+    <details id="f-more" open style="margin:12px 0"><summary style="display:none">More</summary>
     <input type="hidden" id="f-grp"/><datalist id="grp-list"></datalist>
     <div id="ember-box"></div>
     <div class="f"><label>Caption (goes to Buffer)</label><textarea id="f-cap"></textarea></div>
@@ -1561,7 +1561,7 @@ function fillForm(p){
   fillBank(p.bankRef||'');fillImgList(p);
   $('f-grp').value=p.grp||'';
   $('grp-list').innerHTML=[...new Set(posts.map(x=>x.grp).filter(Boolean))].map(g=>`<option value="${esc(g)}">`).join('');
-  renderTags();renderWin();renderSum();$('f-more').open=false;
+  renderTags();renderWin();renderSum();$('f-more').open=true;
 }
 function openEdit(id,presetDate){
   editingId=id||null;
