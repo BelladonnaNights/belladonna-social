@@ -1304,7 +1304,7 @@ function cadRow(e,dim,restore){
 function cadTop(){
   return `<div class="sub" style="margin:0 0 8px">Everything you post on a rhythm, grouped. Each line has a Frequency (like “every Monday” or “7, 3 days before and the day of each big night”), and Clio creates the posts for the next 60 days from it. Change a frequency and the new posts follow it. Posts already on your calendar are never duplicated or moved. Silenced ones are turned off and sit at the bottom.</div>
   <div class="bar"><button class="btn btn-p" data-act="libnew">+ Add a post type</button><button class="btn btn-g" data-act="gennow">Create posts now (${planGen().length} waiting)</button>
-  <label style="display:flex;gap:8px;align-items:center;cursor:pointer;font-size:13px;color:var(--text2)"><input type="checkbox" data-act="gentoggle" ${(libOv.settings||{}).autoGen===false?'':'checked'} style="width:17px;height:17px"/> Create them automatically when I open Clio</label></div><div style="margin-top:14px"><div class="sec" style="margin:0 0 4px">Caption prompt</div><div class="meta" style="margin:0 0 6px">The instructions that get copied with every post when you press Copy caption prompt. Edit it and it saves on its own.</div><textarea data-lib="settings" data-f="capRules" style="min-height:380px;font-size:13px;line-height:1.5">${esc(capRules())}</textarea><div style="margin-top:6px"><button class="btn btn-g" data-act="capreset">Back to the standard version</button></div></div><div>${(((libOv.hide||{}).ids||[]).length)?`<div style="margin-top:8px"><button class="btn btn-g" data-act="unhide">Bring back the ${(libOv.hide.ids||[]).length} post${libOv.hide.ids.length>1?'s':''} I removed from the calendar</button></div>`:''}</div>`;
+  <label style="display:flex;gap:8px;align-items:center;cursor:pointer;font-size:13px;color:var(--text2)"><input type="checkbox" data-act="gentoggle" ${(libOv.settings||{}).autoGen===false?'':'checked'} style="width:17px;height:17px"/> Create them automatically when I open Clio</label></div><div>${(((libOv.hide||{}).ids||[]).length)?`<div style="margin-top:8px"><button class="btn btn-g" data-act="unhide">Bring back the ${(libOv.hide.ids||[]).length} post${libOv.hide.ids.length>1?'s':''} I removed from the calendar</button></div>`:''}</div>`;
 }
 let cadMonth=todayStr().slice(0,7),cadSel=null;
 function cadModeNow(){return (libOv.settings||{}).cadMode||'list';}
@@ -1928,7 +1928,7 @@ function tagSuggested(set){const hay=($('f-title').value+' '+$('f-notes').value)
 function renderTags(){
   const box=$('f-tags');if(!box)return;
   const L=Object.entries(getTagSets()).filter(([,v])=>(v.text||'').trim());
-  if(!L.length){box.innerHTML='<span class="has" style="display:block">Add tag sets in the Library to add hashtags with one click.</span>';return;}
+  if(!L.length){box.innerHTML='<span class="has" style="display:block;white-space:normal;line-height:1.4">Add tag sets in the Templates tab to add hashtags with one click.</span>';return;}
   L.sort((a,b)=>tagSuggested(b[1])-tagSuggested(a[1]));
   const sug=L.filter(([,v])=>tagSuggested(v));
   box.innerHTML=(sug.length>1?`<button class="chip on" type="button" onclick="addTags('*')">+ All matching (${sug.length})</button>`:'')+
@@ -2286,10 +2286,14 @@ function vBank(){
 venueCitiesHtml()+`<div class="card" style="border-color:var(--border-gold)"><div class="f" style="margin-bottom:6px"><label>Brainstorming prompt for ChatGPT (editable: goes first when you press "Copy brainstorm prompt" on a category)</label><textarea id="bkbp" data-bbp="1" style="min-height:200px">${esc(brainPrompt())}</textarea></div>
     <div class="tools" style="margin:0"><button class="btn btn-gold" data-md="bkcopybp">Copy prompt</button><button class="btn btn-g" data-md="bkresetbp">Reset to the original</button></div></div>
   <div class="card" style="border-color:var(--border-gold)"><div class="f" style="margin-bottom:6px"><label>Design prompt for ChatGPT, makes the PNGs from your template (editable: goes first when you press "Copy prompt + these")</label><textarea id="bkmp" data-bmp="1" style="min-height:240px">${esc(bankPrompt())}</textarea></div>
-    <div class="tools" style="margin:0"><button class="btn btn-gold" data-md="bkcopyp">Copy prompt</button><button class="btn btn-g" data-md="bkresetp">Reset to the original</button></div></div>`;
+    <div class="tools" style="margin:0"><button class="btn btn-gold" data-md="bkcopyp">Copy prompt</button><button class="btn btn-g" data-md="bkresetp">Reset to the original</button></div></div>${capBoxHtml()}`;
 }
 /* ── LIVE DETAILS: facts pulled from HQ and appended to the graphic prompt ── */
 let bankWeek=0;
+function capBoxHtml(){
+  return `<div class="card" style="border-color:var(--border-gold)"><div class="f" style="margin-bottom:6px"><label>Caption prompt for ChatGPT, writes the captions in your voice (editable: goes first when you press "Copy caption prompt" on a post)</label><textarea data-lib="settings" data-f="capRules" style="min-height:380px">${esc(capRules())}</textarea></div>
+    <div class="tools" style="margin:0"><button class="btn btn-g" data-act="capreset">Reset to the original</button></div></div>`;
+}
 function bankMonday(off){const t=todayStr(),back=(new Date(t+'T12:00:00').getDay()+6)%7;return addDays(t,-back+7*(off||0));}
 function bankWeekLabel(off){const a=bankMonday(off),b=addDays(a,6),f=d=>new Date(d+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'});return f(a)+' to '+f(b);}
 function liveDetails(off){
@@ -2855,7 +2859,7 @@ function tplSettingsHtml(){
   <div class="card" style="border-color:var(--border-gold)"><div class="f" style="margin-bottom:6px"><label>Brainstorming prompt for ChatGPT (editable: goes first when you press "Copy brainstorm prompt" on a category)</label><textarea id="bkbp" data-bbp="1" style="min-height:200px">${esc(brainPrompt())}</textarea></div>
     <div class="tools" style="margin:0"><button class="btn btn-gold" data-md="bkcopybp">Copy prompt</button><button class="btn btn-g" data-md="bkresetbp">Reset to the original</button></div></div>
   <div class="card" style="border-color:var(--border-gold)"><div class="f" style="margin-bottom:6px"><label>Design prompt for ChatGPT, makes the PNGs from your template (editable: goes first when you press "Copy prompt + these")</label><textarea id="bkmp" data-bmp="1" style="min-height:240px">${esc(bankPrompt())}</textarea></div>
-    <div class="tools" style="margin:0"><button class="btn btn-gold" data-md="bkcopyp">Copy prompt</button><button class="btn btn-g" data-md="bkresetp">Reset to the original</button></div></div>
+    <div class="tools" style="margin:0"><button class="btn btn-gold" data-md="bkcopyp">Copy prompt</button><button class="btn btn-g" data-md="bkresetp">Reset to the original</button></div></div>${capBoxHtml()}
   ${libTagsHtml()}${venueCitiesHtml()}
   <div class="card" style="max-width:520px;margin-top:16px"><span class="lbl">Worker address (for image uploads and Buffer sync)</span><input type="text" data-api="1" value="${esc(getApi())}" placeholder="https://clio-api.yourname.workers.dev"/></div>
   </div>`;
