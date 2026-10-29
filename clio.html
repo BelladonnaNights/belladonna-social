@@ -178,45 +178,38 @@ select:focus,input:focus,textarea:focus{outline:none;border-color:var(--gold);}
   <div class="box">
     <h3 id="mt">Post</h3>
     <div class="f"><label>What it is</label><input type="text" id="f-title"/></div>
-    <div class="f2">
+    <div style="display:none"><div class="f2">
       <div class="f"><label>Date</label><input type="date" id="f-date"/></div>
       <div class="f"><label>Time</label><input type="time" id="f-time"/></div>
     </div>
     <div class="f2">
       <div class="f"><label>Template</label><select id="f-type"></select></div>
       <div class="f"><label>Where</label><input type="text" id="f-plat" placeholder="IG + FB"/></div>
-    </div>
+    </div></div>
     <div id="f-sum" class="card" style="padding:10px 12px;margin-bottom:10px"></div>
-    <div class="f"><label>Text from your Content Bank (The Muse puts it on the template)</label><select id="f-bank" onchange="bankPickText()"></select></div>
-    <div class="f"><label>Not in the list? Type the text that is on the image here (Sabine reads this to write the caption)</label><textarea id="f-imgtext" style="min-height:56px" placeholder="The exact words on the graphic, or a short description of the photo"></textarea><select id="f-imgpick" onchange="pickImgText()" style="margin-top:6px"></select></div>
+    <div class="f"><label>Post Image Description</label><input type="text" id="f-imgtext" list="img-list" autocomplete="off" placeholder="Pick a line from your Content Bank, or type what is on the image" oninput="imgTextPick()"/><datalist id="img-list"></datalist><select id="f-bank" style="display:none"></select></div>
     <div class="checks">
       <label><input type="checkbox" id="f-created"/> Made</label>
       <label><input type="checkbox" id="f-sched"/> Scheduled</label>
       <label><input type="checkbox" id="f-posted"/> Posted</label>
     </div>
-    <div class="tools"><button class="btn btn-gold" type="button" onclick="promoPrompt()">✦ Copy caption prompt (for Muse)</button></div>
+    <div class="tools"><button class="btn btn-gold" type="button" onclick="capPrompt()">✦ Copy caption prompt</button></div>
     <div class="f" id="f-muse-wrap" style="display:none"><label>Prompt (copied to clipboard, edit the [brackets])</label><textarea id="f-muse" style="min-height:200px"></textarea></div>
-    <details id="f-more" style="margin:12px 0"><summary style="cursor:pointer;color:var(--gold2)">More: caption, hashtags, image, notes, graphic tools</summary>
-    <div class="f"><label>Carousel post name (posts with the same name on the same day are grouped as slides of one post)</label><input type="text" id="f-grp" list="grp-list" placeholder="Leave empty for a single post, e.g. Songs that trigger the bar"/><datalist id="grp-list"></datalist></div>
+    <details id="f-more" style="margin:12px 0"><summary style="cursor:pointer;color:var(--gold2)">More: caption, hashtags, notes</summary>
+    <input type="hidden" id="f-grp"/><datalist id="grp-list"></datalist>
     <div id="ember-box"></div>
-    <div class="f"><label>Caption (goes to Buffer)</label><textarea id="f-cap"></textarea>
-      <div class="tools" style="margin:6px 0 0"><button class="btn btn-g" type="button" id="b-cap" onclick="capPrompt()">Copy caption prompt (paste into ChatGPT)</button></div></div>
+    <div class="f"><label>Caption (goes to Buffer)</label><textarea id="f-cap"></textarea></div>
     <div class="f"><label>Hashtags (Instagram only, kept separate from the caption)</label><textarea id="f-hash" style="min-height:60px" placeholder="#belladonnanights #karaoke"></textarea>
       <div id="f-tags" class="bar" style="margin:6px 0 0"></div></div>
-    <div class="f"><label>Image (upload, or paste a direct .jpg / .png link)</label><input type="text" id="f-img" placeholder="https://…" oninput="imgPrev()"/>
+    <div class="f" style="display:none"><label>Image (upload, or paste a direct .jpg / .png link)</label><input type="text" id="f-img" placeholder="https://…" oninput="imgPrev()"/>
       <div class="tools" style="margin:6px 0 0"><button class="btn btn-g" type="button" id="b-up" onclick="document.getElementById('f-file').click()">Upload image</button><input type="file" id="f-file" accept="image/jpeg,image/png,image/webp" style="display:none" onchange="uploadImg(this)"/></div>
       <img id="f-prev" alt="" style="display:none;max-width:140px;max-height:140px;margin-top:8px;border:1px solid var(--border2);border-radius:var(--radius)"/></div>
     <div class="f" id="f-win" style="display:none"></div>
     <div class="f"><label>Notes</label><input type="text" id="f-notes"/></div>
-    <div class="tools">
-      <button class="btn btn-gold" onclick="muse()">✦ The Muse: build ChatGPT prompt</button>
-      <button class="btn btn-gold" onclick="openGfx()">▣ Make graphic</button>
-      <button class="btn btn-gold" id="f-slide" onclick="addSlide()">▤ Add another slide</button>
-      <button class="btn btn-gold" id="f-enc" onclick="encore()">↻ Encore: duplicate</button>
-    </div>
     </details>
     <div class="acts">
       <button class="btn btn-d" id="f-del" onclick="delPost()">Delete</button>
+      <button class="btn btn-g" id="f-enc" type="button" onclick="encore()" title="Duplicate" aria-label="Duplicate" style="width:40px;height:40px;padding:0;font-size:20px;line-height:1">↻</button>
       <div class="sp"></div>
       <button class="btn btn-g" onclick="closeEdit()">Cancel</button>
       <button class="btn btn-p" onclick="saveEdit()">Save</button>
@@ -1311,7 +1304,7 @@ function cadRow(e,dim,restore){
 function cadTop(){
   return `<div class="sub" style="margin:0 0 8px">Everything you post on a rhythm, grouped. Each line has a Frequency (like “every Monday” or “7, 3 days before and the day of each big night”), and Clio creates the posts for the next 60 days from it. Change a frequency and the new posts follow it. Posts already on your calendar are never duplicated or moved. Silenced ones are turned off and sit at the bottom.</div>
   <div class="bar"><button class="btn btn-p" data-act="libnew">+ Add a post type</button><button class="btn btn-g" data-act="gennow">Create posts now (${planGen().length} waiting)</button>
-  <label style="display:flex;gap:8px;align-items:center;cursor:pointer;font-size:13px;color:var(--text2)"><input type="checkbox" data-act="gentoggle" ${(libOv.settings||{}).autoGen===false?'':'checked'} style="width:17px;height:17px"/> Create them automatically when I open Clio</label>${(((libOv.hide||{}).ids||[]).length)?`<div style="margin-top:8px"><button class="btn btn-g" data-act="unhide">Bring back the ${(libOv.hide.ids||[]).length} post${libOv.hide.ids.length>1?'s':''} I removed from the calendar</button></div>`:''}</div>`;
+  <label style="display:flex;gap:8px;align-items:center;cursor:pointer;font-size:13px;color:var(--text2)"><input type="checkbox" data-act="gentoggle" ${(libOv.settings||{}).autoGen===false?'':'checked'} style="width:17px;height:17px"/> Create them automatically when I open Clio</label></div><div style="margin-top:14px"><div class="sec" style="margin:0 0 4px">Caption prompt</div><div class="meta" style="margin:0 0 6px">The instructions that get copied with every post when you press Copy caption prompt. Edit it and it saves on its own.</div><textarea data-lib="settings" data-f="capRules" style="min-height:380px;font-size:13px;line-height:1.5">${esc(capRules())}</textarea><div style="margin-top:6px"><button class="btn btn-g" data-act="capreset">Back to the standard version</button></div></div><div>${(((libOv.hide||{}).ids||[]).length)?`<div style="margin-top:8px"><button class="btn btn-g" data-act="unhide">Bring back the ${(libOv.hide.ids||[]).length} post${libOv.hide.ids.length>1?'s':''} I removed from the calendar</button></div>`:''}</div>`;
 }
 let cadMonth=todayStr().slice(0,7),cadSel=null;
 function cadModeNow(){return (libOv.settings||{}).cadMode||'list';}
@@ -1472,6 +1465,7 @@ function act(a,arg){
   else if(a==='mprev'||a==='mnext'){const[y,m]=calMonth.split('-').map(Number);const d=new Date(y,m-1+(a==='mnext'?1:-1),1);calMonth=d.getFullYear()+'-'+pad(d.getMonth()+1);selDay=null;render();}
   else if(a==='mtoday'){calMonth=todayStr().slice(0,7);selDay=todayStr();render();}
   else if(a==='newday')openEdit(null,arg);
+  else if(a==='capreset'){if(confirm('Replace your caption prompt with the standard version?'))saveLib('settings',{capRules:''}).then(()=>{render();toast('Back to the standard version');});}
   else if(a==='hiderow'){hidePost(arg);}
   else if(a==='unhide'){if(confirm('Bring back every post you removed from the calendar?'))saveLib('hide',{ids:[]}).then(()=>{render();toast('Brought back');});}
   else if(a==='delrow'){const p=posts.find(x=>x.id===arg);if(p&&confirm('Delete "'+p.title+'"? This cannot be undone.')){removePost(arg);toast('Deleted');}}
@@ -1552,7 +1546,7 @@ function promoPrompt(){
   const tn=(TYPES[type]&&TYPES[type].l)||type,cvEl=$('f-sum').querySelector('b'),cvn=cvEl?cvEl.textContent:'';
   const wk=(type==='weekly'&&gigs.length&&date)?nightLines(date,addDays(date,6),true):[];
   const extra=$('f-notes').value.trim();
-  const p=CAP_RULES+'\n\nHere is a post I\'m making. [ATTACH THE FINISHED IMAGE]\n\nThis is a '+tn+' post'+(cvn&&!/^No template/.test(cvn)?' made with the "'+cvn+'" look':'')+(title?': "'+title+'"':'')+'. Write the caption in the Belladonna brand voice, referencing what is said in the post itself.'
+  const p=capRules()+'\n\nHere is a post I\'m making. [ATTACH THE FINISHED IMAGE]\n\nThis is a '+tn+' post'+(cvn&&!/^No template/.test(cvn)?' made with the "'+cvn+'" look':'')+(title?': "'+title+'"':'')+'. Write the caption in the Belladonna brand voice, referencing what is said in the post itself.'
    +(hit?'\n\nText on the post:\n"'+hit.item.t+'"':'')+(wk.length?'\n\nFacts to use (one per line):\n'+wk.join('\n'):'')+(extra?'\n\nExtra direction: '+extra:'')
    +'\n\nPlatform: '+($('f-plat').value||'IG + FB')+'.';
   $('f-muse').value=p;$('f-muse-wrap').style.display='';
@@ -1561,10 +1555,10 @@ function promoPrompt(){
 function fillForm(p){
   curBankCat=p.bankCat||'';
   $('f-date').value=p.date;$('f-time').value=p.time||'';$('f-type').value=p.type;$('f-plat').value=p.platform||'';
-  $('f-title').value=p.title;$('f-cap').value=p.caption||'';$('f-hash').value=p.hashtags||'';$('f-img').value=p.imageUrl||'';imgPrev();$('f-notes').value=p.notes||'';$('f-imgtext').value=p.imageText||'';fillImgPick();
+  $('f-title').value=p.title;$('f-cap').value=p.caption||'';$('f-hash').value=p.hashtags||'';$('f-img').value=p.imageUrl||'';imgPrev();$('f-notes').value=p.notes||'';
   $('f-created').checked=!!p.created;$('f-sched').checked=!!p.scheduled;$('f-posted').checked=!!p.posted;
   $('f-muse-wrap').style.display='none';
-  fillBank(p.bankRef||'');
+  fillBank(p.bankRef||'');fillImgList(p);
   $('f-grp').value=p.grp||'';
   $('grp-list').innerHTML=[...new Set(posts.map(x=>x.grp).filter(Boolean))].map(g=>`<option value="${esc(g)}">`).join('');
   renderTags();renderWin();renderSum();$('f-more').open=false;
@@ -2412,15 +2406,21 @@ function bankCommit(c,q){
   if(lines.length){const at=Date.now();cats[c].made=[...lines.map((t,i)=>({id:'m'+at.toString(36)+i,t,at})),...(cats[c].made||[])].slice(0,60);ch=true;}
   if(ch)saveLib('bank',{cats},true);
 }
-function fillImgPick(){
-  const sel=$('f-imgpick');if(!sel)return;
-  sel.innerHTML='<option value="">Pick a line you recently made into an image</option>'+Object.entries(bankData()).map(([c,v])=>{const m=(v.made||[]).slice(0,25);return m.length?`<optgroup label="${esc(v.name)}">${m.map(x=>`<option value="${c}|${x.id}">${esc(x.t.length>80?x.t.slice(0,80)+'…':x.t)}</option>`).join('')}</optgroup>`:'';}).join('');
+function fillImgList(p){
+  const dl=$('img-list');if(!dl)return;const seen=new Set(),out=[];
+  const add=t=>{t=String(t||'').trim();if(t&&!seen.has(t)){seen.add(t);out.push(t);}};
+  const cats=bankData();
+  Object.values(cats).forEach(v=>(v.items||[]).filter(x=>!x.used).forEach(x=>add(x.t)));
+  Object.values(cats).forEach(v=>(v.made||[]).slice(0,25).forEach(x=>add(x.t)));
+  dl.innerHTML=out.map(t=>`<option value="${esc(t)}">`).join('');
+  const h=p&&p.bankRef?bankFind(p.bankRef):null;
+  $('f-imgtext').value=p&&p.imageText?p.imageText:(h?h.item.t:'');
 }
-function bankPickText(){const h=bankFind($('f-bank').value);if(h&&h.item&&!$('f-imgtext').value.trim())$('f-imgtext').value=h.item.t;}
-function pickImgText(){
-  const v=$('f-imgpick').value;if(!v)return;const[c,i]=v.split('|'),x=((bankData()[c]||{}).made||[]).find(m=>m.id===i);
-  if(x){$('f-imgtext').value=x.t;toast('Added to "What is on the image"');}
-  $('f-imgpick').value='';
+function imgTextPick(){
+  const v=$('f-imgtext').value.trim(),sel=$('f-bank');let ref='';
+  if(v)Object.entries(bankData()).forEach(([c,cat])=>(cat.items||[]).forEach(x=>{if(!ref&&!x.used&&String(x.t).trim()===v)ref=c+'|'+x.id;}));
+  const cur=sel.value;
+  if(ref&&[...sel.options].some(o=>o.value===ref))sel.value=ref;else if(!ref&&cur&&!(bankFind(cur)&&String(bankFind(cur).item.t).trim()===v))sel.value='';
 }
 let bankRestored=false;
 let mdT=0;
@@ -2634,11 +2634,41 @@ async function syncBuffer(manual){
 }
 
 /* Caption helper that costs nothing: builds a ready-to-paste prompt for the ChatGPT chat you already use */
-const CAP_RULES='You write social media captions for Belladonna, a gothic, elegant live-entertainment brand in the Pacific Northwest (Music Bingo, Karaoke, Trivia and Sing-Along nights at local venues). Voice: warm, witty, a little mysterious, never cheesy. No emojis, no hashtags, no clip-art phrases like "get ready to party". Under 600 characters. Use only the facts below; never invent a venue, time, prize or date. If a detail is missing, leave it out. End with a short call to action when it fits. Return only the caption text.';
-function bankBrief(ref){
+const DEFAULT_CAP_RULES=`You are writing one social media caption for Belladonna Nights (the public name of Belladonna Audio Alchemies), a live entertainment company in the Seattle-Tacoma area, based in Auburn, WA. We run Music Bingo, Karaoke, Trivia, Sing-Along and themed nights at bars and venues. The look is gothic: black, gold and deep pink. The personality is not. You don't know us, so here is exactly how we talk.
+
+WHO IS TALKING
+The funniest person at the table, who also happens to be running the night. Dry, observant, a little wicked, warm underneath. The friend who talks everyone into going out on a Wednesday and is right about it. We tease the experience, never the person, and never punch down. We invite. We never beg and we never fake urgency.
+
+HOW TO WRITE IT
+- Sound like a real person texting a friend, not a brand. Short sentences, contractions, natural spoken rhythm. A fragment is fine.
+- The first line does the work. Make it specific and funny enough to stop a scroll. Never open with the date, "Join us" or "Come out".
+- Say one true, specific thing about nights out (the song everyone swears they "don't really sing", the friend who has opinions about trivia) instead of a general claim about fun. Specific beats clever. Clever never beats true.
+- Add to the image, don't repeat it. The post already shows its own words. The caption is the next line of the joke, the reaction, or the invitation.
+- Plain words. One exclamation point at most, and only if it earns it.
+- End with one small, human next step when it fits ("bring the friend who swears they can't sing"). Never "link in bio" unless I say so.
+- Under 600 characters. Instagram works best at 2 to 4 short lines.
+
+NEVER
+- Corporate or marketing language: "elevate", "thrilled to announce", "unforgettable", "join us for an evening of".
+- Influencer pep or trendy slang: "get ready to", "who's ready", "let's goooo", "vibes", "slay".
+- Stock bar jokes you could put under any photo: "liquid courage", "sing your heart out", "good times", "tag a friend who...". Skip them unless I ask.
+- Witch, spell, potion or darkness puns, or theatrical Victorian talk. The look is gothic, the writing is not. Don't call a night "magical" or "spellbinding".
+- Stacked rhetorical questions, or "Whether you're a... or a..." lines.
+- Emojis, hashtags, quotation marks around the whole caption, or labels like "Caption:".
+- Inventing a venue, time, date, prize, name or number. If a detail is missing, leave it out.
+
+HOW TO READ THE POST INFO BELOW
+- "Post image description" (or "The exact text that appears on the image") is the words printed on the graphic, or a description of what it shows. Write to fit it. Do not repeat it word for word.
+- Text in [square brackets] is only my note for where a carousel splits into slides. Each bracketed item is one slide, and the part before the first bracket is the cover slide. People never see the brackets. Never put brackets in the caption, never write "slide 1" or "slide 2", and never read the slides out as a list. Write about the idea of the whole carousel. You may mention one or two items naturally if it makes the joke land. You may say "swipe" once if it fits.
+- Text in ** ** (double asterisks) describes a picture on the graphic, not words. Never write the asterisks. Mention the picture only if it adds to the joke.
+- A slide written "Song - Artist" is the song title and its artist. Treat it as one thing.
+
+Return only the caption text, ready to paste.`;
+function capRules(){return ((libOv.settings||{}).capRules||'').trim()||DEFAULT_CAP_RULES;}
+function bankBrief(ref,hasText){
   const[c,id]=String(ref||'').split('|'),cat=c?bankData()[c]:null;if(!cat)return '';
   const it=(cat.items||[]).find(x=>String(x.id)===id);
-  return '\nWhat the image is: a "'+cat.name+'" post'+(it?'\nThe exact text that appears on the image: '+it.t:'')+(cat.pnotes?'\nNotes for this kind of post: '+cat.pnotes:'');
+  return '\nWhat the image is: a "'+cat.name+'" post'+(it&&!hasText?'\nThe exact text that appears on the image: '+it.t:'')+(cat.pnotes?'\nNotes for this kind of post: '+cat.pnotes:'');
 }
 function capPrompt(){
   const type=$('f-type').value,title=$('f-title').value.trim(),date=$('f-date').value;
@@ -2647,7 +2677,7 @@ function capPrompt(){
   const mo=(type==='monthly'&&gigs.length&&date)?(()=>{const d=new Date(date+'T12:00:00');return nightLines(ymd(new Date(d.getFullYear(),d.getMonth()+1,1)),ymd(new Date(d.getFullYear(),d.getMonth()+2,0)),false);})():[];
   const win=(type==='recap'&&date)?winLines(date.slice(0,7),false).map(x=>'Best Dressed winner - '+x):[];
   const facts=[...wk,...mo,...win],old=$('f-cap').value.trim(),extra=$('f-notes').value.trim();
-  const p=CAP_RULES+'\n\nPost type: '+(TYPES[type]?.l||type)+'\nPost title: '+title+(date?'\nPost date: '+date:'')+($('f-imgtext').value.trim()?'\nWhat is on the image: '+$('f-imgtext').value.trim():'')+bankBrief($('f-bank')&&$('f-bank').value)+'\nPlatform: '+($('f-plat').value||'IG + FB')+
+  const p=capRules()+'\n\nPost type: '+(TYPES[type]?.l||type)+'\nPost title: '+title+(date?'\nPost date: '+date:'')+($('f-imgtext').value.trim()?'\nPost image description (the words on the graphic, or what it shows): '+$('f-imgtext').value.trim():'')+bankBrief($('f-bank')&&$('f-bank').value,!!$('f-imgtext').value.trim())+'\nPlatform: '+($('f-plat').value||'IG + FB')+
     (facts.length?'\nFacts to use (one per line):\n'+facts.join('\n'):'')+(old?'\n\nCurrent draft to improve:\n'+old:'')+(extra?'\n\nExtra direction: '+extra:'');
   $('f-muse').value=p;$('f-muse-wrap').style.display='';
   (navigator.clipboard?navigator.clipboard.writeText(p).then(()=>toast('Caption prompt copied. Paste it into ChatGPT, then paste the answer here'),()=>toast('Select and copy the prompt below')):toast('Select and copy the prompt below'));
@@ -2935,7 +2965,7 @@ function exportBuffer(){
   toast(`Instagram ${ig.length} · Facebook ${fb.length}`+(noCap?` · ${noCap} skipped (no caption)`:'')+(igNoImg?` · ${igNoImg} Instagram posts need an image`:''));
 }
 
-window.pickImgText=pickImgText;window.bankPickText=bankPickText;window.embCopyCur=f=>embCopy(editingId,f);window.embUse=embUse;window.closeEdit=closeEdit;window.saveEdit=saveEdit;window.addSlide=addSlide;window.delPost=delPost;window.encore=encore;window.muse=muse;window.libSaveEdit=libSaveEdit;window.ledRule=ledRule;window.libHide=libHide;window.banUpload=banUpload;window.addTags=addTags;window.setWin=setWin;window.tw=null;Object.defineProperty(window,'tw',{get:()=>tw,set:v=>{tw=v;}});Object.defineProperty(window,'twKey',{get:()=>twKey});window.twPick=twPick;window.twAdd=twAdd;window.twDelTask=twDelTask;window.twMove=twMove;window.twNewSet=twNewSet;window.twDelSet=twDelSet;window.twSave=twSave;window.libUpload=libUpload;window.aiCaption=aiCaption;window.capPrompt=capPrompt;window.openGfx=openGfx;window.gfxPick=gfxPick;window.gfxSaveBg=gfxSaveBg;window.gfxUse=gfxUse;window.uploadImg=uploadImg;window.imgPrev=imgPrev;
+window.imgTextPick=imgTextPick;window.embCopyCur=f=>embCopy(editingId,f);window.embUse=embUse;window.closeEdit=closeEdit;window.saveEdit=saveEdit;window.addSlide=addSlide;window.delPost=delPost;window.encore=encore;window.muse=muse;window.libSaveEdit=libSaveEdit;window.ledRule=ledRule;window.libHide=libHide;window.banUpload=banUpload;window.addTags=addTags;window.setWin=setWin;window.tw=null;Object.defineProperty(window,'tw',{get:()=>tw,set:v=>{tw=v;}});Object.defineProperty(window,'twKey',{get:()=>twKey});window.twPick=twPick;window.twAdd=twAdd;window.twDelTask=twDelTask;window.twMove=twMove;window.twNewSet=twNewSet;window.twDelSet=twDelSet;window.twSave=twSave;window.libUpload=libUpload;window.aiCaption=aiCaption;window.capPrompt=capPrompt;window.openGfx=openGfx;window.gfxPick=gfxPick;window.gfxSaveBg=gfxSaveBg;window.gfxUse=gfxUse;window.uploadImg=uploadImg;window.imgPrev=imgPrev;
 window.addEventListener('hashchange',()=>{let h=location.hash.slice(1);if(['library','bank','cadence','inventory'].includes(h)){location.hash='templates';return;}if((TABS.some(t=>t[0]===h)||h==='events')&&h!==tab){editing=false;tab=h;render();}});
 applyTheme(document.documentElement.getAttribute('data-theme')||'dark');
 init();
