@@ -157,6 +157,15 @@ select:focus,input:focus,textarea:focus{outline:none;border-color:var(--gold);}
 .gtd{position:absolute;left:0;right:0;bottom:0;padding:3px 6px;font-family:var(--cinzel);font-size:9px;letter-spacing:.06em;background:rgba(0,0,0,.65);color:var(--gold2);text-align:center}
 @media(max-width:600px){.has{display:none}.time{width:44px}.badge{display:none}.mode{display:none}.logo{font-size:1.2rem}
   .mc{min-height:58px;padding:3px}.mp{font-size:0;padding:0;width:6px;height:6px;border-radius:50%;display:inline-block;margin:2px 1px 0 0}.mp.more{width:auto;font-size:8px;height:auto}}
+
+/* Template builder look */
+.tb select{appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='9' viewBox='0 0 14 9'%3E%3Cpath d='M1 1l6 6 6-6' fill='none' stroke='%23c9a96e' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 14px center;padding-right:38px;cursor:pointer}
+.tb select,.tb input[type=text],.tb textarea{border:1px solid var(--border-gold);border-radius:10px;padding:10px 12px}
+.tb select:focus,.tb input[type=text]:focus,.tb textarea:focus{outline:none;border-color:var(--gold);box-shadow:0 0 0 2px var(--gold-dim)}
+.tb .f>label,.tb .lbl{display:flex;align-items:center;gap:8px;color:var(--gold2);font-weight:600;letter-spacing:.02em}
+.tb .f>label::before,.tb .lbl::before{content:'\2726';color:var(--gold);font-size:.8em}
+.tb .sec{display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--border-gold);padding-bottom:6px;margin-top:18px}
+.tb .sec::before{content:'\2726';color:var(--gold);font-size:.8em}
 </style>
 </head>
 <body>
@@ -2364,7 +2373,7 @@ function missingCities(){
   return names.filter(n=>!cityMap()[rtKey(n)]);
 }
 function venueCitiesHtml(){
-  const names=[...new Set(gigs.filter(isPublicGig).map(g=>g.venue).filter(Boolean))].sort((a,b)=>String(a).localeCompare(String(b))),m=cityMap();
+  const seenK=new Set(),names=gigs.filter(isPublicGig).map(g=>g.venue).filter(Boolean).filter(n=>{const k=rtKey(n);if(seenK.has(k))return false;seenK.add(k);return true;}).sort((a,b)=>String(a).localeCompare(String(b))),m=cityMap();
   return `<div class="card" style="border-color:var(--border-gold)"><div class="f" style="margin-bottom:6px"><label>Venue cities (HQ does not store a city, so Tonight stories use these)</label></div>
   ${names.length?names.map(n=>`<div style="display:flex;gap:8px;align-items:center;margin-bottom:5px"><span class="meta" style="margin:0;width:44%;flex-shrink:0">${esc(n)}</span><input type="text" data-vc="${esc(rtKey(n))}" value="${esc(m[rtKey(n)]||'')}" placeholder="City"/></div>`).join(''):'<div class="meta">Venues appear here once HQ nights load.</div>'}</div>`;
 }
@@ -2794,7 +2803,7 @@ function tplCard(t){
   const open=!!tplOpenMap()[t.id],pseudo=t.id==='_none';
   if(!open)return `<div class="card" style="padding:10px 12px;margin-bottom:6px">${tplHead(t,false)}</div>`;
   const types=tplTypes(t),cats=tplCats(t),slide=MONTHLY_SET_IDS.includes(t.id)&&t.id!=='monthly';
-  return `<div class="card" style="margin-bottom:8px">${tplHead(t,true)}<div style="margin-top:10px">
+  return `<div class="card tb" style="margin-bottom:8px">${tplHead(t,true)}<div style="margin-top:10px">
     ${pseudo?'':`<div class="f" style="max-width:360px"><label>How do you make this?</label><select class="mini" data-lib="${t.id}" data-f="makeStyle"><option value="every" ${tplMake(t)==='every'?'selected':''}>Every time (weekly, monthly, events)</option><option value="batch" ${tplMake(t)==='batch'?'selected':''}>Batch-made, as needed</option></select></div>`}
     ${pseudo?'':`<div class="sec">Prompt for ChatGPT</div><div style="max-width:640px"><div class="meta" style="margin-top:0">Paste the prompt you use in ChatGPT to make this image. It saves when you click out of the box.</div><textarea id="tp-${t.id}" data-lib="${t.id}" data-f="prompt" style="min-height:160px">${esc((libOv[t.id]||{}).prompt||'')}</textarea><div class="tools" style="margin:6px 0 0"><button class="btn btn-gold" data-act="tplpromptcopy" data-arg="${t.id}">Copy prompt</button></div></div>`}
     ${pseudo?'':tplLookHtml(t)}
