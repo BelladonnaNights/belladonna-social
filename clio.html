@@ -1023,11 +1023,16 @@ function vMonth(){
     `<div class="mgrid">${DN.map(d=>`<div class="mh">${d}</div>`).join('')}${grid}</div>`+
     (sel?`<div class="sec">${dayName(selDay)}</div>${sel.length?sel.map(rowHtml).join(''):'<div class="empty">Nothing on this day.</div>'}<div style="margin-top:8px"><button class="btn btn-g" data-act="newday" data-arg="${selDay}">+ Add post on this day</button></div>`:'');
 }
+function cadUnsched(){
+  let L=[];try{L=tplList().filter(t=>!MONTHLY_SET_IDS.includes(t.id)&&!tplTypes(t).some(e=>!e.silenced));}catch(e){}
+  if(!L.length)return '';
+  return `<div class="monthh" style="font-size:1.1rem;margin:14px 0 6px">Templates not scheduled yet</div>`+L.map(t=>`<div class="card" style="padding:8px 12px;margin-bottom:4px;display:flex;gap:10px;align-items:center;flex-wrap:wrap"><div style="flex:1;min-width:160px"><b style="font-weight:600">${esc(t.name)}</b></div><div class="meta" style="margin:0">Not scheduled</div><button class="btn btn-g" data-act="tplgo" data-arg="${t.id}">Open template</button></div>`).join('');
+}
 function cadListOnly(){
   const all=cadAll().filter(e=>qHas(cadQ,e.name,e.nick,e.use,e.group,freqText(e))),L=all.filter(e=>!e.silenced),sil=all.filter(e=>e.silenced),groups=orderGroups([...new Set(L.map(e=>e.group||'Other'))]);
   const hid=libList(true).filter(e=>e.deleted&&!e.id.startsWith('cv_'));
   return searchBox('cadq',cadQ,'Search the cadence list')+cadTop()+groups.map(g=>`<div class="monthh" style="font-size:1.1rem;margin:14px 0 6px">${esc(g)}</div>`+L.filter(e=>(e.group||'Other')===g).map(e=>cadRow(e,false)).join('')).join('')+
-  (sil.length?`<div class="monthh" style="font-size:1.1rem;margin:22px 0 6px">Paused / Retired</div>`+sil.map(e=>cadRow(e,true)).join(''):'')+
+  cadUnsched()+(sil.length?`<div class="monthh" style="font-size:1.1rem;margin:22px 0 6px">Paused / Retired</div>`+sil.map(e=>cadRow(e,true)).join(''):'')+
   (hid.length?`<div class="monthh" style="font-size:1.1rem;margin:22px 0 6px">Hidden</div>`+hid.map(e=>cadRow(e,true,true)).join(''):'');
 }
 function vCalendar(){vMonth();$('view').insertAdjacentHTML('beforeend','<div class="sec" style="margin-top:28px">Cadence</div>'+cadListOnly());}
@@ -1292,7 +1297,8 @@ function howBlock(e){
   };
   return `<div style="flex-basis:100%;border-top:1px solid var(--border);padding-top:6px">${one('brain','How To Make It: Idea Brainstorm')}${one('batch','How To Make It: Batch Creation')}${one('post','How To Make It: Ready for Post')}</div>`;
 }
-function cadRow(e,dim,restore){
+function cadRow(e,dim,restore,full){
+  if(!full)return `<div class="card" style="padding:8px 12px;margin-bottom:4px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;${dim?'opacity:.55':''}"><div style="flex:1;min-width:160px"><b style="font-weight:600">${esc(e.name)}</b></div><div class="meta" style="margin:0;color:var(--gold2)">${esc(freqText(e))}</div>${restore?`<button class="btn btn-p" data-act="librestore" data-arg="${e.id}">Restore</button>`:`<button class="btn btn-g" data-act="libedit" data-arg="${e.id}">Edit</button>`}</div>`;
   const tid=effTpl(e),tn=tid?((tplList().find(x=>x.id===tid)||{}).name||''):'';
   const img=tid?((libOv[tid]||{}).tplImg||''):'';
   return `<div class="card" style="padding:10px 12px;margin-bottom:6px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;${dim?'opacity:.55':''}">
@@ -1302,7 +1308,7 @@ function cadRow(e,dim,restore){
       ${restore?`<button class="btn btn-p" data-act="librestore" data-arg="${e.id}">Restore</button>`:`${String(e.id).startsWith('bk:')?`<button class="btn btn-g" data-act="bkpause" data-arg="${e.cat}">${e.silenced?'Resume':'Pause / Retire'}</button>`:''}<button class="btn btn-g" data-act="libedit" data-arg="${e.id}">Edit time &amp; frequency</button>`}${restore?'':howBlock(e)}</div>`;
 }
 function cadTop(){
-  return `<div class="sub" style="margin:0 0 8px">Everything you post on a rhythm, grouped. Each line has a Frequency (like “every Monday” or “7, 3 days before and the day of each big night”), and Clio creates the posts for the next 60 days from it. Change a frequency and the new posts follow it. Posts already on your calendar are never duplicated or moved. Silenced ones are turned off and sit at the bottom.</div>
+  return `<div class="sub" style="margin:0 0 8px">What is scheduled to post, and when. Everything about how to make each one is on the Templates page.</div>
   <div class="bar"><button class="btn btn-p" data-act="libnew">+ Add a post type</button><button class="btn btn-g" data-act="gennow">Create posts now (${planGen().length} waiting)</button>
   <label style="display:flex;gap:8px;align-items:center;cursor:pointer;font-size:13px;color:var(--text2)"><input type="checkbox" data-act="gentoggle" ${(libOv.settings||{}).autoGen===false?'':'checked'} style="width:17px;height:17px"/> Create them automatically when I open Clio</label></div><div>${(((libOv.hide||{}).ids||[]).length)?`<div style="margin-top:8px"><button class="btn btn-g" data-act="unhide">Bring back the ${(libOv.hide.ids||[]).length} post${libOv.hide.ids.length>1?'s':''} I removed from the calendar</button></div>`:''}</div>`;
 }
@@ -1351,7 +1357,7 @@ function cadenceHtml(){
   const hid=libList(true).filter(e=>e.deleted&&!e.id.startsWith('cv_'));
   if(cadModeNow()==='cal')return modes+cadTop()+cadCalHtml();
   return modes+cadTop()+
-  groups.map(g=>`<div class="monthh" style="font-size:1.1rem;margin:14px 0 6px">${esc(g)}</div>`+L.filter(e=>(e.group||'Other')===g).map(e=>cadRow(e,false)).join('')).join('')+
+  groups.map(g=>`<div class="monthh" style="font-size:1.1rem;margin:14px 0 6px">${esc(g)}</div>`+L.filter(e=>(e.group||'Other')===g).map(e=>cadRow(e,false)).join('')).join('')+cadUnsched()+
   (sil.length?`<div class="monthh" style="font-size:1.1rem;margin:22px 0 6px">Paused / Retired</div>`+sil.map(e=>cadRow(e,true)).join(''):'')+
   (hid.length?`<div class="monthh" style="font-size:1.1rem;margin:22px 0 6px">Hidden</div>`+hid.map(e=>cadRow(e,true,true)).join(''):'');
 }
@@ -1501,6 +1507,8 @@ function act(a,arg){
   else if(a==='qclear'){if(arg==='tplq')tplQ='';else cadQ='';render();}
   else if(a==='bkpause'){const cats=bankData();if(!cats[arg])return;cats[arg].silenced=!cats[arg].silenced;saveBank(cats);if(cats[arg].silenced)setTimeout(()=>offerClear('bk:'+arg),50);}
   else if(a==='howedit'){howEditId=arg;render();}
+  else if(a==='tplgo'){const o={...tplOpenMap()};o[arg]=true;saveLib('tplui',{open:o},true).then(()=>setTab('templates'));}
+  else if(a==='tplpromptcopy'){const e=document.getElementById('tp-'+arg);if(e&&e.value.trim())copyTxt(e.value.trim());else toast('Nothing to copy yet. Type the prompt first.');}
   else if(a==='livefold'){const o={...((libOv.tplui||{}).liveOpen||{})};if(o[arg])delete o[arg];else o[arg]=true;saveLib('tplui',{liveOpen:o},true).then(render);}
   else if(a==='grpadd')slideFrom(arg);
   else if(a==='librestore'){saveLib(arg,{deleted:false}).then(render);}
@@ -2788,12 +2796,13 @@ function tplCard(t){
   const types=tplTypes(t),cats=tplCats(t),slide=MONTHLY_SET_IDS.includes(t.id)&&t.id!=='monthly';
   return `<div class="card" style="margin-bottom:8px">${tplHead(t,true)}<div style="margin-top:10px">
     ${pseudo?'':`<div class="f" style="max-width:360px"><label>How do you make this?</label><select class="mini" data-lib="${t.id}" data-f="makeStyle"><option value="every" ${tplMake(t)==='every'?'selected':''}>Every time (weekly, monthly, events)</option><option value="batch" ${tplMake(t)==='batch'?'selected':''}>Batch-made, as needed</option></select></div>`}
+    ${pseudo?'':`<div class="sec">Prompt for ChatGPT</div><div style="max-width:640px"><div class="meta" style="margin-top:0">Paste the prompt you use in ChatGPT to make this image. It saves when you click out of the box.</div><textarea id="tp-${t.id}" data-lib="${t.id}" data-f="prompt" style="min-height:160px">${esc((libOv[t.id]||{}).prompt||'')}</textarea><div class="tools" style="margin:6px 0 0"><button class="btn btn-gold" data-act="tplpromptcopy" data-arg="${t.id}">Copy prompt</button></div></div>`}
     ${pseudo?'':tplLookHtml(t)}
     <div class="sec">Words${cats.length?' ('+cats.length+')':''}</div>
     ${cats.length?cats.map(([c,v])=>bankCatHtml(c,v)).join(''):'<div class="meta">No word bank yet. Add a category to keep ready-to-post lines for this look.</div>'}
     <div class="tools" style="margin:6px 0 0"><button class="btn btn-g" data-act="bknewt" data-arg="${pseudo?'':t.id}">+ Add a category</button></div>
     <div class="sec">When</div>
-    ${slide?'<div class="meta">This is a slide of the monthly post. It is scheduled by "Monthly Announcement".</div>':(types.length?types.map(e=>cadRow(e,e.silenced)).join(''):'<div class="meta">Nothing is scheduled with this look. Add a post type to schedule it.</div>')}
+    ${slide?'<div class="meta">This is a slide of the monthly post. It is scheduled by "Monthly Announcement".</div>':(types.length?types.map(e=>cadRow(e,e.silenced,false,true)).join(''):'<div class="meta">Nothing is scheduled with this look. Add a post type to schedule it.</div>')}
     <div class="tools" style="margin:6px 0 0"><button class="btn btn-g" data-act="libnew">+ Add a post type</button></div></div></div>`;
 }
 const TPL_TIERS=[['night','Every night (automatic from HQ)'],['week','Every week'],['month','Every month'],['event','Around each big night'],['manual','Every time, not scheduled']];
