@@ -1517,7 +1517,7 @@ function act(a,arg){
   else if(a==='bkpause'){const cats=bankData();if(!cats[arg])return;cats[arg].silenced=!cats[arg].silenced;saveBank(cats);if(cats[arg].silenced)setTimeout(()=>offerClear('bk:'+arg),50);}
   else if(a==='howedit'){howEditId=arg;render();}
   else if(a==='tplgo'){const o={...tplOpenMap()};o[arg]=true;saveLib('tplui',{open:o},true).then(()=>setTab('templates'));}
-  else if(a==='tplpromptcopy'){const e=document.getElementById('tp-'+arg);if(e&&e.value.trim())copyTxt(e.value.trim());else toast('Nothing to copy yet. Type the prompt first.');}
+  else if(a==='tplpromptcopy'){const e=document.getElementById('tp-'+arg);if(e&&e.value.trim())copyTxt(withSafe(e.value));else toast('Nothing to copy yet. Type the prompt first.');}
   else if(a==='livefold'){const o={...((libOv.tplui||{}).liveOpen||{})};if(o[arg])delete o[arg];else o[arg]=true;saveLib('tplui',{liveOpen:o},true).then(render);}
   else if(a==='grpadd')slideFrom(arg);
   else if(a==='librestore'){saveLib(arg,{deleted:false}).then(render);}
@@ -1725,6 +1725,11 @@ function museCanvas(ent,date){
   const look={cv_snark:'a pure black canvas with high-contrast gold and cream serif text, fast to read',cv_atmos:'a low-lit cinematic dark photo background framed in gold',cv_scroll:'a cream parchment canvas like an official decree, deep burgundy serif text, gold Victorian frame',cv_reel:'a 1080x1920 vertical frame with dark border, gold filigree, a top plaque, and a clear empty center for video'}[cvId]||'a dark gothic canvas with gold accents';
   return `Create a ${cvId==='cv_reel'?'1080x1920':'1080x1350'} Instagram graphic for Belladonna, a live entertainment brand. ${STYLE}\n\nCanvas: ${look}.\n${cv?'(No example saved yet for "'+cv.name+'". Upload one in Library and this prompt becomes an edit of it.)\n':''}\nTop plaque: "${badge||'BELLADONNA'}"\nMain text, exactly as written:\n"${text}"\nSmall footer: belladonnanights.com\n\nKeep the text large and perfectly spelled.`;
 }
+const IG_SAFE=`Create the entire design on a 4:5 portrait canvas (1080 × 1350 px).
+Position the decorative outer border 6% inward from both the left and right edges, with 2% padding at the top and 3.5% at the bottom.
+The border must be fully contained within the canvas, including all corner flourishes and decorative elements. Maintain a consistent, intentional black buffer outside the border.
+Do not crop, extend, or push any part of the border against the canvas edges. Preserve this exact border placement and margin spacing across all future designs.`;
+function withSafe(p){p=String(p||'').trim();return p.indexOf('4:5 portrait canvas (1080')>=0?p:(p?p+'\n\n':'')+IG_SAFE;}
 function muse(){
   const type=$('f-type').value,ent=libList(true).find(x=>x.id===type)||{},tpl=(libOv[type]||{}).tplImg;
   let p;
@@ -1732,7 +1737,7 @@ function muse(){
   if(type==='monthly')p=museMonthly($('f-title').value||'',$('f-date').value);
   else if(ent.canvas||$('f-bank').value)p=museCanvas(ent,$('f-date').value);
   else p=tpl?museEdit(type,$('f-title').value||'',$('f-date').value):museFor(type,$('f-title').value||'',$('f-date').value);
-  $('f-muse').value=p;$('f-muse-wrap').style.display='';
+  p=withSafe(p);$('f-muse').value=p;$('f-muse-wrap').style.display='';
   (navigator.clipboard?navigator.clipboard.writeText(p).then(()=>toast('Prompt copied. Attach your example image in ChatGPT if it says to'),()=>toast('Select and copy the prompt below')):Promise.resolve(toast('Select and copy the prompt below')));
 }
 
@@ -2459,7 +2464,7 @@ function mdAct(el){
   else if(a==='bkcopypn'){const el=document.querySelector('[data-bx="'+arg+'|pnotes"]'),t=((el?el.value:(bankData()[arg]||{}).pnotes)||'').trim();copyTxt((t?t+'\n\n':'')+catLive(arg));}
   else if(a==='bkcopyqo'){const q=$('bkq-'+arg).value.trim();copyTxt(q);if(q)bankCommit(arg,q);}
   else if(a==='bkcopyx')copyTxt($('bkx-'+arg).value.trim());
-  else if(a==='bkcopyp')copyTxt($('bkmp').value.trim());
+  else if(a==='bkcopyp')copyTxt(withSafe($('bkmp').value));
   else if(a==='bkcopybp')copyTxt($('bkbp').value.trim());
   else if(a==='bkresetbp'){$('bkbp').value=DEFAULT_BRAIN;brainPromptSave('');}
   else if(a==='bkcopyb'){
@@ -2472,7 +2477,7 @@ function mdAct(el){
   else if(a==='bkcopyq'){
     const q=($('bkq-'+arg).value||'').trim();if(!q){toast('Add some posts to Make now first');return;}
     const v=bankData()[arg]||{},cv=libList(true).find(x=>x.id===v.canvas);
-    copyTxt($('bkmp').value.trim()+'\n\n'+(cv?'TEMPLATE LOOK: '+cv.name+' (attach your saved example image from Library)\n':'')+(v.badge?'TOP BADGE TEXT: '+v.badge+'\n':'')+'\nNOTES FOR THIS CATEGORY:\n'+((v.pnotes||'').trim()?v.pnotes.trim()+'\n\n':'')+catLive(arg)+'\n\nPOSTS TO MAKE (one PNG each, carousels where there are [brackets]):\n'+q);
+    copyTxt(withSafe($('bkmp').value.trim()+'\n\n'+(cv?'TEMPLATE LOOK: '+cv.name+' (attach your saved example image from Library)\n':'')+(v.badge?'TOP BADGE TEXT: '+v.badge+'\n':'')+'\nNOTES FOR THIS CATEGORY:\n'+((v.pnotes||'').trim()?v.pnotes.trim()+'\n\n':'')+catLive(arg)+'\n\nPOSTS TO MAKE (one PNG each, carousels where there are [brackets]):\n'+q));
     bankCommit(arg,q);
   }
 }
