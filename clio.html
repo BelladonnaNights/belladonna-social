@@ -541,7 +541,7 @@ function applyTheme(t){
   try{localStorage.setItem('bn_clio_theme',t);}catch(e){}
   const b=document.getElementById('th');if(b)b.textContent=t==='dark'?'☀ Light':'☾ Dark';
 }
-const TABS=[['dashboard','Dashboard'],['calendar','Calendar'],['campaigns','Campaigns'],['studio','Studio'],['events','Events'],['echo','Echo'],['templates','Templates'],['listings','Listings']];
+const TABS=[['dashboard','Dashboard'],['calendar','Calendar'],['campaigns','Sponsor campaigns'],['studio','Studio'],['events','Events'],['echo','Echo'],['templates','Templates'],['listings','Listings']];
 if(['library','bank','cadence','inventory'].includes(tab))tab='templates';
 if(!TABS.some(t=>t[0]===tab)&&tab!=='events')tab='dashboard';
 
@@ -1064,36 +1064,136 @@ async function setCampaign(m,field,val){
   }
   render();
 }
+/* ── SPONSOR CAMPAIGNS: one theme a month, a different local business sponsors a night each week ── */
+const SPON_STATUS=['To ask','Asked','Said yes','Said no'];
+const SPON_WK_STATUS=['Needed','Asked','Confirmed','Prizes in','Paid'];
+const SPON_TPL_DEFAULT={subject:'Sponsor a night with Belladonna: {theme} in {month}',body:`Hi {contact},
+
+I'm Ahnna with Belladonna Entertainment. Each week this month we're teaming up with one local business for a special night at {venue}, and I'd love for {sponsor} to be a featured sponsor.
+
+Here's the idea: {month}'s theme is {theme}. {venue} makes a four-cocktail flight inspired by it, we sell tickets, and your business is the star of the night. You provide the prizes, and the sponsor fee is just \${fee}.
+
+Would you be open to hearing more?
+
+Ahnna
+Belladonna Entertainment
+www.belladonnanights.com`};
+function sponD(){const d=libOv.sponsors||{};return {areas:d.areas||[],area:d.area||'',prospects:d.prospects||{},weeks:d.weeks||{},template:d.template||null,fee:d.fee||100};}
+function sponAreas(){const d=sponD();if(d.areas.length)return d.areas;return [...new Set(Object.values(cityMap()).map(x=>String(x||'').trim()).filter(Boolean))];}
+function sponArea(){const d=sponD(),L=sponAreas();return L.indexOf(d.area)>=0?d.area:(L[0]||'');}
+function sponSlug(a){return String(a||'all').toLowerCase().replace(/[^a-z0-9]/g,'')||'all';}
+function sponWkKey(m,i){return m+'_'+sponSlug(sponArea())+'_'+i;}
+function sponList(m){const a=sponArea();return Object.values(sponD().prospects).filter(p=>p&&p.month===m&&(!a||p.area===a)).sort((x,y)=>String(x.name).localeCompare(String(y.name)));}
+function sponTpl(){return sponD().template||SPON_TPL_DEFAULT;}
+function sponOv(html){let el=$('sov');if(!el){el=document.createElement('div');el.className='ov';el.id='sov';el.addEventListener('click',e=>{if(e.target===el)el.classList.remove('show');});document.body.appendChild(el);}el.innerHTML=html;el.classList.add('show');}
+function sponClose(){const el=$('sov');if(el)el.classList.remove('show');}
+function sponV(id){const e=$(id);return e?e.value.trim():'';}
+function sponFill(txt,c){return String(txt).replace(/\{(\w+)\}/g,(x,k)=>c[k]!==undefined&&c[k]!==''?c[k]:x);}
+function sponCtx(p){
+  const m=p.month,ci=campInfo(m),d=sponD();let wk=null,wi=-1;
+  [0,1,2,3].forEach(i=>{const w=d.weeks[m+'_'+sponSlug(p.area||sponArea())+'_'+i];if(!wk&&w&&w.sponsorId===p.id){wk=w;wi=i;}});
+  const mon=wi>=0?mondaysOf(m)[wi]:'';
+  return {sponsor:p.name||'your business',contact:p.contactName||'there',theme:ci.theme||'our monthly theme',month:monthLong(m),area:p.area||sponArea(),fee:String((wk&&wk.fee)||d.fee),venue:(wk&&wk.venue)||'a local venue',week:mon?new Date(mon+'T12:00:00').toLocaleDateString('en-US',{month:'long',day:'numeric'}):'this week'};
+}
+function sponMailP(id){const p=sponD().prospects[id];if(!p)return;const t=sponTpl(),c=sponCtx(p);copyTxt('Subject: '+sponFill(t.subject,c)+'\n\n'+sponFill(t.body,c)+(p.email?'\n\n(To: '+p.email+')':''));}
+function sponMailWk(m,i){const w=sponD().weeks[sponWkKey(m,i)];if(!w)return;const p=w.sponsorId&&sponD().prospects[w.sponsorId];
+  const base=p?{...p}:{id:'',name:w.name,month:m,area:sponArea(),contactName:'',email:''};const t=sponTpl(),c=sponCtx(base);c.venue=w.venue||c.venue;c.fee=String(w.fee||c.fee);c.sponsor=w.name||c.sponsor;
+  const mon=mondaysOf(m)[i];if(mon)c.week=new Date(mon+'T12:00:00').toLocaleDateString('en-US',{month:'long',day:'numeric'});
+  copyTxt('Subject: '+sponFill(t.subject,c)+'\n\n'+sponFill(t.body,c)+(p&&p.email?'\n\n(To: '+p.email+')':''));}
+async function sponSave(patch){await saveLib('sponsors',patch);render();}
+function sponAreasEdit(){
+  sponOv(`<div class="box" style="max-width:480px"><h3>Areas</h3><div class="meta">One area per line (a city or part of town). The weekly sponsors and the sponsor prospect list are kept separately for each area. Renaming an area does not move its sponsors.</div>
+  <div class="f"><label>Areas</label><textarea id="sa-list" style="min-height:130px">${esc(sponAreas().join('\n'))}</textarea></div>
+  <div class="acts"><button class="btn btn-g" type="button" onclick="sponClose()">Cancel</button><button class="btn btn-p" type="button" onclick="sponAreasSave()">Save areas</button></div></div>`);
+}
+function sponAreasSave(){const L=[...new Set(($('sa-list').value||'').split('\n').map(x=>x.trim()).filter(Boolean))];const d=sponD();sponClose();sponSave({areas:L,area:L.indexOf(d.area)>=0?d.area:(L[0]||'')});}
+function sponEdit(id,m){
+  const p=id?sponD().prospects[id]:null;if(id&&!p)return;const mm=p?p.month:m;
+  sponOv(`<div class="box" style="max-width:520px"><h3>${p?'Edit sponsor prospect':'New sponsor prospect'}</h3><div class="meta">${esc(monthName(mm))} · ${esc(p?(p.area||'All areas'):(sponArea()||'All areas'))}</div>
+  <div class="f"><label>Business name</label><input type="text" id="sp-name" value="${esc(p?p.name:'')}"/></div>
+  <div class="f2"><div class="f"><label>Kind of business</label><input type="text" id="sp-kind" value="${esc(p?p.kind:'')}"/></div><div class="f"><label>Status</label><select id="sp-status">${SPON_STATUS.map(x=>`<option ${p&&p.status===x?'selected':''}>${x}</option>`).join('')}</select></div></div>
+  <div class="f2"><div class="f"><label>Contact name</label><input type="text" id="sp-who" value="${esc(p?p.contactName:'')}"/></div><div class="f"><label>Email or phone</label><input type="text" id="sp-email" value="${esc(p?p.email:'')}"/></div></div>
+  <div class="f2"><div class="f"><label>Instagram</label><input type="text" id="sp-ig" value="${esc(p?p.ig:'')}"/></div><div class="f"><label>Website</label><input type="text" id="sp-web" value="${esc(p?p.web:'')}"/></div></div>
+  <div class="f"><label>Notes</label><textarea id="sp-notes" style="min-height:80px">${esc(p?p.notes:'')}</textarea></div>
+  <div class="acts">${p?`<button class="btn btn-d" type="button" onclick="sponDel('${esc(id)}')">Remove</button>`:''}<button class="btn btn-g" type="button" onclick="sponClose()">Cancel</button><button class="btn btn-p" type="button" onclick="sponEditSave('${esc(id)}','${esc(mm)}')">Save</button></div></div>`);
+}
+function sponEditSave(id,m){
+  const name=sponV('sp-name');if(!name){toast('Add the business name');return;}
+  const d=sponD(),pr={...d.prospects},old=id?pr[id]:null,nid=id||'s'+Date.now().toString(36);
+  pr[nid]={id:nid,month:m,area:old?old.area:sponArea(),name:name,kind:sponV('sp-kind'),status:sponV('sp-status'),contactName:sponV('sp-who'),email:sponV('sp-email'),ig:sponV('sp-ig'),web:sponV('sp-web'),notes:sponV('sp-notes')};
+  sponClose();sponSave({prospects:pr});
+}
+function sponDel(id){if(!confirm('Remove this sponsor prospect from the list?'))return;const pr={...sponD().prospects};delete pr[id];sponClose();sponSave({prospects:pr});}
+function sponWkEdit(m,i){
+  const d=sponD(),k=sponWkKey(m,i),w=d.weeks[k]||{},L=sponList(m),mon=mondaysOf(m)[i],ci=campInfo(m);
+  sponOv(`<div class="box" style="max-width:520px"><h3>Week ${i+1} sponsor</h3><div class="meta">${esc(mon?new Date(mon+'T12:00:00').toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'}):'')} · ${esc(sponArea()||'All areas')}${ci.weeks[i]?' · '+esc(ci.weeks[i]):''}</div>
+  <div class="f"><label>Sponsor from the prospect list</label><select id="sw-pick"><option value="">Not from the list (type a name below)</option>${L.map(p=>`<option value="${esc(p.id)}" ${w.sponsorId===p.id?'selected':''}>${esc(p.name)}${p.kind?' · '+esc(p.kind):''}</option>`).join('')}</select></div>
+  <div class="f"><label>Sponsor name (if not from the list)</label><input type="text" id="sw-name" value="${esc(w.sponsorId?'':(w.name||''))}"/></div>
+  <div class="f2"><div class="f"><label>Venue</label><input type="text" id="sw-venue" value="${esc(w.venue||'')}"/></div><div class="f"><label>Sponsor fee ($)</label><input type="text" inputmode="numeric" id="sw-fee" value="${esc(w.fee!==undefined?w.fee:d.fee)}"/></div></div>
+  <div class="f"><label>Status</label><select id="sw-status">${SPON_WK_STATUS.map(x=>`<option ${(w.status||'Needed')===x?'selected':''}>${x}</option>`).join('')}</select></div>
+  <div class="f"><label>Prizes the sponsor is providing</label><textarea id="sw-prizes" style="min-height:70px">${esc(w.prizes||'')}</textarea></div>
+  <div class="f"><label>Notes (cocktail flight, ticket price, anything else)</label><textarea id="sw-notes" style="min-height:70px">${esc(w.notes||'')}</textarea></div>
+  <div class="acts">${w.name?`<button class="btn btn-d" type="button" onclick="sponWkClear('${esc(m)}',${i})">Clear this week</button>`:''}<button class="btn btn-g" type="button" onclick="sponClose()">Cancel</button><button class="btn btn-p" type="button" onclick="sponWkSave('${esc(m)}',${i})">Save</button></div></div>`);
+}
+function sponWkSave(m,i){
+  const d=sponD(),pid=sponV('sw-pick'),pp=pid&&d.prospects[pid],name=pp?pp.name:sponV('sw-name'),wk={...d.weeks};
+  wk[sponWkKey(m,i)]={sponsorId:pp?pid:'',name:name,venue:sponV('sw-venue'),fee:parseInt(sponV('sw-fee').replace(/[^\d]/g,''))||0,status:sponV('sw-status'),prizes:sponV('sw-prizes'),notes:sponV('sw-notes')};
+  sponClose();sponSave({weeks:wk});
+}
+function sponWkClear(m,i){const wk={...sponD().weeks};delete wk[sponWkKey(m,i)];sponClose();sponSave({weeks:wk});}
+function sponTplEdit(){
+  const t=sponTpl();
+  sponOv(`<div class="box" style="max-width:640px"><h3>Sponsor email template</h3><div class="meta">These words fill in automatically when you press Email on a sponsor: {sponsor} {contact} {theme} {month} {area} {venue} {week} {fee}</div>
+  <div class="f"><label>Subject</label><input type="text" id="st-sub" value="${esc(t.subject)}"/></div>
+  <div class="f"><label>Email</label><textarea id="st-body" style="min-height:300px">${esc(t.body)}</textarea></div>
+  <div class="acts"><button class="btn btn-g" type="button" onclick="sponTplReset()">Back to the starter version</button><button class="btn btn-g" type="button" onclick="sponClose()">Cancel</button><button class="btn btn-p" type="button" onclick="sponTplSave()">Save template</button></div></div>`);
+}
+function sponTplReset(){$('st-sub').value=SPON_TPL_DEFAULT.subject;$('st-body').value=SPON_TPL_DEFAULT.body;}
+function sponTplSave(){const t={subject:$('st-sub').value.trim(),body:$('st-body').value.replace(/\s+$/,'')};sponClose();sponSave({template:t});}
+function banEdit(m){
+  const u=bannerMap()[m]||'';
+  sponOv(`<div class="box" style="max-width:520px"><h3>${esc(monthName(m))} banner</h3>
+  <div class="f"><label>Image link</label><input type="text" id="bn-url" value="${esc(u)}"/></div>
+  <div class="tools"><button class="btn btn-g" type="button" onclick="banUpload('${esc(m)}')">${u?'Upload a new banner':'Upload a banner'}</button>${u?`<button class="btn btn-d" type="button" onclick="setBanner('${esc(m)}','')">Remove banner</button>`:''}</div>
+  <div class="acts"><button class="btn btn-g" type="button" onclick="sponClose()">Cancel</button><button class="btn btn-p" type="button" onclick="banLinkSave('${esc(m)}')">Save link</button></div></div>`);
+}
+function banLinkSave(m){const u=sponV('bn-url');if(u&&!/^https?:\/\//.test(u)){toast('That does not look like an image link');return;}sponClose();setBanner(m,u);}
 function campCard(m){
-  const t=todayStr().slice(0,7),real=vposts.filter(p=>!isMile(p)&&p.date.startsWith(m)),n=real.length;
-  const made=real.filter(p=>p.created).length,posted=real.filter(p=>p.posted).length;
-  const ci=campInfo(m),bigs=posts.filter(p=>p.type==='big'&&p.date.startsWith(m)).sort(sortFn);
-  const win=winLines(m,false);
+  const t=todayStr().slice(0,7);
+  const ci=campInfo(m),d=sponD(),area=sponArea(),L=sponList(m);
   const st=posts.filter(p=>!isMile(p)&&p.date.startsWith(m)&&p.stats&&(p.stats.reach||p.stats.likes||p.stats.comments||p.stats.shares));
   const sum=k=>st.reduce((a,p)=>a+(+p.stats[k]||0),0);
   const best=st.slice().sort((a,b)=>engage(b)-engage(a))[0];
   const inp=(f,v,ph)=>`<input type="text" data-ct="${m}" data-f="${f}" value="${esc(v||'')}" placeholder="${ph}"/>`;
+  const pen=(act,arg,tt)=>`<button class="btn btn-g" style="padding:3px 9px" type="button" title="${tt}" data-act="${act}" data-arg="${esc(arg)}">&#9998;</button>`;
+  const mons=mondaysOf(m);
+  const wkRows=[0,1,2,3].map(i=>{const w=d.weeks[sponWkKey(m,i)]||{},mon=mons[i]?new Date(mons[i]+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'}):'';
+    return `<div class="row" style="cursor:default;flex-wrap:wrap"><div class="rt">Week ${i+1}${mon?' · '+mon:''}<small>${esc(ci.weeks[i]||'No theme yet')}</small></div>
+      <div class="has" style="display:block">${w.name?esc(w.name)+(w.venue?' at '+esc(w.venue):'')+' · '+esc(w.status||'Needed')+(w.fee?' · $'+esc(w.fee):''):'No sponsor yet'}</div>
+      ${w.name?`<button class="btn btn-g" style="padding:3px 9px" type="button" data-act="sponwkmail" data-arg="${m}|${i}">Email</button>`:''}${pen('sponwk',m+'|'+i,'Edit this week')}</div>`;}).join('');
+  const prRows=L.length?L.map(p=>`<div class="row" style="cursor:default;flex-wrap:wrap"><div class="rt">${esc(p.name)}<small>${esc([p.kind,p.status].filter(Boolean).join(' · '))}</small></div>
+      <button class="btn btn-g" style="padding:3px 9px" type="button" data-act="sponmail" data-arg="${esc(p.id)}">Email</button>${pen('sponedit',p.id,'Edit this sponsor')}</div>`).join(''):'<div class="meta" style="margin:0">No sponsor prospects for '+esc(area||'this month')+' yet.</div>';
   return `<div class="card" style="padding:14px">${bannerHtml(m)}<h4 style="font-size:13px">${monthName(m)} ${m===t?'· now':''}</h4>
     <span class="lbl">Month theme</span>${inp('theme',ci.theme,'Month theme')}
     <span class="lbl">Weekly themes</span>${[0,1,2,3].map(i=>inp('w'+i,ci.weeks[i],'Week '+(i+1)+' theme')).join('<div style="height:4px"></div>')}
-    <span class="lbl">Big night</span>
-    ${bigs.length?bigs.map(b=>{const[pn,tot]=evProgress(b);return `<div class="row" style="cursor:default;flex-wrap:wrap"><div class="rt">${esc(evTitle(b))}<small>${esc(dayName(b.date))}</small></div><div class="has" style="display:block">${pn}/${tot} done</div><button class="btn btn-g" style="padding:3px 9px" data-act="evgo" data-arg="${esc(b.id)}">Checklist</button></div><div class="prog" style="margin:2px 0 6px"><i style="width:${Math.round(pn/tot*100)}%"></i></div>`;}).join(''):'<div class="meta">No big night this month.</div>'}
-    <span class="lbl">Best Dressed winners</span>
-    ${win.length?win.map(x=>`<div class="meta" style="margin:0">${esc(x)}</div>`).join(''):'<div class="meta" style="margin:0">None entered yet. Add them in the Monthly Recap post.</div>'}
+    <span class="lbl">Weekly sponsors${area?' · '+esc(area):''}</span>${wkRows}
+    <span class="lbl">Sponsor prospects for this theme${area?' · '+esc(area):''} (${L.length})</span>${prRows}
+    <div class="tools" style="margin-top:6px"><button class="btn btn-g" type="button" data-act="sponadd" data-arg="${m}">+ Add sponsor prospect</button></div>
     <span class="lbl">Results (from Echo)</span>
     ${st.length?`<div class="meta" style="margin:0">${st.length} posts with numbers · reach ${sum('reach').toLocaleString()} · likes ${sum('likes').toLocaleString()} · comments + shares ${(sum('comments')+sum('shares')).toLocaleString()}</div>${best?`<div class="meta" style="margin:0">Best: ${esc(best.title)}</div>`:''}`:'<div class="meta" style="margin:0">No numbers entered yet.</div>'}
-    <span class="lbl">Progress</span>
-    <div class="nick">Made ${made}/${n}</div><div class="prog"><i style="width:${n?made/n*100:0}%"></i></div>
-    <div class="nick">Posted ${posted}/${n}</div><div class="prog posted"><i style="width:${n?posted/n*100:0}%"></i></div>
     <div style="margin-top:8px"><button class="btn btn-g" data-act="month" data-arg="${m}">Open in Studio</button></div></div>`;
 }
 function vCampaigns(){
   const months=[...new Set(vposts.map(p=>p.date.slice(0,7)))].sort();
-  const cur=todayStr().slice(0,7),show=months.filter(m=>campFilter==='all'||m>=cur);
-  $('view').innerHTML=head('Campaigns','Each month is a campaign: its themes, banner, big night, winners and results in one place.')+
+  const cur=todayStr().slice(0,7),show=months.filter(m=>campFilter==='all'?m<cur:m>=cur);
+  const areas=sponAreas(),area=sponArea(),t=sponTpl();
+  $('view').innerHTML=head('Sponsor campaigns','One theme a month. Each week a different local business sponsors a night at a venue: a four-cocktail flight, tickets, and prizes from the sponsor.')+
     `<div class="bar"><label style="display:flex;gap:8px;align-items:center;cursor:pointer;font-size:13px;color:var(--text2)"><input type="checkbox" data-act="bantoggle" ${showBanners()?'checked':''} style="width:17px;height:17px"/> Show campaign banners</label><div class="sp"></div>
-      <button class="chip ${campFilter==='up'?'on':''}" data-act="campf" data-arg="up">This month and ahead</button><button class="chip ${campFilter==='all'?'on':''}" data-act="campf" data-arg="all">All months</button></div>`+
-    `<div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(320px,1fr))">${show.map(campCard).join('')}</div>`;
+      <button class="chip ${campFilter==='up'?'on':''}" data-act="campf" data-arg="up">This month and ahead</button><button class="chip ${campFilter==='all'?'on':''}" data-act="campf" data-arg="all">Previous month</button></div>`+
+    `<div class="bar"><span class="meta" style="margin:0">Area</span>${areas.length?areas.map(a=>`<button class="chip ${a===area?'on':''}" data-act="sponarea" data-arg="${esc(a)}">${esc(a)}</button>`).join(''):'<span class="meta" style="margin:0">No areas yet</span>'}<button class="btn btn-g" style="padding:3px 9px" type="button" title="Edit areas" data-act="sponareas">&#9998;</button></div>`+
+    `<div class="card" style="padding:14px"><div style="display:flex;gap:10px;align-items:center"><span class="lbl" style="margin:0;flex:1">Sponsor email template</span><button class="btn btn-g" style="padding:3px 9px" type="button" title="Edit the template" data-act="sponTpl">&#9998;</button></div>
+      <div class="meta" style="margin:6px 0 2px"><b>${esc(t.subject)}</b></div><div class="meta" style="margin:0;white-space:pre-wrap;font-size:13px">${esc(t.body)}</div></div>`+
+    (show.length?`<div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(380px,1fr))">${show.map(campCard).join('')}</div>`:'<div class="empty">'+(campFilter==='all'?'No previous months yet.':'No months ahead yet.')+'</div>');
 }
 let campFilter='up';
 
@@ -1506,6 +1606,15 @@ function act(a,arg){
     let v=document.getElementById('tplv');if(!v){v=document.createElement('div');v.id='tplv';v.style.cssText='position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.88);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:16px;cursor:pointer';v.onclick=()=>v.remove();document.body.appendChild(v);}
     v.innerHTML=`<div style="font-family:var(--cinzel);color:var(--gold);letter-spacing:.14em;text-transform:uppercase">${esc(t.name)}</div><div style="aspect-ratio:4/5;height:min(78vh,calc(92vw*1.25));max-width:92vw;background:var(--surface3);border:1px solid var(--border-gold);display:flex;align-items:center;justify-content:center;overflow:hidden">${u?`<img src="${esc(u)}" alt="" style="width:100%;height:100%;object-fit:contain"/>`:'<span style="color:var(--text2)">No example uploaded yet (Library)</span>'}</div><div style="color:var(--text2);font-size:12px;text-align:center;max-width:90vw">${ub.length?'Used by: '+ub.map(esc).join(' · '):'Not used by anything yet'} · tap anywhere to close</div>`;}
   else if(a==='campf'){campFilter=arg;render();}
+  else if(a==='sponarea'){saveLib('sponsors',{area:arg},true).then(render);}
+  else if(a==='sponareas')sponAreasEdit();
+  else if(a==='sponadd')sponEdit('',arg);
+  else if(a==='sponedit')sponEdit(arg);
+  else if(a==='sponwk'){const q=arg.split('|');sponWkEdit(q[0],+q[1]);}
+  else if(a==='sponmail')sponMailP(arg);
+  else if(a==='sponwkmail'){const q=arg.split('|');sponMailWk(q[0],+q[1]);}
+  else if(a==='sponTpl')sponTplEdit();
+  else if(a==='banedit')banEdit(arg);
   else if(a==='evgo'){const L=upcomingEvents().findIndex(x=>x.id===arg);evIdx=Math.max(0,L);evMode='one';setTab('events');}
   else if(a==='evmode'){evMode=arg;render();}
   else if(a==='dashday'){calMonth=arg.slice(0,7);selDay=arg;setTab('calendar');}
@@ -2569,10 +2678,9 @@ function showBanners(){return (libOv.settings||{}).showBanners!==false;}
 function bannerHtml(m){
   if(!showBanners())return '';
   const u=bannerMap()[m];
-  return `<div style="margin:-2px -2px 10px">${u?`<img src="${esc(u)}" alt="" style="width:100%;height:auto;display:block"/>`
+  return `<div style="margin:-2px -2px 10px;position:relative">${u?`<img src="${esc(u)}" alt="" style="width:100%;height:auto;display:block"/>`
     :`<div style="width:100%;aspect-ratio:2043/770;border:1px dashed var(--border2);border-radius:var(--radius);display:flex;align-items:center;justify-content:center;color:var(--text3);font-family:var(--serif);font-style:italic">No banner yet</div>`}
-    <div class="tools" style="margin:6px 0 0"><button class="btn btn-g" type="button" onclick="banUpload('${m}')">${u?'Replace banner':'Upload banner'}</button>${u?`<button class="btn btn-d" type="button" data-act="bandel" data-arg="${m}">Remove</button>`:''}</div>
-    <input type="text" data-ban="${m}" value="${esc(u||'')}" placeholder="or paste an image link" style="margin-top:6px"/></div>`;
+    <button class="btn btn-g" type="button" title="Edit banner" data-act="banedit" data-arg="${m}" style="position:absolute;top:8px;right:8px;padding:3px 9px">&#9998;</button></div>`;
 }
 let banPend=null;
 function banUpload(m){
@@ -2585,7 +2693,7 @@ function banUpload(m){
     document.body.appendChild(f);}
   f.click();
 }
-async function setBanner(m,u){const mp={...bannerMap()};if(u)mp[m]=u;else delete mp[m];await saveLib('banners',{map:mp});render();}
+async function setBanner(m,u){const mp={...bannerMap()};if(u)mp[m]=u;else delete mp[m];sponClose();await saveLib('banners',{map:mp});render();}
 
 /* ── CHECKLIST EDITOR: your own tasks and timing, one list per kind of event ── */
 let tw=null,twKey='';
