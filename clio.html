@@ -1083,7 +1083,7 @@ function sponAreas(){const d=sponD();if(d.areas.length)return d.areas;return [..
 function sponArea(){const d=sponD(),L=sponAreas();return L.indexOf(d.area)>=0?d.area:(L[0]||'');}
 function sponSlug(a){return String(a||'all').toLowerCase().replace(/[^a-z0-9]/g,'')||'all';}
 function sponWkKey(m,i){return m+'_'+sponSlug(sponArea())+'_'+i;}
-function sponList(m){const a=sponArea();return Object.values(sponD().prospects).filter(p=>p&&p.month===m&&(!a||p.area===a)).sort((x,y)=>String(x.name).localeCompare(String(y.name)));}
+function sponList(m){const a=sponArea();return Object.values(sponD().prospects).filter(p=>p&&p.month===m&&(!a||p.area===a)).map(sponNorm).sort((x,y)=>(sponRank(x)-sponRank(y))||String(x.name).localeCompare(String(y.name)));}
 function sponTpl(){return sponD().template||SPON_TPL_DEFAULT;}
 function sponOv(html){let el=$('sov');if(!el){el=document.createElement('div');el.className='ov';el.id='sov';el.addEventListener('click',e=>{if(e.target===el)el.classList.remove('show');});document.body.appendChild(el);}el.innerHTML=html;el.classList.add('show');}
 function sponClose(){const el=$('sov');if(el)el.classList.remove('show');}
@@ -1107,26 +1107,118 @@ function sponAreasEdit(){
   <div class="acts"><button class="btn btn-g" type="button" onclick="sponClose()">Cancel</button><button class="btn btn-p" type="button" onclick="sponAreasSave()">Save areas</button></div></div>`);
 }
 function sponAreasSave(){const L=[...new Set(($('sa-list').value||'').split('\n').map(x=>x.trim()).filter(Boolean))];const d=sponD();sponClose();sponSave({areas:L,area:L.indexOf(d.area)>=0?d.area:(L[0]||'')});}
+function sponNorm(p){
+  const q={...p};
+  q.answer=p.answer||(p.status==='Said yes'?'yes':p.status==='Said no'?'no':'');
+  q.emailedAt=p.emailedAt||(p.status==='Asked'?'earlier':'');
+  q.desc=p.desc||p.kind||'';
+  return q;
+}
+function sponStage(p){return p.goneCold?'Gone cold':p.answer==='yes'?'Said yes':p.answer==='no'?'Said no':p.emailedAt?'In progress':'To ask';}
+function sponRank(p){return p.goneCold?4:p.answer==='yes'?0:p.answer==='no'?3:p.emailedAt?1:2;}
+function sponDay(x){return x&&x!=='earlier'?new Date(x+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'}):'';}
 function sponEdit(id,m){
-  const p=id?sponD().prospects[id]:null;if(id&&!p)return;const mm=p?p.month:m;
-  sponOv(`<div class="box" style="max-width:520px"><h3>${p?'Edit sponsor prospect':'New sponsor prospect'}</h3><div class="meta">${esc(monthName(mm))} · ${esc(p?(p.area||'All areas'):(sponArea()||'All areas'))}</div>
-  <div class="f"><label>Business name</label><input type="text" id="sp-name" value="${esc(p?p.name:'')}"/></div>
-  <div class="f2"><div class="f"><label>Kind of business</label><input type="text" id="sp-kind" value="${esc(p?p.kind:'')}"/></div><div class="f"><label>Status</label><select id="sp-status">${SPON_STATUS.map(x=>`<option ${p&&p.status===x?'selected':''}>${x}</option>`).join('')}</select></div></div>
-  <div class="f2"><div class="f"><label>Contact name</label><input type="text" id="sp-who" value="${esc(p?p.contactName:'')}"/></div><div class="f"><label>Email or phone</label><input type="text" id="sp-email" value="${esc(p?p.email:'')}"/></div></div>
-  <div class="f2"><div class="f"><label>Instagram</label><input type="text" id="sp-ig" value="${esc(p?p.ig:'')}"/></div><div class="f"><label>Website</label><input type="text" id="sp-web" value="${esc(p?p.web:'')}"/></div></div>
-  <div class="f"><label>Notes</label><textarea id="sp-notes" style="min-height:80px">${esc(p?p.notes:'')}</textarea></div>
+  const raw=id?sponD().prospects[id]:null;if(id&&!raw)return;const p=raw?sponNorm(raw):null,mm=p?p.month:m;
+  const v=k=>esc(p?(p[k]||''):'');
+  sponOv(`<div class="box" style="max-width:600px"><h3>${p?'Edit sponsor prospect':'New sponsor prospect'}</h3><div class="meta">${esc(monthName(mm))} · ${esc(p?(p.area||'All areas'):(sponArea()||'All areas'))}</div>
+  <div class="f2"><div class="f"><label>Business name</label><input type="text" id="sp-name" value="${v('name')}"/></div><div class="f"><label>Contact name</label><input type="text" id="sp-who" value="${v('contactName')}"/></div></div>
+  <div class="f2"><div class="f"><label>Email</label><input type="text" id="sp-email" value="${v('email')}"/></div><div class="f"><label>Phone</label><input type="text" id="sp-phone" value="${v('phone')}"/></div></div>
+  <div class="f2"><div class="f"><label>Address</label><input type="text" id="sp-addr" value="${v('address')}"/></div><div class="f"><label>City</label><input type="text" id="sp-city" value="${v('city')}"/></div></div>
+  <div class="f2"><div class="f"><label>Instagram</label><input type="text" id="sp-ig" value="${v('ig')}"/></div><div class="f"><label>Facebook</label><input type="text" id="sp-fb" value="${v('fb')}"/></div></div>
+  <div class="f"><label>Website</label><input type="text" id="sp-web" value="${v('web')}"/></div>
+  <div class="f"><label>What this place is</label><textarea id="sp-desc" style="min-height:70px">${v('desc')}</textarea></div>
+  <div class="f"><label>How they fit the theme</label><textarea id="sp-fit" style="min-height:70px">${v('fit')}</textarea></div>
+  <div class="f"><label>Notes</label><textarea id="sp-notes" style="min-height:70px">${v('notes')}</textarea></div>
+  <div class="f2"><div class="f"><label>Their answer</label><select id="sp-ans"><option value="">No answer yet</option><option value="yes" ${p&&p.answer==='yes'?'selected':''}>Said yes</option><option value="no" ${p&&p.answer==='no'?'selected':''}>Said no</option></select></div>
+  <div class="f"><label>We emailed them on</label><input type="date" id="sp-emdate" value="${p&&p.emailedAt&&p.emailedAt!=='earlier'?esc(p.emailedAt):''}"/></div></div>
+  <div style="display:flex;gap:18px;flex-wrap:wrap;margin:2px 0 10px"><label style="display:flex;gap:6px;align-items:center;font-size:13px"><input type="checkbox" id="sp-em" ${p&&p.emailedAt?'checked':''} style="width:17px;height:17px"/> We emailed (in progress)</label><label style="display:flex;gap:6px;align-items:center;font-size:13px"><input type="checkbox" id="sp-cold" ${p&&p.goneCold?'checked':''} style="width:17px;height:17px"/> Gone cold</label></div>
   <div class="acts">${p?`<button class="btn btn-d" type="button" onclick="sponDel('${esc(id)}')">Remove</button>`:''}<button class="btn btn-g" type="button" onclick="sponClose()">Cancel</button><button class="btn btn-p" type="button" onclick="sponEditSave('${esc(id)}','${esc(mm)}')">Save</button></div></div>`);
 }
 function sponEditSave(id,m){
   const name=sponV('sp-name');if(!name){toast('Add the business name');return;}
-  const d=sponD(),pr={...d.prospects},old=id?pr[id]:null,nid=id||'s'+Date.now().toString(36);
-  pr[nid]={id:nid,month:m,area:old?old.area:sponArea(),name:name,kind:sponV('sp-kind'),status:sponV('sp-status'),contactName:sponV('sp-who'),email:sponV('sp-email'),ig:sponV('sp-ig'),web:sponV('sp-web'),notes:sponV('sp-notes')};
-  sponClose();sponSave({prospects:pr});
+  const d=sponD(),pr={...d.prospects},old=id?sponNorm(pr[id]||{}):null,nid=id||'s'+Date.now().toString(36);
+  const em=$('sp-em').checked,dt=sponV('sp-emdate');
+  const rec={...(pr[id]||{}),id:nid,month:m,area:old?old.area:sponArea(),name:name,contactName:sponV('sp-who'),email:sponV('sp-email'),phone:sponV('sp-phone'),address:sponV('sp-addr'),city:sponV('sp-city'),ig:sponV('sp-ig'),fb:sponV('sp-fb'),web:sponV('sp-web'),desc:sponV('sp-desc'),fit:sponV('sp-fit'),notes:sponV('sp-notes'),answer:sponV('sp-ans'),goneCold:$('sp-cold').checked,status:'',kind:''};
+  rec.emailedAt=em?(dt||(old&&old.emailedAt&&old.emailedAt!=='earlier'?old.emailedAt:(old&&old.emailedAt==='earlier'?'earlier':todayStr()))):'';
+  pr[nid]=rec;sponClose();sponSave({prospects:pr});
+}
+async function sponToggle(id,field){
+  const pr={...sponD().prospects},p=pr[id];if(!p)return;const q=sponNorm(p);
+  if(field==='em'){p.emailedAt=q.emailedAt?'':todayStr();}else{p.goneCold=!p.goneCold;}
+  p.status='';p.answer=q.answer;p.desc=q.desc;
+  await sponSave({prospects:pr});
+}
+/* ── bulk add: CSV or paragraph ── */
+function sponCsv(text,delim){
+  const rows=[];let row=[],cur='',q=false;
+  for(let i=0;i<text.length;i++){const c=text[i];
+    if(q){if(c==='"'){if(text[i+1]==='"'){cur+='"';i++;}else q=false;}else cur+=c;}
+    else if(c==='"')q=true;
+    else if(c===delim){row.push(cur);cur='';}
+    else if(c==='\n'||c==='\r'){if(c==='\r'&&text[i+1]==='\n')i++;row.push(cur);cur='';rows.push(row);row=[];}
+    else cur+=c;}
+  if(cur!==''||row.length){row.push(cur);rows.push(row);}
+  return rows.filter(r=>r.some(x=>String(x).trim()));
+}
+const SPON_COLS={name:['name','business','businessname','company','sponsor','businessnamename'],contactName:['contact','contactname','owner','person','contactperson'],email:['email','emailaddress','emailorphone'],phone:['phone','phonenumber','tel','telephone','mobile'],address:['address','street','streetaddress'],city:['city','town'],ig:['instagram','ig','insta'],fb:['facebook','fb'],web:['website','web','url','site'],desc:['whatthisplaceis','description','about','what','type','kind','category','whothey are'.replace(/\s/g,'')],fit:['howtheyfit','fit','themefit','why','howtheyfitthetheme'],notes:['notes','note','comments']};
+function sponHeaderMap(cells){
+  const map={};cells.forEach((c,i)=>{const k=String(c).toLowerCase().replace(/[^a-z]/g,'');for(const f in SPON_COLS){if(map[f]===undefined&&SPON_COLS[f].indexOf(k)>=0){map[f]=i;break;}}});
+  return map.name!==undefined?map:null;
+}
+function sponParseEntry(txt){
+  let t=String(txt),o={};
+  const em=t.match(/[\w.+-]+@[\w-]+(\.[\w-]+)+/);if(em){o.email=em[0];t=t.replace(em[0],' ');}
+  const ph=t.match(/(\+?1[\s.-]?)?\(?\d{3}\)?[\s.-]\d{3}[\s.-]\d{4}/);if(ph){o.phone=ph[0].trim();t=t.replace(ph[0],' ');}
+  (t.match(/(https?:\/\/|www\.)[^\s,;|]+/gi)||[]).forEach(u=>{const url=/^www\./i.test(u)?'https://'+u:u;
+    if(/instagram\.com/i.test(u))o.ig=url;else if(/facebook\.com|fb\.com/i.test(u))o.fb=url;else if(!o.web)o.web=url;t=t.replace(u,' ');});
+  const at=t.match(/(^|\s)@([\w.]+)/);if(at&&!o.ig){o.ig='https://www.instagram.com/'+at[2]+'/';t=t.replace(at[0],' ');}
+  const parts=t.split(/\s*[|;]\s*|\s+[-–—]\s+|,\s*/).map(x=>x.replace(/^[\s\-–—,;|]+|[\s\-–—,;|]+$/g,'')).filter(x=>/[A-Za-z0-9]/.test(x));
+  o.name=(parts.shift()||'').replace(/^[\-\*•\d.)]+\s*/,'');
+  if(parts.length)o.desc=parts.join(', ');
+  return o;
+}
+function sponParse(text){
+  text=String(text||'').replace(/^﻿/,'').trim();if(!text)return [];
+  const first=text.split(/\r?\n/)[0],delim=first.indexOf('\t')>=0?'\t':',';
+  const rows=sponCsv(text,delim),hm=rows.length&&rows[0].length>1?sponHeaderMap(rows[0]):null;
+  let out=[];
+  if(hm){rows.slice(1).forEach(r=>{const o={};for(const f in hm)o[f]=String(r[hm[f]]||'').trim();if(o.name)out.push(o);});return out;}
+  const blocks=text.split(/\r?\n\s*\r?\n/).map(x=>x.trim()).filter(Boolean);
+  if(blocks.length>1&&blocks.some(b=>b.split(/\r?\n/).length>1)){
+    blocks.forEach(b=>{const L=b.split(/\r?\n/).map(x=>x.trim()).filter(Boolean),o=sponParseEntry(L[0]);
+      const rest=sponParseEntry(L.slice(1).join(' ; '));
+      ['email','phone','ig','fb','web'].forEach(k=>{if(rest[k]&&!o[k])o[k]=rest[k];});
+      const more=[o.desc,rest.name,rest.desc].filter(Boolean).join('. ');if(more)o.desc=more;
+      if(o.name)out.push(o);});
+  }else{text.split(/\r?\n/).map(x=>x.trim()).filter(Boolean).forEach(l=>{const o=sponParseEntry(l);if(o.name)out.push(o);});}
+  return out;
+}
+function sponBulkEdit(m){
+  sponOv(`<div class="box" style="max-width:640px"><h3>Add sponsors in bulk</h3><div class="meta">${esc(monthName(m))} · ${esc(sponArea()||'All areas')}. Paste a CSV (first row = column names like Name, Contact, Email, Phone, Address, City, Instagram, Facebook, Website, What this place is, How they fit, Notes) or just type a paragraph: one business per line, or a blank line between businesses. Emails, phones, Instagram, Facebook and websites are picked out automatically.</div>
+  <div class="tools"><button class="btn btn-g" type="button" onclick="sponBulkFile()">Choose a CSV file</button></div>
+  <div class="f"><textarea id="sb-text" style="min-height:220px" oninput="sponBulkPrev()"></textarea></div>
+  <div class="meta" id="sb-prev" style="margin:0"></div>
+  <input type="hidden" id="sb-month" value="${esc(m)}"/>
+  <div class="acts"><button class="btn btn-g" type="button" onclick="sponClose()">Cancel</button><button class="btn btn-p" type="button" onclick="sponBulkAdd()">Add them</button></div></div>`);
+}
+function sponBulkFile(){
+  let f=$('sb-file');if(!f){f=document.createElement('input');f.type='file';f.id='sb-file';f.accept='.csv,.tsv,.txt,text/csv,text/plain';f.style.display='none';
+    f.onchange=()=>{const file=f.files[0];f.value='';if(!file)return;const r=new FileReader();r.onload=()=>{const t=$('sb-text');if(t){t.value=String(r.result||'');sponBulkPrev();}};r.readAsText(file);};document.body.appendChild(f);}
+  f.click();
+}
+function sponBulkPrev(){const L=sponParse($('sb-text').value),e=$('sb-prev');if(e)e.textContent=L.length?L.length+' found: '+L.slice(0,6).map(x=>x.name).join(', ')+(L.length>6?', and '+(L.length-6)+' more':''):'Nothing found yet.';}
+function sponBulkAdd(){
+  const L=sponParse($('sb-text').value),m=$('sb-month').value;if(!L.length){toast('Nothing to add yet');return;}
+  const d=sponD(),pr={...d.prospects},area=sponArea(),have=new Set(Object.values(pr).filter(p=>p&&p.month===m&&p.area===area).map(p=>String(p.name).toLowerCase().trim()));
+  let n=0,dup=0;
+  L.forEach((o,i)=>{const k=String(o.name).toLowerCase().trim();if(have.has(k)){dup++;return;}have.add(k);const id='s'+Date.now().toString(36)+i;
+    pr[id]={id:id,month:m,area:area,name:o.name,contactName:o.contactName||'',email:o.email||'',phone:o.phone||'',address:o.address||'',city:o.city||'',ig:o.ig||'',fb:o.fb||'',web:o.web||'',desc:o.desc||'',fit:o.fit||'',notes:o.notes||'',answer:'',emailedAt:'',goneCold:false};n++;});
+  sponClose();sponSave({prospects:pr}).then(()=>toast('Added '+n+(dup?', skipped '+dup+' already on the list':'')));
 }
 function sponDel(id){if(!confirm('Remove this sponsor prospect from the list?'))return;const pr={...sponD().prospects};delete pr[id];sponClose();sponSave({prospects:pr});}
 function sponWkEdit(m,i){
   const d=sponD(),k=sponWkKey(m,i),w=d.weeks[k]||{},L=sponList(m),mon=mondaysOf(m)[i],ci=campInfo(m);
-  sponOv(`<div class="box" style="max-width:520px"><h3>Week ${i+1} sponsor</h3><div class="meta">${esc(mon?new Date(mon+'T12:00:00').toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'}):'')} · ${esc(sponArea()||'All areas')}${ci.weeks[i]?' · '+esc(ci.weeks[i]):''}</div>
+  sponOv(`<div class="box" style="max-width:520px"><h3>Week ${i+1} sponsor</h3><div class="meta">${esc(mon?new Date(mon+'T12:00:00').toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'}):'')} · ${esc(sponArea()||'All areas')}</div>
   <div class="f"><label>Sponsor from the prospect list</label><select id="sw-pick"><option value="">Not from the list (type a name below)</option>${L.map(p=>`<option value="${esc(p.id)}" ${w.sponsorId===p.id?'selected':''}>${esc(p.name)}${p.kind?' · '+esc(p.kind):''}</option>`).join('')}</select></div>
   <div class="f"><label>Sponsor name (if not from the list)</label><input type="text" id="sw-name" value="${esc(w.sponsorId?'':(w.name||''))}"/></div>
   <div class="f2"><div class="f"><label>Venue</label><input type="text" id="sw-venue" value="${esc(w.venue||'')}"/></div><div class="f"><label>Sponsor fee ($)</label><input type="text" inputmode="numeric" id="sw-fee" value="${esc(w.fee!==undefined?w.fee:d.fee)}"/></div></div>
@@ -1168,17 +1260,17 @@ function campCard(m){
   const pen=(act,arg,tt)=>`<button class="btn btn-g" style="padding:3px 9px" type="button" title="${tt}" data-act="${act}" data-arg="${esc(arg)}">&#9998;</button>`;
   const mons=mondaysOf(m);
   const wkRows=[0,1,2,3].map(i=>{const w=d.weeks[sponWkKey(m,i)]||{},mon=mons[i]?new Date(mons[i]+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'}):'';
-    return `<div class="row" style="cursor:default;flex-wrap:wrap"><div class="rt">Week ${i+1}${mon?' · '+mon:''}<small>${esc(ci.weeks[i]||'No theme yet')}</small></div>
+    return `<div class="row" style="cursor:default;flex-wrap:wrap"><div class="rt">Week ${i+1}${mon?' · '+mon:''}</div>
       <div class="has" style="display:block">${w.name?esc(w.name)+(w.venue?' at '+esc(w.venue):'')+' · '+esc(w.status||'Needed')+(w.fee?' · $'+esc(w.fee):''):'No sponsor yet'}</div>
       ${w.name?`<button class="btn btn-g" style="padding:3px 9px" type="button" data-act="sponwkmail" data-arg="${m}|${i}">Email</button>`:''}${pen('sponwk',m+'|'+i,'Edit this week')}</div>`;}).join('');
-  const prRows=L.length?L.map(p=>`<div class="row" style="cursor:default;flex-wrap:wrap"><div class="rt">${esc(p.name)}<small>${esc([p.kind,p.status].filter(Boolean).join(' · '))}</small></div>
-      <button class="btn btn-g" style="padding:3px 9px" type="button" data-act="sponmail" data-arg="${esc(p.id)}">Email</button>${pen('sponedit',p.id,'Edit this sponsor')}</div>`).join(''):'<div class="meta" style="margin:0">No sponsor prospects for '+esc(area||'this month')+' yet.</div>';
+  const prRows=L.length?L.map(p=>{const lk=[p.ig&&'IG',p.fb&&'FB',p.web&&'Web'].filter(Boolean).join(' ');return `<div class="row" style="cursor:default;flex-wrap:wrap"><div class="rt">${esc(p.name)}<small>${esc([sponStage(p)+(p.emailedAt&&p.emailedAt!=='earlier'?' (emailed '+sponDay(p.emailedAt)+')':''),p.city,p.contactName,lk].filter(Boolean).join(' · '))}</small>${p.fit?`<small>Fit: ${esc(p.fit)}</small>`:''}</div>
+      <label style="display:flex;gap:4px;align-items:center;font-size:12px"><input type="checkbox" data-act="sponem" data-arg="${esc(p.id)}" ${p.emailedAt?'checked':''}/> Emailed</label><label style="display:flex;gap:4px;align-items:center;font-size:12px"><input type="checkbox" data-act="sponcold" data-arg="${esc(p.id)}" ${p.goneCold?'checked':''}/> Gone cold</label>
+      <button class="btn btn-g" style="padding:3px 9px" type="button" data-act="sponmail" data-arg="${esc(p.id)}">Email</button>${pen('sponedit',p.id,'Edit this sponsor')}</div>`;}).join(''):'<div class="meta" style="margin:0">No sponsor prospects for '+esc(area||'this month')+' yet.</div>';
   return `<div class="card" style="padding:14px">${bannerHtml(m)}<h4 style="font-size:13px">${monthName(m)} ${m===t?'· now':''}</h4>
     <span class="lbl">Month theme</span>${inp('theme',ci.theme,'Month theme')}
-    <span class="lbl">Weekly themes</span>${[0,1,2,3].map(i=>inp('w'+i,ci.weeks[i],'Week '+(i+1)+' theme')).join('<div style="height:4px"></div>')}
     <span class="lbl">Weekly sponsors${area?' · '+esc(area):''}</span>${wkRows}
     <span class="lbl">Sponsor prospects for this theme${area?' · '+esc(area):''} (${L.length})</span>${prRows}
-    <div class="tools" style="margin-top:6px"><button class="btn btn-g" type="button" data-act="sponadd" data-arg="${m}">+ Add sponsor prospect</button></div>
+    <div class="tools" style="margin-top:6px"><button class="btn btn-g" type="button" data-act="sponadd" data-arg="${m}">+ Add sponsor prospect</button><button class="btn btn-g" type="button" data-act="sponbulk" data-arg="${m}">Add in bulk</button></div>
     <span class="lbl">Results (from Echo)</span>
     ${st.length?`<div class="meta" style="margin:0">${st.length} posts with numbers · reach ${sum('reach').toLocaleString()} · likes ${sum('likes').toLocaleString()} · comments + shares ${(sum('comments')+sum('shares')).toLocaleString()}</div>${best?`<div class="meta" style="margin:0">Best: ${esc(best.title)}</div>`:''}`:'<div class="meta" style="margin:0">No numbers entered yet.</div>'}
     <div style="margin-top:8px"><button class="btn btn-g" data-act="month" data-arg="${m}">Open in Studio</button></div></div>`;
@@ -1609,6 +1701,9 @@ function act(a,arg){
   else if(a==='sponarea'){saveLib('sponsors',{area:arg},true).then(render);}
   else if(a==='sponareas')sponAreasEdit();
   else if(a==='sponadd')sponEdit('',arg);
+  else if(a==='sponbulk')sponBulkEdit(arg);
+  else if(a==='sponem')sponToggle(arg,'em');
+  else if(a==='sponcold')sponToggle(arg,'cold');
   else if(a==='sponedit')sponEdit(arg);
   else if(a==='sponwk'){const q=arg.split('|');sponWkEdit(q[0],+q[1]);}
   else if(a==='sponmail')sponMailP(arg);
@@ -3119,6 +3214,7 @@ function exportBuffer(){
 }
 
 window.imgTextPick=imgTextPick;window.embCopyCur=f=>embCopy(editingId,f);window.embUse=embUse;window.closeEdit=closeEdit;window.saveEdit=saveEdit;window.addSlide=addSlide;window.delPost=delPost;window.encore=encore;window.muse=muse;window.libSaveEdit=libSaveEdit;window.ledRule=ledRule;window.libHide=libHide;window.banUpload=banUpload;window.addTags=addTags;window.setWin=setWin;window.tw=null;Object.defineProperty(window,'tw',{get:()=>tw,set:v=>{tw=v;}});Object.defineProperty(window,'twKey',{get:()=>twKey});window.twPick=twPick;window.twAdd=twAdd;window.twDelTask=twDelTask;window.twMove=twMove;window.twNewSet=twNewSet;window.twDelSet=twDelSet;window.twSave=twSave;window.libUpload=libUpload;window.aiCaption=aiCaption;window.capPrompt=capPrompt;window.openGfx=openGfx;window.gfxPick=gfxPick;window.gfxSaveBg=gfxSaveBg;window.gfxUse=gfxUse;window.uploadImg=uploadImg;window.imgPrev=imgPrev;
+window.sponClose=sponClose;window.sponAreasSave=sponAreasSave;window.sponEditSave=sponEditSave;window.sponDel=sponDel;window.sponWkSave=sponWkSave;window.sponWkClear=sponWkClear;window.sponTplReset=sponTplReset;window.sponTplSave=sponTplSave;window.banLinkSave=banLinkSave;window.setBanner=setBanner;window.sponBulkAdd=sponBulkAdd;window.sponBulkPrev=sponBulkPrev;window.sponBulkFile=sponBulkFile;window.sponEdit=sponEdit;window.seedMissing=seedMissing;window.sponWkEdit=sponWkEdit;window.sponBulkEdit=sponBulkEdit;window.sponParse=sponParse;window.sponD=sponD;window.sponList=sponList;window.sponStage=sponStage;
 window.addEventListener('hashchange',()=>{let h=location.hash.slice(1);if(['library','bank','cadence','inventory'].includes(h)){location.hash='templates';return;}if((TABS.some(t=>t[0]===h)||h==='events')&&h!==tab){editing=false;tab=h;render();}});
 applyTheme(document.documentElement.getAttribute('data-theme')||'dark');
 init();
