@@ -1083,7 +1083,15 @@ function sponAreas(){const d=sponD();if(d.areas.length)return d.areas;return [..
 function sponArea(){const d=sponD(),L=sponAreas();return L.indexOf(d.area)>=0?d.area:(L[0]||'');}
 function sponSlug(a){return String(a||'all').toLowerCase().replace(/[^a-z0-9]/g,'')||'all';}
 function sponWkKey(m,i){return m+'_'+sponSlug(sponArea())+'_'+i;}
-function sponList(m){const a=sponArea();return Object.values(sponD().prospects).filter(p=>p&&p.month===m&&(!a||p.area===a)).map(sponNorm).sort((x,y)=>(sponRank(x)-sponRank(y))||String(x.name).localeCompare(String(y.name)));}
+let sponF={q:'',city:'',stage:'',ds:'',has:''};
+function sponSetF(k,v){sponF[k]=v;render();if(k==='q'){const e=$('sf-q');if(e){e.focus();try{e.setSelectionRange(v.length,v.length);}catch(x){}}}}
+function sponClearF(){sponF={q:'',city:'',stage:'',ds:'',has:''};render();}
+function sponAll(m){const a=sponArea();return Object.values(sponD().prospects).filter(p=>p&&p.month===m&&(!a||p.area===a)).map(sponNorm);}
+function sponPass(p){const f=sponF,q=f.q.toLowerCase();
+  if(q&&[p.name,p.contactName,p.email,p.city,p.address,p.desc,p.fit,p.notes].join(' ').toLowerCase().indexOf(q)<0)return false;
+  if(f.city&&String(p.city||'')!==f.city)return false;if(f.stage&&sponStage(p)!==f.stage)return false;if(f.ds&&String(p.ds||'')!==f.ds)return false;
+  if(f.has==='email'&&!p.email)return false;if(f.has==='noemail'&&p.email)return false;if(f.has==='social'&&!(p.ig||p.fb))return false;return true;}
+function sponList(m){const a=sponArea();return Object.values(sponD().prospects).filter(p=>p&&p.month===m&&(!a||p.area===a)).map(sponNorm).filter(sponPass).sort((x,y)=>(sponRank(x)-sponRank(y))||String(x.name).localeCompare(String(y.name)));}
 function sponTpl(){return sponD().template||SPON_TPL_DEFAULT;}
 function sponOv(html){let el=$('sov');if(!el){el=document.createElement('div');el.className='ov';el.id='sov';el.addEventListener('click',e=>{if(e.target===el)el.classList.remove('show');});document.body.appendChild(el);}el.innerHTML=html;el.classList.add('show');}
 function sponClose(){const el=$('sov');if(el)el.classList.remove('show');}
@@ -1125,7 +1133,7 @@ function sponEdit(id,m){
   <div class="f2"><div class="f"><label>Email</label><input type="text" id="sp-email" value="${v('email')}"/></div><div class="f"><label>Phone</label><input type="text" id="sp-phone" value="${v('phone')}"/></div></div>
   <div class="f2"><div class="f"><label>Address</label><input type="text" id="sp-addr" value="${v('address')}"/></div><div class="f"><label>City</label><input type="text" id="sp-city" value="${v('city')}"/></div></div>
   <div class="f2"><div class="f"><label>Instagram</label><input type="text" id="sp-ig" value="${v('ig')}"/></div><div class="f"><label>Facebook</label><input type="text" id="sp-fb" value="${v('fb')}"/></div></div>
-  <div class="f"><label>Website</label><input type="text" id="sp-web" value="${v('web')}"/></div>
+  <div class="f2"><div class="f"><label>Website</label><input type="text" id="sp-web" value="${v('web')}"/></div><div class="f"><label>Info found (found, partial, not found...)</label><input type="text" id="sp-ds" value="${v('ds')}"/></div></div>
   <div class="f"><label>What this place is</label><textarea id="sp-desc" style="min-height:70px">${v('desc')}</textarea></div>
   <div class="f"><label>How they fit the theme</label><textarea id="sp-fit" style="min-height:70px">${v('fit')}</textarea></div>
   <div class="f"><label>Notes</label><textarea id="sp-notes" style="min-height:70px">${v('notes')}</textarea></div>
@@ -1138,7 +1146,7 @@ function sponEditSave(id,m){
   const name=sponV('sp-name');if(!name){toast('Add the business name');return;}
   const d=sponD(),pr={...d.prospects},old=id?sponNorm(pr[id]||{}):null,nid=id||'s'+Date.now().toString(36);
   const em=$('sp-em').checked,dt=sponV('sp-emdate');
-  const rec={...(pr[id]||{}),id:nid,month:m,area:old?old.area:sponArea(),name:name,contactName:sponV('sp-who'),email:sponV('sp-email'),phone:sponV('sp-phone'),address:sponV('sp-addr'),city:sponV('sp-city'),ig:sponV('sp-ig'),fb:sponV('sp-fb'),web:sponV('sp-web'),desc:sponV('sp-desc'),fit:sponV('sp-fit'),notes:sponV('sp-notes'),answer:sponV('sp-ans'),goneCold:$('sp-cold').checked,status:'',kind:''};
+  const rec={...(pr[id]||{}),id:nid,month:m,area:old?old.area:sponArea(),name:name,contactName:sponV('sp-who'),email:sponV('sp-email'),phone:sponV('sp-phone'),address:sponV('sp-addr'),city:sponV('sp-city'),ig:sponV('sp-ig'),fb:sponV('sp-fb'),web:sponV('sp-web'),desc:sponV('sp-desc'),ds:sponV('sp-ds'),fit:sponV('sp-fit'),notes:sponV('sp-notes'),answer:sponV('sp-ans'),goneCold:$('sp-cold').checked,status:'',kind:''};
   rec.emailedAt=em?(dt||(old&&old.emailedAt&&old.emailedAt!=='earlier'?old.emailedAt:(old&&old.emailedAt==='earlier'?'earlier':todayStr()))):'';
   pr[nid]=rec;sponClose();sponSave({prospects:pr});
 }
@@ -1160,7 +1168,7 @@ function sponCsv(text,delim){
   if(cur!==''||row.length){row.push(cur);rows.push(row);}
   return rows.filter(r=>r.some(x=>String(x).trim()));
 }
-const SPON_COLS={name:['name','business','businessname','company','sponsor','businessnamename'],contactName:['contact','contactname','owner','person','contactperson'],email:['email','emailaddress','emailorphone'],phone:['phone','phonenumber','tel','telephone','mobile'],address:['address','street','streetaddress'],city:['city','town'],ig:['instagram','ig','insta'],fb:['facebook','fb'],web:['website','web','url','site'],desc:['whatthisplaceis','description','about','what','type','kind','category','whothey are'.replace(/\s/g,'')],fit:['howtheyfit','fit','themefit','why','howtheyfitthetheme'],notes:['notes','note','comments']};
+const SPON_COLS={name:['name','business','businessname','company','sponsor','businessnamename'],contactName:['contact','contactname','owner','person','contactperson'],email:['email','emailaddress','emailorphone'],phone:['phone','phonenumber','tel','telephone','mobile'],address:['address','street','streetaddress'],city:['city','town'],ig:['instagram','ig','insta'],fb:['facebook','fb'],web:['website','web','url','site'],desc:['whatthisplaceis','description','about','what','type','kind','category','whothey are'.replace(/\s/g,'')],fit:['howtheyfit','fit','themefit','why','howtheyfitthetheme'],notes:['notes','note','comments'],ds:['status','infostatus','infofound','researchstatus']};
 function sponHeaderMap(cells){
   const map={};cells.forEach((c,i)=>{const k=String(c).toLowerCase().replace(/[^a-z]/g,'');for(const f in SPON_COLS){if(map[f]===undefined&&SPON_COLS[f].indexOf(k)>=0){map[f]=i;break;}}});
   return map.name!==undefined?map:null;
@@ -1194,7 +1202,7 @@ function sponParse(text){
   return out;
 }
 function sponBulkEdit(m){
-  sponOv(`<div class="box" style="max-width:640px"><h3>Add sponsors in bulk</h3><div class="meta">${esc(monthName(m))} · ${esc(sponArea()||'All areas')}. Paste a CSV (first row = column names like Name, Contact, Email, Phone, Address, City, Instagram, Facebook, Website, What this place is, How they fit, Notes) or just type a paragraph: one business per line, or a blank line between businesses. Emails, phones, Instagram, Facebook and websites are picked out automatically.</div>
+  sponOv(`<div class="box" style="max-width:640px"><h3>Add sponsors in bulk</h3><div class="meta">${esc(monthName(m))} · ${esc(sponArea()||'All areas')}. Paste a CSV (first row = column names like Name, Contact, Email, Phone, Address, City, Instagram, Facebook, Website, What this place is, How they fit, Notes) or just type a paragraph: one business per line, or a blank line between businesses. Emails, phones, Instagram, Facebook and websites are picked out automatically. A Status column is kept as Info found. If a business's city matches one of your areas, it goes into that area, otherwise into the one selected.</div>
   <div class="tools"><button class="btn btn-g" type="button" onclick="sponBulkFile()">Choose a CSV file</button></div>
   <div class="f"><textarea id="sb-text" style="min-height:220px" oninput="sponBulkPrev()"></textarea></div>
   <div class="meta" id="sb-prev" style="margin:0"></div>
@@ -1209,10 +1217,12 @@ function sponBulkFile(){
 function sponBulkPrev(){const L=sponParse($('sb-text').value),e=$('sb-prev');if(e)e.textContent=L.length?L.length+' found: '+L.slice(0,6).map(x=>x.name).join(', ')+(L.length>6?', and '+(L.length-6)+' more':''):'Nothing found yet.';}
 function sponBulkAdd(){
   const L=sponParse($('sb-text').value),m=$('sb-month').value;if(!L.length){toast('Nothing to add yet');return;}
-  const d=sponD(),pr={...d.prospects},area=sponArea(),have=new Set(Object.values(pr).filter(p=>p&&p.month===m&&p.area===area).map(p=>String(p.name).toLowerCase().trim()));
+  const d=sponD(),pr={...d.prospects},cur=sponArea(),AL=sponAreas();
+  const areaFor=o=>{const c=String(o.city||'').toLowerCase();const hit=AL.find(a=>c&&c.indexOf(String(a).toLowerCase())>=0);return hit||cur;};
+  const have=new Set(Object.values(pr).filter(p=>p&&p.month===m).map(p=>String(p.area)+'|'+String(p.name).toLowerCase().trim()));
   let n=0,dup=0;
-  L.forEach((o,i)=>{const k=String(o.name).toLowerCase().trim();if(have.has(k)){dup++;return;}have.add(k);const id='s'+Date.now().toString(36)+i;
-    pr[id]={id:id,month:m,area:area,name:o.name,contactName:o.contactName||'',email:o.email||'',phone:o.phone||'',address:o.address||'',city:o.city||'',ig:o.ig||'',fb:o.fb||'',web:o.web||'',desc:o.desc||'',fit:o.fit||'',notes:o.notes||'',answer:'',emailedAt:'',goneCold:false};n++;});
+  L.forEach((o,i)=>{const ar=areaFor(o),k=ar+'|'+String(o.name).toLowerCase().trim();if(have.has(k)){dup++;return;}have.add(k);const id='s'+Date.now().toString(36)+i;
+    pr[id]={id:id,month:m,area:ar,name:o.name,contactName:o.contactName||'',email:o.email||'',phone:o.phone||'',address:o.address||'',city:o.city||'',ig:o.ig||'',fb:o.fb||'',web:o.web||'',desc:o.desc||'',fit:o.fit||'',notes:o.notes||'',ds:o.ds||'',answer:'',emailedAt:'',goneCold:false};n++;});
   sponClose();sponSave({prospects:pr}).then(()=>toast('Added '+n+(dup?', skipped '+dup+' already on the list':'')));
 }
 function sponDel(id){if(!confirm('Remove this sponsor prospect from the list?'))return;const pr={...sponD().prospects};delete pr[id];sponClose();sponSave({prospects:pr});}
@@ -1263,13 +1273,13 @@ function campCard(m){
     return `<div class="row" style="cursor:default;flex-wrap:wrap"><div class="rt">Week ${i+1}${mon?' · '+mon:''}</div>
       <div class="has" style="display:block">${w.name?esc(w.name)+(w.venue?' at '+esc(w.venue):'')+' · '+esc(w.status||'Needed')+(w.fee?' · $'+esc(w.fee):''):'No sponsor yet'}</div>
       ${w.name?`<button class="btn btn-g" style="padding:3px 9px" type="button" data-act="sponwkmail" data-arg="${m}|${i}">Email</button>`:''}${pen('sponwk',m+'|'+i,'Edit this week')}</div>`;}).join('');
-  const prRows=L.length?L.map(p=>{const lk=[p.ig&&'IG',p.fb&&'FB',p.web&&'Web'].filter(Boolean).join(' ');return `<div class="row" style="cursor:default;flex-wrap:wrap"><div class="rt">${esc(p.name)}<small>${esc([sponStage(p)+(p.emailedAt&&p.emailedAt!=='earlier'?' (emailed '+sponDay(p.emailedAt)+')':''),p.city,p.contactName,lk].filter(Boolean).join(' · '))}</small>${p.fit?`<small>Fit: ${esc(p.fit)}</small>`:''}</div>
+  const prRows=L.length?L.map(p=>{const lk=[p.ig&&'IG',p.fb&&'FB',p.web&&'Web'].filter(Boolean).join(' ');return `<div class="row" style="cursor:default;flex-wrap:wrap"><div class="rt">${esc(p.name)}<small>${esc([sponStage(p)+(p.emailedAt&&p.emailedAt!=='earlier'?' (emailed '+sponDay(p.emailedAt)+')':''),p.city,p.contactName,lk,p.ds?'info: '+p.ds:''].filter(Boolean).join(' · '))}</small>${p.fit?`<small>Fit: ${esc(p.fit)}</small>`:''}</div>
       <label style="display:flex;gap:4px;align-items:center;font-size:12px"><input type="checkbox" data-act="sponem" data-arg="${esc(p.id)}" ${p.emailedAt?'checked':''}/> Emailed</label><label style="display:flex;gap:4px;align-items:center;font-size:12px"><input type="checkbox" data-act="sponcold" data-arg="${esc(p.id)}" ${p.goneCold?'checked':''}/> Gone cold</label>
-      <button class="btn btn-g" style="padding:3px 9px" type="button" data-act="sponmail" data-arg="${esc(p.id)}">Email</button>${pen('sponedit',p.id,'Edit this sponsor')}</div>`;}).join(''):'<div class="meta" style="margin:0">No sponsor prospects for '+esc(area||'this month')+' yet.</div>';
+      <button class="btn btn-g" style="padding:3px 9px" type="button" data-act="sponmail" data-arg="${esc(p.id)}">Email</button>${pen('sponedit',p.id,'Edit this sponsor')}</div>`;}).join(''):'<div class="meta" style="margin:0">'+(sponAll(m).length?'No sponsor prospects match the filters.':'No sponsor prospects for '+esc(area||'this month')+' yet.')+'</div>';
   return `<div class="card" style="padding:14px">${bannerHtml(m)}<h4 style="font-size:13px">${monthName(m)} ${m===t?'· now':''}</h4>
     <span class="lbl">Month theme</span>${inp('theme',ci.theme,'Month theme')}
     <span class="lbl">Weekly sponsors${area?' · '+esc(area):''}</span>${wkRows}
-    <span class="lbl">Sponsor prospects for this theme${area?' · '+esc(area):''} (${L.length})</span>${prRows}
+    <span class="lbl">Sponsor prospects for this theme${area?' · '+esc(area):''} (${L.length===sponAll(m).length?L.length:L.length+' of '+sponAll(m).length})</span>${prRows}
     <div class="tools" style="margin-top:6px"><button class="btn btn-g" type="button" data-act="sponadd" data-arg="${m}">+ Add sponsor prospect</button><button class="btn btn-g" type="button" data-act="sponbulk" data-arg="${m}">Add in bulk</button></div>
     <span class="lbl">Results (from Echo)</span>
     ${st.length?`<div class="meta" style="margin:0">${st.length} posts with numbers · reach ${sum('reach').toLocaleString()} · likes ${sum('likes').toLocaleString()} · comments + shares ${(sum('comments')+sum('shares')).toLocaleString()}</div>${best?`<div class="meta" style="margin:0">Best: ${esc(best.title)}</div>`:''}`:'<div class="meta" style="margin:0">No numbers entered yet.</div>'}
@@ -1283,6 +1293,15 @@ function vCampaigns(){
     `<div class="bar"><label style="display:flex;gap:8px;align-items:center;cursor:pointer;font-size:13px;color:var(--text2)"><input type="checkbox" data-act="bantoggle" ${showBanners()?'checked':''} style="width:17px;height:17px"/> Show campaign banners</label><div class="sp"></div>
       <button class="chip ${campFilter==='up'?'on':''}" data-act="campf" data-arg="up">This month and ahead</button><button class="chip ${campFilter==='all'?'on':''}" data-act="campf" data-arg="all">Previous month</button></div>`+
     `<div class="bar"><span class="meta" style="margin:0">Area</span>${areas.length?areas.map(a=>`<button class="chip ${a===area?'on':''}" data-act="sponarea" data-arg="${esc(a)}">${esc(a)}</button>`).join(''):'<span class="meta" style="margin:0">No areas yet</span>'}<button class="btn btn-g" style="padding:3px 9px" type="button" title="Edit areas" data-act="sponareas">&#9998;</button></div>`+
+    (function(){const all=Object.values(sponD().prospects).filter(p=>p&&(!area||p.area===area)).map(sponNorm);
+      const cities=[...new Set(all.map(p=>String(p.city||'')).filter(Boolean))].sort(),dss=[...new Set(all.map(p=>String(p.ds||'')).filter(Boolean))].sort();
+      const opt=(v,l,cur)=>`<option value="${esc(v)}" ${cur===v?'selected':''}>${esc(l)}</option>`;
+      return `<div class="bar"><span class="meta" style="margin:0">Filter prospects</span><input type="text" id="sf-q" value="${esc(sponF.q)}" oninput="sponSetF('q',this.value)" style="max-width:200px"/>
+      <select class="mini" onchange="sponSetF('city',this.value)">${opt('','All cities',sponF.city)}${cities.map(c=>opt(c,c,sponF.city)).join('')}</select>
+      <select class="mini" onchange="sponSetF('stage',this.value)">${opt('','Any progress',sponF.stage)}${['To ask','In progress','Said yes','Said no','Gone cold'].map(c=>opt(c,c,sponF.stage)).join('')}</select>
+      <select class="mini" onchange="sponSetF('ds',this.value)">${opt('','Any info found',sponF.ds)}${dss.map(c=>opt(c,c,sponF.ds)).join('')}</select>
+      <select class="mini" onchange="sponSetF('has',this.value)">${opt('','Any contact',sponF.has)}${opt('email','Has email',sponF.has)}${opt('noemail','No email yet',sponF.has)}${opt('social','Has Instagram or Facebook',sponF.has)}</select>
+      <button class="btn btn-g" style="padding:3px 9px" type="button" onclick="sponClearF()">Clear filters</button></div>`;})()+
     `<div class="card" style="padding:14px"><div style="display:flex;gap:10px;align-items:center"><span class="lbl" style="margin:0;flex:1">Sponsor email template</span><button class="btn btn-g" style="padding:3px 9px" type="button" title="Edit the template" data-act="sponTpl">&#9998;</button></div>
       <div class="meta" style="margin:6px 0 2px"><b>${esc(t.subject)}</b></div><div class="meta" style="margin:0;white-space:pre-wrap;font-size:13px">${esc(t.body)}</div></div>`+
     (show.length?`<div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(380px,1fr))">${show.map(campCard).join('')}</div>`:'<div class="empty">'+(campFilter==='all'?'No previous months yet.':'No months ahead yet.')+'</div>');
@@ -3214,7 +3233,7 @@ function exportBuffer(){
 }
 
 window.imgTextPick=imgTextPick;window.embCopyCur=f=>embCopy(editingId,f);window.embUse=embUse;window.closeEdit=closeEdit;window.saveEdit=saveEdit;window.addSlide=addSlide;window.delPost=delPost;window.encore=encore;window.muse=muse;window.libSaveEdit=libSaveEdit;window.ledRule=ledRule;window.libHide=libHide;window.banUpload=banUpload;window.addTags=addTags;window.setWin=setWin;window.tw=null;Object.defineProperty(window,'tw',{get:()=>tw,set:v=>{tw=v;}});Object.defineProperty(window,'twKey',{get:()=>twKey});window.twPick=twPick;window.twAdd=twAdd;window.twDelTask=twDelTask;window.twMove=twMove;window.twNewSet=twNewSet;window.twDelSet=twDelSet;window.twSave=twSave;window.libUpload=libUpload;window.aiCaption=aiCaption;window.capPrompt=capPrompt;window.openGfx=openGfx;window.gfxPick=gfxPick;window.gfxSaveBg=gfxSaveBg;window.gfxUse=gfxUse;window.uploadImg=uploadImg;window.imgPrev=imgPrev;
-window.sponClose=sponClose;window.sponAreasSave=sponAreasSave;window.sponEditSave=sponEditSave;window.sponDel=sponDel;window.sponWkSave=sponWkSave;window.sponWkClear=sponWkClear;window.sponTplReset=sponTplReset;window.sponTplSave=sponTplSave;window.banLinkSave=banLinkSave;window.setBanner=setBanner;window.sponBulkAdd=sponBulkAdd;window.sponBulkPrev=sponBulkPrev;window.sponBulkFile=sponBulkFile;window.sponEdit=sponEdit;window.seedMissing=seedMissing;window.sponWkEdit=sponWkEdit;window.sponBulkEdit=sponBulkEdit;window.sponParse=sponParse;window.sponD=sponD;window.sponList=sponList;window.sponStage=sponStage;
+window.sponClose=sponClose;window.sponAreasSave=sponAreasSave;window.sponEditSave=sponEditSave;window.sponDel=sponDel;window.sponWkSave=sponWkSave;window.sponWkClear=sponWkClear;window.sponTplReset=sponTplReset;window.sponTplSave=sponTplSave;window.banLinkSave=banLinkSave;window.setBanner=setBanner;window.sponBulkAdd=sponBulkAdd;window.sponBulkPrev=sponBulkPrev;window.sponBulkFile=sponBulkFile;window.sponSetF=sponSetF;window.sponClearF=sponClearF;window.sponEdit=sponEdit;window.seedMissing=seedMissing;window.sponWkEdit=sponWkEdit;window.sponBulkEdit=sponBulkEdit;window.sponParse=sponParse;window.sponD=sponD;window.sponList=sponList;window.sponStage=sponStage;
 window.addEventListener('hashchange',()=>{let h=location.hash.slice(1);if(['library','bank','cadence','inventory'].includes(h)){location.hash='templates';return;}if((TABS.some(t=>t[0]===h)||h==='events')&&h!==tab){editing=false;tab=h;render();}});
 applyTheme(document.documentElement.getAttribute('data-theme')||'dark');
 init();
