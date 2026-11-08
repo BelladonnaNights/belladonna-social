@@ -533,6 +533,13 @@ function buildSeed(){
 let emCfg={},emAv='';
 let db=null,fs=null,auth=null,authMod=null,user=null,authChecked=false,unsubs=[],mode='local',posts=[],vposts=[],gigs=[],hqGigs=[],libOv={},rtMod=null,rtdb=null,rt={};
 let tab=(location.hash||'#dashboard').slice(1);
+let kindF='all';
+function isFbPost(p){return !!(p&&(p.hqFb||p.type==='cover'));}
+function fbLead(){const n=+((libOv.settings||{}).fbLead);return n>=1&&n<=120?Math.round(n):14;}
+function kindBar(){
+  const opts=[7,10,14,21,28,30,45,60,90];const cur=fbLead();if(opts.indexOf(cur)<0){opts.push(cur);opts.sort((a,b)=>a-b);}
+  return `<div class="bar"><button class="chip ${kindF==='all'?'on':''}" data-act="kindf" data-arg="all">All</button><button class="chip ${kindF==='fb'?'on':''}" data-act="kindf" data-arg="fb">FB Events</button><div class="sp"></div><span class="meta" style="margin:0">Make Facebook events</span><select class="mini" id="fblead">${opts.map(n=>`<option value="${n}" ${n===cur?'selected':''}>${n} days ahead</option>`).join('')}</select></div>`;
+}
 let evIdx=0,calView='todo',typeF='all',monthF='all',studioF='todo',editingId=null,selDay=null;
 let calMode=(()=>{try{return localStorage.getItem('bn_clio_calmode')||'list';}catch(e){return 'list';}})();
 let calMonth=(()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');})();
@@ -1015,7 +1022,7 @@ function vMonth(){
   for(let i=0;i<startDow;i++)cells.push(null);
   for(let d=1;d<=dim;d++)cells.push(Y+'-'+pad(M)+'-'+pad(d));
   while(cells.length%7)cells.push(null);
-  let list=vposts.slice();if(typeF!=='all')list=list.filter(p=>p.type===typeF);
+  let list=vposts.slice();if(typeF!=='all')list=list.filter(p=>p.type===typeF);if(kindF==='fb')list=list.filter(isFbPost);
   const by={};list.forEach(p=>{(by[p.date]=by[p.date]||[]).push(p);});
   Object.values(by).forEach(a=>a.sort(sortFn));
   const monthTitle=new Date(Y,M-1,1).toLocaleDateString('en-US',{month:'long',year:'numeric'});
@@ -1027,7 +1034,7 @@ function vMonth(){
   }).join('');
   const sel=selDay&&selDay.startsWith(calMonth)?(by[selDay]||[]):null;
   $('view').innerHTML=head('Calendar','Tap a day to see its posts. Gold = to do, green = posted, ★ = big night.')+overviewStats()+
-    `<div class="bar"><select class="mini" id="tf"><option value="all">All templates</option>${Object.entries(TYPES).map(([k,v])=>`<option value="${k}" ${typeF===k?'selected':''}>${v.l}</option>`).join('')}</select></div>`+
+    `<div class="bar"><select class="mini" id="tf"><option value="all">All types of posts</option>${Object.entries(TYPES).map(([k,v])=>`<option value="${k}" ${typeF===k?'selected':''}>${v.l}</option>`).join('')}</select></div>`+kindBar()+
     `<div class="mnav"><button class="btn btn-g" data-act="mprev">‹</button><div class="mt">${monthTitle}</div><button class="btn btn-g" data-act="mtoday">Today</button><button class="btn btn-g" data-act="mnext">›</button></div>`+
     `<div class="mgrid">${DN.map(d=>`<div class="mh">${d}</div>`).join('')}${grid}</div>`+
     (sel?`<div class="sec">${dayName(selDay)}</div>${sel.length?sel.map(rowHtml).join(''):'<div class="empty">Nothing on this day.</div>'}<div style="margin-top:8px"><button class="btn btn-g" data-act="newday" data-arg="${selDay}">+ Add post on this day</button></div>`:'');
@@ -1051,7 +1058,7 @@ function vCalendar(){vMonth();$('view').insertAdjacentHTML('beforeend','<div cla
 /* ── STUDIO: where posts get finished ── */
 function studioSets(){
   const t=todayStr(),end=addDays(t,14);
-  const af=L=>L.filter(p=>(typeF==='all'||p.type===typeF)&&(monthF==='all'||p.date.startsWith(monthF)));
+  const af=L=>L.filter(p=>(typeF==='all'||p.type===typeF)&&(kindF!=='fb'||isFbPost(p))&&(monthF==='all'||p.date.startsWith(monthF)));
   const up=af(vposts.filter(p=>!isMile(p)&&p.type!=='tonight'&&p.type!=='host'&&!p.posted&&!p.scheduled&&p.date>=t)).sort(sortFn);
   const base=af(vposts.slice()).sort(sortFn);
   return {todo:base.filter(p=>overdue(p,t)||(p.date>=t&&p.date<=end&&!p.posted&&!p.scheduled)),overdue:base.filter(p=>overdue(p,t)),
@@ -1062,7 +1069,7 @@ function studioBar(F){
   const months=[...new Set(vposts.map(p=>p.date.slice(0,7)))].sort();
   const chips=[['todo','To do'],['caption','Needs caption'],['image','Needs image'],['ready','Ready for Buffer'],['all','Everything'],['history','History']];
   return `<div class="bar">${chips.map(([k,l])=>`<button class="chip ${studioF===k?'on':''}" data-act="studio" data-arg="${k}">${l} (${F[k].length})</button>`).join('')}<button class="chip ${studioF==='grid'?'on':''}" data-act="studio" data-arg="grid">Instagram grid</button></div>
-    <div class="bar"><select class="mini" id="tf"><option value="all">All templates</option>${Object.entries(TYPES).map(([k,v])=>`<option value="${k}" ${typeF===k?'selected':''}>${v.l}</option>`).join('')}</select>
+    ${kindBar()}<div class="bar"><select class="mini" id="tf"><option value="all">All types of posts</option>${Object.entries(TYPES).map(([k,v])=>`<option value="${k}" ${typeF===k?'selected':''}>${v.l}</option>`).join('')}</select>
       <select class="mini" id="mf"><option value="all">All months</option>${months.map(m=>`<option value="${m}" ${monthF===m?'selected':''}>${monthName(m)}</option>`).join('')}</select><div class="sp"></div>
       <button class="btn btn-gold" data-act="export">Export for Buffer (Instagram + Facebook files)</button></div>`;
 }
@@ -1119,15 +1126,15 @@ async function syncBigNights(){
     if(posts.some(p=>p.id===id)||c.date<t)continue;
     quietSave({id,date:c.date,time:'',type:'big',title:campTitle(c),platform:TYPES.big.plat,caption:'',imageUrl:'',notes:'HQ campaign: '+(c.theme?c.theme+' ('+monthLong(c.month)+')':monthLong(c.month)),created:false,posted:false,hqGig:id});changed=true;
   }
-  /* gigs starred in HQ "Needs a Facebook event": tell her exactly when to create it (14 days before the night) */
+  /* gigs starred in HQ "Needs a Facebook event": tell her exactly when to create it (set in Calendar / Studio: how many days before the night) */
   const wantFb=new Map();
   gigs.filter(g=>g.fbEvent&&g.date&&g.status!=='cancelled'&&g.date>=t).forEach(g=>wantFb.set('hqfb_'+g.id,g));
   for(const p of posts.filter(x=>x.hqFb)){
     if(!wantFb.has(p.id)&&!p.posted){await rawDel(p.id);changed=true;}
   }
   for(const [id,g] of wantFb){
-    const nm=g.bigName||((g.kind||'Event')+' at '+g.venue),by=addDays(g.date,-14),when=by<t?t:by;
-    const title='Create Facebook event: '+nm,notes='Create the Facebook event for this night by '+dayName(when)+(by<t?' (already inside 14 days, do it now)':'')+'. The night is '+dayName(g.date)+(g.time?' at '+fmtTime(t24(g.time)):'')+'.';
+    const nm=g.bigName||((g.kind||'Event')+' at '+g.venue),LD=fbLead(),by=addDays(g.date,-LD),when=by<t?t:by;
+    const title='Create Facebook event: '+nm,notes='Create the Facebook event for this night by '+dayName(when)+(by<t?' (already inside '+LD+' days, do it now)':'')+'. The night is '+dayName(g.date)+(g.time?' at '+fmtTime(t24(g.time)):'')+'.';
     const ex=posts.find(p=>p.id===id);
     if(ex){if(ex.posted)continue;if(ex.title!==title||ex.date!==when||ex.notes!==notes){quietSave({...ex,title,date:when,notes});changed=true;}continue;}
     quietSave({id,date:when,time:'09:00',type:'cover',title,platform:'FB',caption:'',imageUrl:'',notes,created:false,posted:false,hqFb:true});changed=true;
@@ -1413,6 +1420,7 @@ document.addEventListener('keydown',e=>{if(e.key==='Enter'&&(e.target.id==='si-p
 $('banner').addEventListener('click',e=>{const a=e.target.closest('[data-act]');if(a)act(a.dataset.act,a.dataset.arg);});
 $('view').addEventListener('change',e=>{
   if(e.target.id==='tf'){typeF=e.target.value;render();}
+  else if(e.target.id==='fblead'){saveLib('settings',{fbLead:+e.target.value},true).then(()=>{try{syncBigNights();}catch(x){}render();toast('Facebook events: '+e.target.value+' days ahead');});}
   else if(e.target.id==='mf'){monthF=e.target.value;render();}
   else if(e.target.id==='bkwk'){bankWeek=+e.target.value;render();}
   else if(e.target.dataset.bkr){if(e.target.dataset.bkr==='from'){bankFrom=e.target.value;if(bankTo<bankFrom)bankTo=bankFrom;}else bankTo=e.target.value;e.target.blur();render();}
@@ -1427,6 +1435,7 @@ $('view').addEventListener('change',e=>{
   else if(e.target.dataset.secn!==undefined){const old=e.target.dataset.secn,nm=e.target.value.trim();if(!nm||nm===old){render();return;}
     const sc=tplSections();if(sc.includes(nm)){toast('That section name is taken');render();return;}
     (async()=>{for(const t of tplList().filter(x=>(x.group||'Other')===old))await saveLib(t.id,{group:nm},true);await saveLib('tplui',{sections:sc.map(g=>g===old?nm:g)},true);if(tplGrp===old)tplGrp=nm;render();})();}
+  else if(e.target.dataset.tpx){const[tid,pid]=e.target.dataset.tpx.split('|'),cur={...((libOv[tid]||{}).prompts||{})};if(cur[pid]){cur[pid]={...cur[pid],text:e.target.value};saveLib(tid,{prompts:cur});}}
   else if(e.target.dataset.lib){if(e.target.tagName==='SELECT'){e.target.blur();editing=false;pendingRender=false;}saveLib(e.target.dataset.lib,{[e.target.dataset.f]:e.target.value.trim()}).then(render);}
   else if(0)saveLib(e.target.dataset.lib,{[e.target.dataset.f]:e.target.value.trim()}).then(render);
   else if(e.target.dataset.bx){const[c,f]=e.target.dataset.bx.split('|');bankField(c,f,e.target.value);}
@@ -1489,6 +1498,7 @@ function act(a,arg){
   else if(a==='dashday'){calMonth=arg.slice(0,7);selDay=arg;setTab('calendar');}
   else if(a==='dashpost'){openEdit(arg);}
   else if(a==='gennow')runGen(true);
+  else if(a==='kindf'){kindF=arg;render();}
   else if(a==='gentoggle'){saveLib('settings',{autoGen:(libOv.settings||{}).autoGen===false}).then(render);}
   else if(a==='libedit')openLibEdit(arg);
   else if(a==='howfold'){const o={...howOpenMap()};if(o[arg])delete o[arg];else o[arg]=true;saveLib('tplui',{howOpen:o},true).then(render);}
@@ -1497,6 +1507,12 @@ function act(a,arg){
   else if(a==='howedit'){howEditId=arg;render();}
   else if(a==='igcopy'){const e=document.getElementById('igsafe');copyTxt(e?e.value.trim():igSafe());}
   else if(a==='tplgo'){const o={...tplOpenMap()};o[arg]=true;saveLib('tplui',{open:o},true).then(()=>setTab('templates'));}
+  else if(a==='tptog'){tpOpen[arg]=!tpOpen[arg];render();}
+  else if(a==='tpadd'){const ti=(window.prompt('Heading for the new prompt')||'').trim();if(!ti)return;const pid='p'+Date.now().toString(36),cur={...((libOv[arg]||{}).prompts||{})};cur[pid]={title:ti,text:'',at:Date.now()};saveLib(arg,{prompts:cur}).then(()=>{tpOpen[arg+'|'+pid]=true;render();});}
+  else if(a==='tpren'){const[tid,pid]=arg.split('|'),o=libOv[tid]||{};const curT=pid==='main'?(o.promptTitle||'Main prompt'):(((o.prompts||{})[pid]||{}).title||'');const ti=(window.prompt('Heading',curT)||'').trim();if(!ti)return;
+    if(pid==='main')saveLib(tid,{promptTitle:ti}).then(render);else{const cur={...(o.prompts||{})};cur[pid]={...(cur[pid]||{}),title:ti};saveLib(tid,{prompts:cur}).then(render);}}
+  else if(a==='tpdel'){const[tid,pid]=arg.split('|');if(!confirm('Delete this prompt?'))return;const cur={...((libOv[tid]||{}).prompts||{})};delete cur[pid];saveLib(tid,{prompts:cur}).then(render);}
+  else if(a==='tpcopy'){const[tid,pid]=arg.split('|'),o=libOv[tid]||{};const el=document.getElementById(pid==='main'?'tp-'+tid:'tp-'+tid+'-'+pid);const v=el?el.value:(pid==='main'?(o.prompt||''):(((o.prompts||{})[pid]||{}).text||''));if(v.trim())copyTxt(withSafe(v));else toast('Nothing to copy yet. Open it and type the prompt first.');}
   else if(a==='tplpromptcopy'){const e=document.getElementById('tp-'+arg);if(e&&e.value.trim())copyTxt(withSafe(e.value));else toast('Nothing to copy yet. Type the prompt first.');}
   else if(a==='livefold'){const o={...((libOv.tplui||{}).liveOpen||{})};if(o[arg])delete o[arg];else o[arg]=true;saveLib('tplui',{liveOpen:o},true).then(render);}
   else if(a==='grpadd')slideFrom(arg);
@@ -2769,13 +2785,28 @@ function bankCatHtml(c,v){
 `}    <div class="acts"><button class="btn btn-d" data-act="bkcatdel" data-arg="${c}">Delete this category</button></div>
 </div>`:''}</div>`;
 }
+const tpOpen={};
+function tpExtra(tid){const o=(libOv[tid]||{}).prompts||{};return Object.entries(o).filter(([k,v])=>v).map(([k,v])=>({id:k,title:v.title||'Untitled',text:v.text||'',at:v.at||0})).sort((a,b)=>a.at-b.at);}
+function tpHead(tid,pid,title,open){
+  return `<div style="display:flex;align-items:center;gap:8px"><span data-act="tptog" data-arg="${tid}|${pid}" style="cursor:pointer;flex:1;display:flex;gap:8px;align-items:center;min-width:0"><span>${open?'▾':'▸'}</span><b style="font-weight:600;overflow:hidden;text-overflow:ellipsis">${esc(title)}</b></span><button class="btn btn-g" data-act="tpren" data-arg="${tid}|${pid}" style="padding:3px 9px" title="Edit the heading">✎</button><button class="btn btn-gold" data-act="tpcopy" data-arg="${tid}|${pid}" style="padding:3px 12px">Copy</button></div>`;
+}
+function tpHtml(t){
+  const tid=t.id,o=libOv[tid]||{};
+  const mOpen=!!tpOpen[tid+'|main'];
+  let h=`<div style="max-width:640px"><div class="meta" style="margin-top:0">Keep every prompt you use for this look here. Each one is closed until you open it. Click the pencil to rename a heading. Text saves when you click out of the box.</div>`;
+  h+=`<div class="card" style="padding:8px 12px;margin-bottom:6px">${tpHead(tid,'main',o.promptTitle||'Main prompt',mOpen)}${mOpen?`<textarea id="tp-${tid}" data-lib="${tid}" data-f="prompt" style="min-height:160px;margin-top:8px">${esc(o.prompt||'')}</textarea>`:''}</div>`;
+  tpExtra(tid).forEach(p=>{const op=!!tpOpen[tid+'|'+p.id];
+    h+=`<div class="card" style="padding:8px 12px;margin-bottom:6px">${tpHead(tid,p.id,p.title,op)}${op?`<textarea id="tp-${tid}-${p.id}" data-tpx="${tid}|${p.id}" style="min-height:160px;margin-top:8px">${esc(p.text)}</textarea><div class="tools" style="margin:6px 0 0"><button class="btn btn-d" data-act="tpdel" data-arg="${tid}|${p.id}">Delete this prompt</button></div>`:''}</div>`;});
+  h+=`<div class="tools" style="margin:6px 0 0"><button class="btn btn-g" data-act="tpadd" data-arg="${tid}">+ Add a prompt</button></div></div>`;
+  return h;
+}
 function tplCard(t){
   const open=!!tplOpenMap()[t.id],pseudo=t.id==='_none';
   if(!open)return `<div class="card" style="padding:10px 12px;margin-bottom:6px">${tplHead(t,false)}</div>`;
   const types=tplTypes(t),cats=tplCats(t),slide=MONTHLY_SET_IDS.includes(t.id)&&t.id!=='monthly';
   return `<div class="card tb" style="margin-bottom:8px">${tplHead(t,true)}<div style="margin-top:10px">
     ${pseudo?'':`<div class="f" style="max-width:360px"><label>How do you make this?</label><select class="mini" data-lib="${t.id}" data-f="makeStyle"><option value="every" ${tplMake(t)==='every'?'selected':''}>Every time (weekly, monthly, events)</option><option value="batch" ${tplMake(t)==='batch'?'selected':''}>Batch-made, as needed</option></select></div>`}
-    ${pseudo?'':`<div class="sec">Prompt for ChatGPT</div><div style="max-width:640px"><div class="meta" style="margin-top:0">Paste the prompt you use in ChatGPT to make this image. It saves when you click out of the box.</div><textarea id="tp-${t.id}" data-lib="${t.id}" data-f="prompt" style="min-height:160px">${esc((libOv[t.id]||{}).prompt||'')}</textarea><div class="tools" style="margin:6px 0 0"><button class="btn btn-gold" data-act="tplpromptcopy" data-arg="${t.id}">Copy prompt</button></div></div>`}
+    ${pseudo?'':`<div class="sec">Prompt for ChatGPT</div>${tpHtml(t)}`}
     ${pseudo?'':tplLookHtml(t)}
     <div class="sec">Words${cats.length?' ('+cats.length+')':''}</div>
     ${cats.length?cats.map(([c,v])=>bankCatHtml(c,v)).join(''):'<div class="meta">No word bank yet. Add a category to keep ready-to-post lines for this look.</div>'}
