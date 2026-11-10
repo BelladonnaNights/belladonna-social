@@ -166,6 +166,20 @@ select:focus,input:focus,textarea:focus{outline:none;border-color:var(--gold);}
 .tb .f>label::before,.tb .lbl::before{content:'\2726';color:var(--gold);font-size:.8em}
 .tb .sec{display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--border-gold);padding-bottom:6px;margin-top:18px}
 .tb .sec::before{content:'\2726';color:var(--gold);font-size:.8em}
+
+/* big, proper search box */
+input.qbox{width:100%!important;max-width:760px!important;flex:1 1 320px;box-sizing:border-box;font-family:var(--font);font-size:17px!important;padding:15px 20px!important;min-height:54px!important;border:1px solid var(--border-gold)!important;border-radius:14px!important;background:var(--surface3);color:var(--text);outline:none}
+input.qbox:focus{border-color:var(--gold)!important;box-shadow:0 0 0 3px var(--gold-dim)}
+/* section headings: quiet title, small icon buttons */
+.sechd{display:flex;align-items:center;gap:10px;margin:26px 0 10px;padding-bottom:8px;border-bottom:1px solid var(--border)}
+.sechd .st{font-family:var(--cinzel);letter-spacing:.16em;text-transform:uppercase;font-size:.95rem;color:var(--gold2)}
+.sechd .sn{font-size:.72rem;color:var(--text3)}
+.sechd .sp{flex:1}
+.ibtn{width:30px;height:30px;border-radius:50%;border:1px solid var(--border);background:none;color:var(--text3);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;padding:0;opacity:.6;transition:all .15s}
+.ibtn:hover:not([disabled]){opacity:1;border-color:var(--gold);color:var(--gold)}
+.ibtn[disabled]{opacity:.2;cursor:default}
+.ibtn.danger:hover:not([disabled]){border-color:var(--rose);color:var(--rose)}
+.ibtn svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 </style>
 </head>
 <body>
@@ -1478,6 +1492,8 @@ function act(a,arg){
   else if(a==='evopen'){openEdit(arg);}
   else if(a==='edtasks')openTasks();
   else if(a==='libnew')openLibEdit(null);
+  else if(a==='secren'){const nm=(prompt('New name for this section',arg)||'').trim();if(!nm||nm===arg)return;const sc=tplSections();if(sc.includes(nm)){toast('That section name is taken');return;}
+    (async()=>{for(const t of tplList().filter(x=>(x.group||'Other')===arg))await saveLib(t.id,{group:nm},true);await saveLib('tplui',{sections:sc.map(g=>g===arg?nm:g)},true);render();})();}
   else if(a==='secnew'){const nm=(prompt('Name for the new section')||'').trim();if(!nm)return;const sc=tplSections();if(sc.includes(nm)){toast('That section already exists');return;}
     saveLib('tplui',{sections:[...sc,nm]},true).then(render);}
   else if(a==='secup'||a==='secdn'){const sc=tplSections(),i=sc.indexOf(arg),k=a==='secup'?i-1:i+1;if(i<0||k<0||k>=sc.length)return;[sc[i],sc[k]]=[sc[k],sc[i]];saveLib('tplui',{sections:sc},true).then(render);}
@@ -2815,7 +2831,7 @@ function tplGroupBlock(k,label,list){
 }
 let tplGrp='all',tplQ='',cadQ='';
 function qHas(q,...a){q=String(q||'').trim().toLowerCase();return !q||a.join(' ').toLowerCase().includes(q);}
-function searchBox(id,val,ph){return `<div class="bar"><input type="search" id="${id}" value="${esc(val)}" placeholder="${esc(ph)}" autocomplete="off" style="max-width:640px;width:100%;flex:1;font-size:16px;padding:13px 16px;min-height:48px"/>${val?`<button class="btn btn-g" data-act="qclear" data-arg="${id}">Clear</button>`:''}</div>`;}
+function searchBox(id,val,ph){return `<div class="bar"><input type="search" id="${id}" value="${esc(val)}" placeholder="${esc(ph)}" autocomplete="off" class="qbox"/>${val?`<button class="btn btn-g" data-act="qclear" data-arg="${id}">Clear</button>`:''}</div>`;}
 $('view').addEventListener('input',e=>{
   const id=e.target.id;if(id!=='tplq'&&id!=='cadq')return;
   if(id==='tplq')tplQ=e.target.value;else cadQ=e.target.value;
@@ -2846,7 +2862,7 @@ function tplTemplateParts(list){
   let mgmt='',cards='';
   if(tplGrp==='all'){
     cards=secs.map(g=>{const its=list.filter(e=>e.id!=='_none'&&(e.group||'Other')===g);if(tplDue&&!its.length)return '';
-      const ix=secs.indexOf(g);return `<div data-sec="${esc(g)}" style="margin-bottom:6px"><div class="sec" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><input type="text" data-secn="${esc(g)}" value="${esc(g)}" style="width:auto;min-width:140px;max-width:260px;font-family:var(--cinzel);letter-spacing:.12em;text-transform:uppercase"/><span class="meta" style="margin:0">${its.length}</span><button class="btn btn-g" type="button" data-act="secup" data-arg="${esc(g)}" ${ix?'':'disabled'} style="padding:4px 10px">↑</button><button class="btn btn-g" type="button" data-act="secdn" data-arg="${esc(g)}" ${ix<secs.length-1?'':'disabled'} style="padding:4px 10px">↓</button><button class="btn btn-d" type="button" data-act="secdel" data-arg="${esc(g)}" style="padding:4px 10px">Delete section</button></div>${its.length?its.map(tplCard).join(''):'<div class="meta" style="margin:0">Empty. Pick this section on a template to move it here.</div>'}</div>`;}).join('')+(has?`<div class="sec">No template</div>${tplCard(list.find(x=>x.id==='_none'))}`:'');
+      const ix=secs.indexOf(g);return `<div data-sec="${esc(g)}" style="margin-bottom:6px"><div class="sechd"><span class="st">${esc(g)}</span><span class="sn">${its.length} template${its.length===1?'':'s'}</span><span class="sp"></span><button class="ibtn" type="button" data-act="secren" data-arg="${esc(g)}" title="Rename this section"><svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg></button><button class="ibtn" type="button" data-act="secup" data-arg="${esc(g)}" ${ix?'':'disabled'} title="Move up"><svg viewBox="0 0 24 24"><path d="M6 15l6-6 6 6"/></svg></button><button class="ibtn" type="button" data-act="secdn" data-arg="${esc(g)}" ${ix<secs.length-1?'':'disabled'} title="Move down"><svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button><button class="ibtn danger" type="button" data-act="secdel" data-arg="${esc(g)}" title="Delete this section"><svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg></button></div>${its.length?its.map(tplCard).join(''):'<div class="meta" style="margin:0">Empty. Pick this section on a template to move it here.</div>'}</div>`;}).join('')+(has?`<div class="sec">No template</div>${tplCard(list.find(x=>x.id==='_none'))}`:'');
   }else if(tplGrp==='_none'){cards=tplCard(list.find(x=>x.id==='_none'));}
   else{
     const ix=secs.indexOf(tplGrp),its=list.filter(e=>e.id!=='_none'&&(e.group||'Other')===tplGrp);
@@ -2885,9 +2901,9 @@ function vTemplates(){
   tplGrp='all';tplDue=false;
   const view=tplViewNow(),all0=tplAll(),filt=(view==='template'||view==='use'||view==='post'),all=tplQ.trim()?all0.filter(t=>qHas(tplQ,t.name,t.nick,t.use,t.group,tplCats(t).map(([c,v])=>v.name+' '+(v.badge||'')).join(' '),tplTypes(t).map(x=>x.name).join(' '))):all0,list=(tplDue&&filt)?all.filter(tplIsDue):all;
   const chip=(k,l)=>`<button class="chip ${view===k?'on':''}" data-act="tvw" data-arg="${k}">${l}</button>`;
-  const top=`<div class="bar">${chip('template','By template')}${chip('use','By use')}${chip('post','Post view')}<div class="sp"></div><button class="btn btn-p" data-act="tplnew">+ New template</button></div>`;
+  const top=`<div class="bar">${chip('template','By template')}${chip('use','By use')}${chip('post','Post view')}<div class="sp"></div><button class="btn btn-g" data-act="secnew">+ Add a section</button><button class="btn btn-p" data-act="tplnew">+ New template</button></div>`;
   const hd=head('Templates','Every look, its words and how often you post it, in one place. Switch the grouping to find things your way.');
-  if(view==='inventory'){$('view').innerHTML=hd+top.replace(/<button class="btn btn-p"[^>]*>\+ New template<\/button>/,'')+invHtml();return;}
+  if(view==='inventory'){$('view').innerHTML=hd+top.replace(/<button class="btn btn-p"[^>]*>\+ New template<\/button>/,'').replace(/<button class="btn btn-g" data-act="secnew">[^<]*<\/button>/,'')+invHtml();return;}
   const details=`<div class="bar"><span class="meta" style="margin:0">Details for graphics:</span>${bankRangeHtml()}<span class="meta" style="margin:0">Week</span><select class="mini" id="bkwk">${[[-1,'Last week'],[0,'This week'],[1,'Next week'],[2,'Week after next']].map(([o,l])=>`<option value="${o}" ${bankWeek===o?'selected':''}>${l} (${bankWeekLabel(o)})</option>`).join('')}</select></div>`;
   if(view==='schedule'){$('view').innerHTML=hd+top+details+tplScheduleHtml()+tplSettingsHtml();return;}
   if(view==='post'){
