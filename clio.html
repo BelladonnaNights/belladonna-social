@@ -1484,6 +1484,8 @@ function act(a,arg){
   else if(a==='secdel'){const its=tplList().filter(e=>(e.group||'Other')===arg);
     if(!confirm('Delete the section "'+arg+'"?'+(its.length?'\n\nIts '+its.length+' template(s) will move to "Other".':'')))return;
     (async()=>{let sc=tplSections().filter(g=>g!==arg);if(its.length){if(!sc.includes('Other'))sc.push('Other');for(const e of its)await saveLib(e.id,{group:'Other'},true);}await saveLib('tplui',{sections:sc},true);if(tplGrp===arg)tplGrp='all';render();})();}
+  else if(a==='tpllink'){const u=((libOv[arg]||{}).link||'').trim();if(u){window.open(/^https?:\/\//i.test(u)?u:'https://'+u,'_blank','noopener');}else{const v=(prompt('Paste the link to this template (Canva, Drive, anything)')||'').trim();if(v)saveLib(arg,{link:v}).then(render);}}
+  else if(a==='tpllinkedit'){const v=prompt('Link to this template (leave empty to remove it)',((libOv[arg]||{}).link||''));if(v===null)return;saveLib(arg,{link:v.trim()}).then(render);}
   else if(a==='tplfold'){const o={...tplOpenMap()};if(o[arg])delete o[arg];else o[arg]=true;saveLib('tplui',{open:o},true).then(render);}
   else if(a==='tplnew'){const nm=(prompt('Name for the new template (e.g. Crow Imagery)')||'').trim();if(!nm)return;
     {const id='cv_'+Date.now().toString(36);saveLib(id,{custom:true,name:nm,nick:nm,size:'1080x1350',use:'',group:'Canvases',freq:'Template, not a post'}).then(()=>saveLib('tplui',{open:{...tplOpenMap(),[id]:true}},true)).then(()=>{render();toast('Template added: fill in its details and upload an example.');});}}
@@ -2733,7 +2735,7 @@ function tplHead(t,open){
   return `<div data-act="tplfold" data-arg="${t.id}" ${pseudo?'':`data-tid="${t.id}" draggable="true"`} style="cursor:pointer;display:flex;gap:10px;align-items:center">
     <span style="color:var(--gold2);width:12px">${open?'▾':'▸'}</span>
     <div style="width:36px;height:45px;flex-shrink:0;background:var(--surface3);border:1px solid var(--border);border-radius:4px;overflow:hidden;display:flex;align-items:center;justify-content:center">${img?`<img src="${esc(img)}" alt="" loading="lazy" style="width:100%;height:100%;object-fit:contain" onerror="this.style.display='none'"/>`:''}</div>
-    <div style="flex:1;min-width:0"><b style="font-weight:600;font-size:.92rem">${esc(t.name)}</b>${t.nick&&t.nick!==t.name?` <span class="nick">${esc(t.nick)}</span>`:''}<div class="meta" style="margin:0">${esc(bits)||'<span style="opacity:.6">Nothing scheduled yet</span>'}</div></div>
+    <div style="flex:1;min-width:0"><b style="font-weight:600;font-size:.92rem">${esc(t.name)}</b>${t.nick&&t.nick!==t.name?` <span class="nick">${esc(t.nick)}</span>`:''}<div class="meta" style="margin:0">${esc(bits)}</div></div>
     <div style="text-align:right;flex-shrink:0">${di.next?`<div class="has" style="display:block">Next: ${esc(shortDay(di.next))}</div>`:''}</div></div>`;
 }
 function tplWhenHtml(t){
@@ -2741,19 +2743,15 @@ function tplWhenHtml(t){
   return `<div class="sec">When it posts</div><div style="max-width:640px">`+(L.length?L.map(e=>`<div class="card" style="padding:8px 12px;margin:4px 0;display:flex;gap:10px;align-items:center;flex-wrap:wrap"><div style="flex:1;min-width:160px"><b style="font-weight:600">${esc(e.name)}</b><div class="meta" style="margin:0;color:var(--gold2)">${esc(freqText(e))}</div></div><button class="btn btn-g" data-act="libedit" data-arg="${e.id}">Change time &amp; frequency</button></div>`).join(''):'<div class="meta">Nothing is scheduled from this template yet. Add a post type to schedule one.</div>')+'</div>';
 }
 function tplLookHtml(t){
-  const o=libOv[t.id]||{},isCv=t.id.startsWith('cv_'),ub=usedBy(t.id),n=vposts.filter(p=>p.type===t.id).length;
-  return tplWhenHtml(t)+`<div class="sec">Look</div><div style="max-width:640px">
+  const o=libOv[t.id]||{},ub=usedBy(t.id),n=vposts.filter(p=>p.type===t.id).length;
+  return `<div class="sec">Look</div><div style="max-width:640px">
     <div class="f2"><div class="f"><label>Template name</label><input type="text" data-lib="${t.id}" data-f="name" value="${esc(t.name)}"/></div><div class="f"><label>Nickname (short label)</label><input type="text" data-lib="${t.id}" data-f="nick" value="${esc(t.nick||'')}"/></div></div>
-    <div class="f2"><div class="f"><label>Size</label><input type="text" data-lib="${t.id}" data-f="size" value="${esc(t.size||'')}" placeholder="1080x1350"/></div><div class="f"><label>What it is / when it's used</label><input type="text" data-lib="${t.id}" data-f="use" value="${esc(t.use||'')}"/></div></div>
-    <div class="f"><label>Section (used in "By template" view)</label><select data-lib="${t.id}" data-f="group">${tplSections().map(g=>`<option value="${esc(g)}" ${(t.group||'Other')===g?'selected':''}>${esc(g)}</option>`).join('')}</select></div>
-    <div class="meta" style="color:var(--gold2)"><b>Used by:</b> ${ub.length?ub.map(esc).join(' · '):'nothing yet (add a category below)'}</div>
+    <div class="f2"><div class="f"><label>Size</label><input type="text" data-lib="${t.id}" data-f="size" value="${esc(t.size||'')}"/></div><div class="f"><label>What it is / when it's used</label><input type="text" data-lib="${t.id}" data-f="use" value="${esc(t.use||'')}"/></div></div>
+    <div class="f"><label>Section</label><select data-lib="${t.id}" data-f="group">${tplSections().map(g=>`<option value="${esc(g)}" ${(t.group||'Other')===g?'selected':''}>${esc(g)}</option>`).join('')}</select></div>
+    ${ub.length?`<div class="meta" style="color:var(--gold2)"><b>Used by:</b> ${ub.map(esc).join(' · ')}</div>`:''}
     ${n?`<div class="meta">${n} posts on the calendar</div>`:''}
-    <span class="lbl">Example image (a finished design Muse tells ChatGPT to copy)</span>
-    <div class="tools" style="margin:0 0 4px"><button class="btn btn-g" type="button" onclick="libUpload('${t.id}')">${o.tplImg?'Replace example':'Upload example'}</button></div>
-    <span class="lbl">Link to template (optional: Canva, Drive, anything)</span><input type="text" data-lib="${t.id}" data-f="link" value="${esc(o.link||'')}" placeholder="https://canva.com/…"/>
-    <span class="lbl">Blank background (only for Make graphic, where Clio draws the text itself)</span><input type="text" data-lib="${t.id}" data-f="bgUrl" value="${esc(o.bgUrl||'')}" placeholder="Set from Make graphic, or paste a link"/>
-    <span class="lbl">Notes</span><input type="text" data-lib="${t.id}" data-f="notes" value="${esc(o.notes||'')}"/>
-    <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">${o.link?`<a href="${esc(o.link)}" target="_blank" rel="noopener"><button class="btn btn-g" type="button">Open template</button></a>`:''}${isCv?`<button class="btn btn-d" type="button" data-act="tpldel" data-arg="${t.id}">Remove template</button>`:''}</div></div>`;
+    <div class="tools" style="margin:10px 0 4px;align-items:center"><button class="btn btn-g" type="button" data-act="tpllink" data-arg="${t.id}" title="${esc(o.link||'No link yet')}">Link to template</button><button class="btn btn-g" type="button" data-act="tpllinkedit" data-arg="${t.id}" title="Change the link" style="padding:4px 10px">✎</button></div>
+    <span class="lbl">Notes</span><input type="text" data-lib="${t.id}" data-f="notes" value="${esc(o.notes||'')}"/></div>`;
 }
 function bankCatHtml(c,v){
   const simple=catSimple(v),mode=catMode(v);
@@ -2803,17 +2801,11 @@ function tpHtml(t){
 function tplCard(t){
   const open=!!tplOpenMap()[t.id],pseudo=t.id==='_none';
   if(!open)return `<div class="card" style="padding:10px 12px;margin-bottom:6px">${tplHead(t,false)}</div>`;
-  const types=tplTypes(t),cats=tplCats(t),slide=MONTHLY_SET_IDS.includes(t.id)&&t.id!=='monthly';
   return `<div class="card tb" style="margin-bottom:8px">${tplHead(t,true)}<div style="margin-top:10px">
-    ${pseudo?'':`<div class="f" style="max-width:360px"><label>How do you make this?</label><select class="mini" data-lib="${t.id}" data-f="makeStyle"><option value="every" ${tplMake(t)==='every'?'selected':''}>Every time (weekly, monthly, events)</option><option value="batch" ${tplMake(t)==='batch'?'selected':''}>Batch-made, as needed</option></select></div>`}
-    ${pseudo?'':`<div class="sec">Prompt for ChatGPT</div>${tpHtml(t)}`}
+    ${pseudo?'':`<div class="tools" style="margin:0 0 10px"><button class="btn btn-gold" type="button" onclick="libUpload('${t.id}')">${(libOv[t.id]||{}).tplImg?'Replace example':'Add example'}</button></div>`}
     ${pseudo?'':tplLookHtml(t)}
-    <div class="sec">Words${cats.length?' ('+cats.length+')':''}</div>
-    ${cats.length?cats.map(([c,v])=>bankCatHtml(c,v)).join(''):'<div class="meta">No word bank yet. Add a category to keep ready-to-post lines for this look.</div>'}
-    <div class="tools" style="margin:6px 0 0"><button class="btn btn-g" data-act="bknewt" data-arg="${pseudo?'':t.id}">+ Add a category</button></div>
-    <div class="sec">When</div>
-    ${slide?'<div class="meta">This is a slide of the monthly post. It is scheduled by "Monthly Announcement".</div>':(types.length?types.map(e=>cadRow(e,e.silenced,false,true)).join(''):'<div class="meta">Nothing is scheduled with this look. Add a post type to schedule it.</div>')}
-    <div class="tools" style="margin:6px 0 0"><button class="btn btn-g" data-act="libnew">+ Add a post type</button></div></div></div>`;
+    ${pseudo?'':`<div class="sec">Prompt for ChatGPT</div>${tpHtml(t)}`}
+    ${pseudo?'':`<div class="tools" style="margin:14px 0 0"><button class="btn btn-d" type="button" data-act="tpldel" data-arg="${t.id}">Delete this template</button></div>`}</div></div>`;
 }
 const TPL_TIERS=[['night','Every night (automatic from HQ)'],['week','Every week'],['month','Every month'],['event','Around each big night'],['manual','Every time, not scheduled']];
 function gopenNow(k){const m=(libOv.tplui||{}).gopen||{};return m[k]!==undefined?m[k]:!(k==='batch'||k==='off');}
@@ -2823,7 +2815,7 @@ function tplGroupBlock(k,label,list){
 }
 let tplGrp='all',tplQ='',cadQ='';
 function qHas(q,...a){q=String(q||'').trim().toLowerCase();return !q||a.join(' ').toLowerCase().includes(q);}
-function searchBox(id,val,ph){return `<div class="bar"><input type="search" id="${id}" value="${esc(val)}" placeholder="${esc(ph)}" autocomplete="off" style="max-width:360px;flex:1"/>${val?`<button class="btn btn-g" data-act="qclear" data-arg="${id}">Clear</button>`:''}</div>`;}
+function searchBox(id,val,ph){return `<div class="bar"><input type="search" id="${id}" value="${esc(val)}" placeholder="${esc(ph)}" autocomplete="off" style="max-width:640px;width:100%;flex:1;font-size:16px;padding:13px 16px;min-height:48px"/>${val?`<button class="btn btn-g" data-act="qclear" data-arg="${id}">Clear</button>`:''}</div>`;}
 $('view').addEventListener('input',e=>{
   const id=e.target.id;if(id!=='tplq'&&id!=='cadq')return;
   if(id==='tplq')tplQ=e.target.value;else cadQ=e.target.value;
@@ -2854,7 +2846,7 @@ function tplTemplateParts(list){
   let mgmt='',cards='';
   if(tplGrp==='all'){
     cards=secs.map(g=>{const its=list.filter(e=>e.id!=='_none'&&(e.group||'Other')===g);if(tplDue&&!its.length)return '';
-      return `<div data-sec="${esc(g)}" style="margin-bottom:6px"><div class="sec">${esc(g)}</div>${its.length?its.map(tplCard).join(''):'<div class="meta" style="margin:0">Empty. Drag a template onto this section\'s pill above.</div>'}</div>`;}).join('')+(has?`<div class="sec">No template</div>${tplCard(list.find(x=>x.id==='_none'))}`:'');
+      const ix=secs.indexOf(g);return `<div data-sec="${esc(g)}" style="margin-bottom:6px"><div class="sec" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><input type="text" data-secn="${esc(g)}" value="${esc(g)}" style="width:auto;min-width:140px;max-width:260px;font-family:var(--cinzel);letter-spacing:.12em;text-transform:uppercase"/><span class="meta" style="margin:0">${its.length}</span><button class="btn btn-g" type="button" data-act="secup" data-arg="${esc(g)}" ${ix?'':'disabled'} style="padding:4px 10px">↑</button><button class="btn btn-g" type="button" data-act="secdn" data-arg="${esc(g)}" ${ix<secs.length-1?'':'disabled'} style="padding:4px 10px">↓</button><button class="btn btn-d" type="button" data-act="secdel" data-arg="${esc(g)}" style="padding:4px 10px">Delete section</button></div>${its.length?its.map(tplCard).join(''):'<div class="meta" style="margin:0">Empty. Pick this section on a template to move it here.</div>'}</div>`;}).join('')+(has?`<div class="sec">No template</div>${tplCard(list.find(x=>x.id==='_none'))}`:'');
   }else if(tplGrp==='_none'){cards=tplCard(list.find(x=>x.id==='_none'));}
   else{
     const ix=secs.indexOf(tplGrp),its=list.filter(e=>e.id!=='_none'&&(e.group||'Other')===tplGrp);
@@ -2891,13 +2883,18 @@ function tplSettingsHtml(){
 }
 function vTemplates(){
   tplGrp='all';tplDue=false;
-  const view=tplViewNow(),all0=tplAll(),filt=(view==='template'||view==='use'),all=tplQ.trim()?all0.filter(t=>qHas(tplQ,t.name,t.nick,t.use,t.group,tplCats(t).map(([c,v])=>v.name+' '+(v.badge||'')).join(' '),tplTypes(t).map(x=>x.name).join(' '))):all0,list=(tplDue&&filt)?all.filter(tplIsDue):all;
+  const view=tplViewNow(),all0=tplAll(),filt=(view==='template'||view==='use'||view==='post'),all=tplQ.trim()?all0.filter(t=>qHas(tplQ,t.name,t.nick,t.use,t.group,tplCats(t).map(([c,v])=>v.name+' '+(v.badge||'')).join(' '),tplTypes(t).map(x=>x.name).join(' '))):all0,list=(tplDue&&filt)?all.filter(tplIsDue):all;
   const chip=(k,l)=>`<button class="chip ${view===k?'on':''}" data-act="tvw" data-arg="${k}">${l}</button>`;
-  const top=`<div class="bar">${chip('template','By template')}${chip('use','By use')}<div class="sp"></div><button class="btn btn-p" data-act="tplnew">+ New template</button></div>`;
+  const top=`<div class="bar">${chip('template','By template')}${chip('use','By use')}${chip('post','Post view')}<div class="sp"></div><button class="btn btn-p" data-act="tplnew">+ New template</button></div>`;
   const hd=head('Templates','Every look, its words and how often you post it, in one place. Switch the grouping to find things your way.');
   if(view==='inventory'){$('view').innerHTML=hd+top.replace(/<button class="btn btn-p"[^>]*>\+ New template<\/button>/,'')+invHtml();return;}
   const details=`<div class="bar"><span class="meta" style="margin:0">Details for graphics:</span>${bankRangeHtml()}<span class="meta" style="margin:0">Week</span><select class="mini" id="bkwk">${[[-1,'Last week'],[0,'This week'],[1,'Next week'],[2,'Week after next']].map(([o,l])=>`<option value="${o}" ${bankWeek===o?'selected':''}>${l} (${bankWeekLabel(o)})</option>`).join('')}</select></div>`;
   if(view==='schedule'){$('view').innerHTML=hd+top+details+tplScheduleHtml()+tplSettingsHtml();return;}
+  if(view==='post'){
+    const secs=tplSections(),tile=x=>{const u=(libOv[x.id]||{}).tplImg;return `<div class="gt" data-act="tplview" data-arg="${x.id}" style="aspect-ratio:4/5" title="${esc(x.name)}">${u?`<img src="${esc(u)}" alt="" loading="lazy" onerror="this.style.display='none'"/>`:''}<div class="gtl" style="${u?'justify-content:flex-end;background:linear-gradient(transparent 60%,rgba(0,0,0,.75));color:#fff':''}"><span>${esc(x.name)}</span>${u?'':'<span class="meta" style="margin:0">no example yet</span>'}</div></div>`;};
+    const body=secs.map(g=>{const its=list.filter(e=>e.id!=='_none'&&(e.group||'Other')===g);return its.length?`<div class="sec">${esc(g)}</div><div class="ggrid" style="max-width:none">${its.map(tile).join('')}</div>`:'';}).join('');
+    $('view').innerHTML=hd+top+searchBox('tplq',tplQ,'Search templates and categories')+(body||'<div class="empty">Nothing matches.</div>')+tplSettingsHtml();return;
+  }
   const [pills,mgmt,cards]=view==='use'?tplUseParts(list):tplTemplateParts(list);
   const empty=(tplDue&&!list.length)?'<div class="empty">Nothing is due in the next 7 days.</div>':'';
   $('view').innerHTML=hd+top+(filt?searchBox('tplq',tplQ,'Search templates and categories'):'')+mgmt+details+cards+(tplQ.trim()&&!list.length?'<div class="empty">Nothing matches.</div>':'')+empty+tplSettingsHtml();
